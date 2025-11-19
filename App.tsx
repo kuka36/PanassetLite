@@ -7,6 +7,7 @@ import { AssetList } from './components/AssetList';
 import { AddAssetModal } from './components/AddAssetModal';
 import { GeminiAdvisor } from './components/GeminiAdvisor';
 import { Plus, RefreshCw } from 'lucide-react';
+import { Asset } from './types';
 
 const DashboardView: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -48,19 +49,40 @@ const DashboardView: React.FC = () => {
 
 const AssetsView: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingAsset, setEditingAsset] = useState<Asset | null>(null);
+
+  const handleOpenAdd = () => {
+      setEditingAsset(null);
+      setIsModalOpen(true);
+  };
+
+  const handleEdit = (asset: Asset) => {
+      setEditingAsset(asset);
+      setIsModalOpen(true);
+  };
+
+  const handleClose = () => {
+      setIsModalOpen(false);
+      setEditingAsset(null);
+  };
+
   return (
     <div className="space-y-6">
         <div className="flex justify-between items-center">
             <h1 className="text-2xl font-bold text-slate-800">Assets Management</h1>
              <button 
-                onClick={() => setIsModalOpen(true)}
+                onClick={handleOpenAdd}
                 className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl shadow-sm flex items-center gap-2"
             >
                 <Plus size={18}/> Add
             </button>
         </div>
-        <AssetList />
-        <AddAssetModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
+        <AssetList onEdit={handleEdit} />
+        <AddAssetModal 
+            isOpen={isModalOpen} 
+            onClose={handleClose} 
+            initialAsset={editingAsset} 
+        />
     </div>
   );
 };

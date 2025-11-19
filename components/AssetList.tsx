@@ -1,11 +1,15 @@
 import React from 'react';
 import { usePortfolio } from '../context/PortfolioContext';
 import { Card } from './ui/Card';
-import { ArrowUpRight, ArrowDownRight, MoreVertical } from 'lucide-react';
-import { AssetType } from '../types';
+import { ArrowUpRight, ArrowDownRight, Pencil, Trash2 } from 'lucide-react';
+import { Asset, AssetType } from '../types';
 
-export const AssetList: React.FC = () => {
-  const { assets } = usePortfolio();
+interface AssetListProps {
+    onEdit?: (asset: Asset) => void;
+}
+
+export const AssetList: React.FC<AssetListProps> = ({ onEdit }) => {
+  const { assets, deleteAsset } = usePortfolio();
 
   // Helper for conditional styling
   const getTypeColor = (type: AssetType) => {
@@ -16,6 +20,12 @@ export const AssetList: React.FC = () => {
         case AssetType.CASH: return 'bg-green-100 text-green-700';
         default: return 'bg-slate-100 text-slate-700';
     }
+  };
+
+  const handleDelete = (id: string, symbol: string) => {
+      if (window.confirm(`Are you sure you want to delete ${symbol}? This action cannot be undone.`)) {
+          deleteAsset(id);
+      }
   };
 
   return (
@@ -29,6 +39,7 @@ export const AssetList: React.FC = () => {
               <th className="pb-3 font-medium">Holdings</th>
               <th className="pb-3 font-medium text-right">Value</th>
               <th className="pb-3 font-medium text-right pr-2">P&L</th>
+              {onEdit && <th className="pb-3 font-medium text-right pr-2">Actions</th>}
             </tr>
           </thead>
           <tbody className="text-sm">
@@ -70,12 +81,32 @@ export const AssetList: React.FC = () => {
                       {pnl >= 0 ? '+' : '-'}${Math.abs(pnl).toLocaleString(undefined, {maximumFractionDigits: 0})}
                     </div>
                   </td>
+                  {onEdit && (
+                    <td className="py-4 text-right pr-2">
+                        <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button 
+                                onClick={() => onEdit(asset)}
+                                className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                title="Edit"
+                            >
+                                <Pencil size={16} />
+                            </button>
+                            <button 
+                                onClick={() => handleDelete(asset.id, asset.symbol)}
+                                className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                title="Delete"
+                            >
+                                <Trash2 size={16} />
+                            </button>
+                        </div>
+                    </td>
+                  )}
                 </tr>
               );
             })}
             {assets.length === 0 && (
                 <tr>
-                    <td colSpan={5} className="text-center py-8 text-slate-400 italic">
+                    <td colSpan={onEdit ? 6 : 5} className="text-center py-8 text-slate-400 italic">
                         No assets found. Click "Add Asset" to start tracking.
                     </td>
                 </tr>

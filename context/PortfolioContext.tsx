@@ -5,6 +5,8 @@ interface PortfolioContextType {
   assets: Asset[];
   transactions: Transaction[];
   addAsset: (asset: Asset) => void;
+  editAsset: (asset: Asset) => void;
+  deleteAsset: (id: string) => void;
   addTransaction: (transaction: Omit<Transaction, 'id'>) => void;
   updateAssetPrice: (id: string, newPrice: number) => void;
   refreshPrices: () => void;
@@ -41,6 +43,14 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   const addAsset = (newAsset: Asset) => {
     setAssets(prev => [...prev, newAsset]);
+  };
+
+  const editAsset = (updatedAsset: Asset) => {
+    setAssets(prev => prev.map(asset => asset.id === updatedAsset.id ? updatedAsset : asset));
+  };
+
+  const deleteAsset = (id: string) => {
+    setAssets(prev => prev.filter(asset => asset.id !== id));
   };
 
   const addTransaction = (tx: Omit<Transaction, 'id'>) => {
@@ -81,7 +91,16 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
   };
 
   return (
-    <PortfolioContext.Provider value={{ assets, transactions, addAsset, addTransaction, updateAssetPrice, refreshPrices }}>
+    <PortfolioContext.Provider value={{ 
+      assets, 
+      transactions, 
+      addAsset, 
+      editAsset,
+      deleteAsset,
+      addTransaction, 
+      updateAssetPrice, 
+      refreshPrices 
+    }}>
       {children}
     </PortfolioContext.Provider>
   );
