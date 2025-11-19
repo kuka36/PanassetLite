@@ -1,0 +1,96 @@
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { Asset, AssetType, Currency, Transaction, TransactionType } from '../types';
+
+interface PortfolioContextType {
+  assets: Asset[];
+  transactions: Transaction[];
+  addAsset: (asset: Asset) => void;
+  addTransaction: (transaction: Omit<Transaction, 'id'>) => void;
+  updateAssetPrice: (id: string, newPrice: number) => void;
+  refreshPrices: () => void;
+}
+
+const PortfolioContext = createContext<PortfolioContextType | undefined>(undefined);
+
+// Mock Initial Data
+const INITIAL_ASSETS: Asset[] = [
+  { id: '1', symbol: 'AAPL', name: 'Apple Inc.', type: AssetType.STOCK, quantity: 50, avgCost: 150, currentPrice: 175.5, currency: Currency.USD },
+  { id: '2', symbol: 'BTC', name: 'Bitcoin', type: AssetType.CRYPTO, quantity: 0.45, avgCost: 42000, currentPrice: 64000, currency: Currency.USD },
+  { id: '3', symbol: 'VOO', name: 'Vanguard S&P 500', type: AssetType.FUND, quantity: 20, avgCost: 380, currentPrice: 410, currency: Currency.USD },
+  { id: '4', symbol: 'USD', name: 'Cash Reserve', type: AssetType.CASH, quantity: 15000, avgCost: 1, currentPrice: 1, currency: Currency.USD },
+];
+
+export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const [assets, setAssets] = useState<Asset[]>(() => {
+    const saved = localStorage.getItem('investflow_assets');
+    return saved ? JSON.parse(saved) : INITIAL_ASSETS;
+  });
+
+  const [transactions, setTransactions] = useState<Transaction[]>(() => {
+    const saved = localStorage.getItem('investflow_transactions');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  useEffect(() => {
+    localStorage.setItem('investflow_assets', JSON.stringify(assets));
+  }, [assets]);
+
+  useEffect(() => {
+    localStorage.setItem('investflow_transactions', JSON.stringify(transactions));
+  }, [transactions]);
+
+  const addAsset = (newAsset: Asset) => {
+    setAssets(prev => [...prev, newAsset]);
+  };
+
+  const addTransaction = (tx: Omit<Transaction, 'id'>) => {
+    const newTx = { ...tx, id: crypto.randomUUID() };
+    setTransactions(prev => [...prev, newTx]);
+
+    // Update asset holding logic (Simplified weighted average cost)
+    setAssets(prev => prev.map(asset => {
+      if (asset.id !== tx.assetId) return asset;
+
+      let newQty = asset.quantity;
+      let newCost = asset.avgCost;
+
+      if (tx.type === TransactionType.BUY) {
+        const totalValue = (asset.quantity * asset.avgCost) + (tx.quantity * tx.price) + tx.fee;
+        newQty = asset.quantity + tx.quantity;
+        newCost = totalValue / newQty;
+      } else if (tx.type === TransactionType.SELL) {
+        newQty = asset.quantity - tx.quantity;
+        // Avg cost doesn't usually change on sell unless using specific tax lots, keeping simple here
+      }
+
+      return { ...asset, quantity: newQty, avgCost: newCost };
+    }));
+  };
+
+  const updateAssetPrice = (id: string, newPrice: number) => {
+    setAssets(prev => prev.map(a => a.id === id ? { ...a, currentPrice: newPrice } : a));
+  };
+
+  const refreshPrices = () => {
+    // Simulate live market data fetch
+    setAssets(prev => prev.map(asset => {
+        if(asset.type === AssetType.CASH) return asset;
+        const randomChange = 1 + (Math.random() * 0.04 - 0.02); // +/- 2%
+        return { ...asset, currentPrice: asset.currentPrice * randomChange };
+    }));
+  };
+
+  return (
+    <PortfolioContext.Provider value={{ assets, transactions, addAsset, addTransaction, updateAssetPrice, refreshPrices }}>
+      {children}
+    </PortfolioContext.Provider>
+  );
+};
+
+export const usePortfolio = () => {
+  const context = useContext(PortfolioContext);
+  if (context === undefined) {
+    throw new Error('usePortfolio must be used within a PortfolioProvider');
+  }
+  return context;
+};
