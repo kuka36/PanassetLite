@@ -31,19 +31,34 @@ export const Analytics: React.FC = () => {
     new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', notation: 'compact' }).format(val);
 
   useEffect(() => {
+    let isMounted = true;
+
     const fetchRisk = async () => {
       if (assets.length === 0) return;
+      
+      // Only set loading if we don't have data yet (optional UX choice)
+      // We set it here to show the skeleton if it's a "fresh" fetch
       setLoadingRisk(true);
+      
       try {
         const data = await getRiskAssessment(assets);
-        setRiskData(data);
+        if (isMounted) {
+          setRiskData(data);
+        }
       } catch (e) {
         console.error("Failed to fetch risk assessment", e);
       } finally {
-        setLoadingRisk(false);
+        if (isMounted) {
+          setLoadingRisk(false);
+        }
       }
     };
+
     fetchRisk();
+
+    return () => {
+      isMounted = false;
+    };
   }, [assets]);
 
   // 1. Distribution by Asset Type
@@ -200,7 +215,7 @@ export const Analytics: React.FC = () => {
                     )}
                  </div>
 
-                 {loadingRisk ? (
+                 {loadingRisk && !riskData ? (
                      <div className="space-y-2 animate-pulse">
                          <div className="h-4 bg-slate-100 rounded w-3/4"></div>
                          <div className="h-4 bg-slate-100 rounded w-full"></div>
