@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { Asset, AssetType, Currency, Transaction, TransactionType } from '../types';
+import { refreshAllAssetPrices } from '../services/priceService';
 
 interface PortfolioContextType {
   assets: Asset[];
@@ -81,13 +82,15 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
     setAssets(prev => prev.map(a => a.id === id ? { ...a, currentPrice: newPrice } : a));
   };
 
-  const refreshPrices = () => {
-    // Simulate live market data fetch
-    setAssets(prev => prev.map(asset => {
-        if(asset.type === AssetType.CASH) return asset;
-        const randomChange = 1 + (Math.random() * 0.04 - 0.02); // +/- 2%
-        return { ...asset, currentPrice: asset.currentPrice * randomChange };
-    }));
+  const refreshPrices = async () => {
+    // 使用真实的市场数据API刷新价格
+    try {
+      const updatedAssets = await refreshAllAssetPrices(assets);
+      setAssets(updatedAssets);
+    } catch (error) {
+      console.error('Failed to refresh prices:', error);
+      // 失败时保持当前价格不变
+    }
   };
 
   return (
