@@ -2,15 +2,24 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { Asset, AssetType, Currency, Transaction, TransactionType } from '../types';
 import { refreshAllAssetPrices } from '../services/priceService';
 
+interface AppSettings {
+  baseCurrency: Currency;
+  isPrivacyMode: boolean;
+}
+
 interface PortfolioContextType {
   assets: Asset[];
   transactions: Transaction[];
+  settings: AppSettings;
   addAsset: (asset: Asset) => void;
   editAsset: (asset: Asset) => void;
   deleteAsset: (id: string) => void;
   addTransaction: (transaction: Omit<Transaction, 'id'>) => void;
   updateAssetPrice: (id: string, newPrice: number) => void;
   refreshPrices: () => void;
+  updateSettings: (newSettings: Partial<AppSettings>) => void;
+  importData: (data: { assets: Asset[], transactions: Transaction[] }) => void;
+  clearData: () => void;
 }
 
 const PortfolioContext = createContext<PortfolioContextType | undefined>(undefined);
@@ -20,9 +29,13 @@ const INITIAL_ASSETS: Asset[] = [
   { id: '1', symbol: 'AAPL', name: 'Apple Inc.', type: AssetType.STOCK, quantity: 50, avgCost: 150, currentPrice: 175.5, currency: Currency.USD },
   { id: '2', symbol: 'BTC', name: 'Bitcoin', type: AssetType.CRYPTO, quantity: 0.45, avgCost: 42000, currentPrice: 64000, currency: Currency.USD },
   { id: '3', symbol: 'VOO', name: 'Vanguard S&P 500', type: AssetType.FUND, quantity: 20, avgCost: 380, currentPrice: 410, currency: Currency.USD },
-  { id: '4', symbol: '000217', name: '华安黄金ETF联接C', type: AssetType.FUND, quantity: 1000, avgCost: 2.85, currentPrice: 3.19, currency: Currency.CNY },
-  { id: '5', symbol: 'USD', name: 'Cash Reserve', type: AssetType.CASH, quantity: 15000, avgCost: 1, currentPrice: 1, currency: Currency.USD },
+  { id: '4', symbol: 'USD', name: 'Cash Reserve', type: AssetType.CASH, quantity: 15000, avgCost: 1, currentPrice: 1, currency: Currency.USD },
 ];
+
+const INITIAL_SETTINGS: AppSettings = {
+  baseCurrency: Currency.USD,
+  isPrivacyMode: false,
+};
 
 export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [assets, setAssets] = useState<Asset[]>(() => {
@@ -35,6 +48,11 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
     return saved ? JSON.parse(saved) : [];
   });
 
+  const [settings, setSettings] = useState<AppSettings>(() => {
+    const saved = localStorage.getItem('investflow_settings');
+    return saved ? JSON.parse(saved) : INITIAL_SETTINGS;
+  });
+
   useEffect(() => {
     localStorage.setItem('investflow_assets', JSON.stringify(assets));
   }, [assets]);
@@ -42,6 +60,10 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
   useEffect(() => {
     localStorage.setItem('investflow_transactions', JSON.stringify(transactions));
   }, [transactions]);
+
+  useEffect(() => {
+    localStorage.setItem('investflow_settings', JSON.stringify(settings));
+  }, [settings]);
 
   const addAsset = (newAsset: Asset) => {
     setAssets(prev => [...prev, newAsset]);
@@ -59,28 +81,23 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
     const newTx = { ...tx, id: crypto.randomUUID() };
     setTransactions(prev => [...prev, newTx]);
 
-    // Update asset holding logic (Weighted average cost)
+    // Update asset holding logic (Simplified weighted average cost)
     setAssets(prev => prev.map(asset => {
       if (asset.id !== tx.assetId) return asset;
 
       let newQty = asset.quantity;
-      let newAvgCost = asset.avgCost;
+      let newCost = asset.avgCost;
 
       if (tx.type === TransactionType.BUY) {
-        const currentTotalCost = asset.quantity * asset.avgCost;
-        const txCost = (tx.quantity * tx.price) + tx.fee;
-        
+        const totalValue = (asset.quantity * asset.avgCost) + (tx.quantity * tx.price) + tx.fee;
         newQty = asset.quantity + tx.quantity;
-        // Prevent division by zero if newQty is 0 (shouldn't happen on buy but good to be safe)
-        newAvgCost = newQty > 0 ? (currentTotalCost + txCost) / newQty : 0;
+        newCost = totalValue / newQty;
       } else if (tx.type === TransactionType.SELL) {
-        newQty = Math.max(0, asset.quantity - tx.quantity);
-        // Avg cost remains the same on Sell in simple weighted average accounting
-        // If we sold everything, reset avg cost to 0 to avoid confusion if we buy back later
-        if (newQty === 0) newAvgCost = 0;
+        newQty = asset.quantity - tx.quantity;
+        // Avg cost doesn't usually change on sell unless using specific tax lots, keeping simple here
       }
 
-      return { ...asset, quantity: newQty, avgCost: newAvgCost };
+      return { ...asset, quantity: newQty, avgCost: newCost };
     }));
   };
 
@@ -99,16 +116,37 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
     }
   };
 
+  const updateSettings = (newSettings: Partial<AppSettings>) => {
+    setSettings(prev => ({ ...prev, ...newSettings }));
+  };
+
+  const importData = (data: { assets: Asset[], transactions: Transaction[] }) => {
+    if (Array.isArray(data.assets)) setAssets(data.assets);
+    if (Array.isArray(data.transactions)) setTransactions(data.transactions);
+  };
+
+  const clearData = () => {
+    setAssets([]);
+    setTransactions([]);
+    localStorage.removeItem('investflow_assets');
+    localStorage.removeItem('investflow_transactions');
+    // We keep settings
+  };
+
   return (
     <PortfolioContext.Provider value={{ 
       assets, 
       transactions, 
+      settings,
       addAsset, 
       editAsset,
       deleteAsset,
       addTransaction, 
       updateAssetPrice, 
-      refreshPrices 
+      refreshPrices,
+      updateSettings,
+      importData,
+      clearData
     }}>
       {children}
     </PortfolioContext.Provider>

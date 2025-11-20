@@ -2,12 +2,12 @@ import React, { useMemo } from 'react';
 import { usePortfolio } from '../context/PortfolioContext';
 import { Card } from './ui/Card';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, AreaChart, Area, XAxis, YAxis, CartesianGrid } from 'recharts';
-import { TrendingUp, TrendingDown, DollarSign, Activity } from 'lucide-react';
+import { TrendingUp, TrendingDown, DollarSign, Activity, EyeOff } from 'lucide-react';
 
 const COLORS = ['#0ea5e9', '#6366f1', '#8b5cf6', '#ec4899', '#10b981', '#f59e0b'];
 
 export const Dashboard: React.FC = () => {
-  const { assets } = usePortfolio();
+  const { assets, settings } = usePortfolio();
 
   // Calculate Summaries
   const summary = useMemo(() => {
@@ -20,9 +20,8 @@ export const Dashboard: React.FC = () => {
       const cost = asset.quantity * asset.avgCost;
       totalBalance += value;
       totalCost += cost;
-      // Mocking Day PnL as 1.2% of value just for demo visualization if real API absent
-      // In a real app, this comes from (currentPrice - prevClose) * quantity
-      dayPnL += value * (Math.random() * 0.05 - 0.02); 
+      // Mocking Day PnL as 1.2% of value just for demo visualization
+      dayPnL += value * (Math.random() * 0.05 - 0.02); // todo: replace with actual logic
     });
 
     const totalPnL = totalBalance - totalCost;
@@ -60,13 +59,22 @@ export const Dashboard: React.FC = () => {
     return data;
   }, [summary.totalBalance, summary.totalCost]);
 
-  const formatCurrency = (val: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val);
+  const formatCurrency = (val: number) => {
+      if (settings.isPrivacyMode) return '****';
+      return new Intl.NumberFormat('en-US', { style: 'currency', currency: settings.baseCurrency }).format(val);
+  };
+  
+  const formatPercent = (val: number) => {
+      if (settings.isPrivacyMode) return '**%';
+      return `${val.toFixed(2)}%`;
+  };
 
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Top Metrics Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-gradient-to-br from-blue-600 to-blue-700 rounded-2xl p-6 text-white shadow-lg">
+        <div className="bg-gradient-to-br from-blue-600 to-blue-700 rounded-2xl p-6 text-white shadow-lg relative overflow-hidden">
+            {settings.isPrivacyMode && <EyeOff className="absolute top-6 right-6 text-blue-400 opacity-50" size={24} />}
             <div className="flex items-center justify-between mb-4">
                 <span className="text-blue-100 font-medium">Total Balance</span>
                 <div className="p-2 bg-white/20 rounded-lg"><DollarSign size={20} /></div>
@@ -82,7 +90,7 @@ export const Dashboard: React.FC = () => {
             <div className="text-2xl font-bold text-slate-800 mb-1">{formatCurrency(summary.dayPnL)}</div>
             <div className={`text-sm font-medium flex items-center gap-1 ${summary.dayPnL >= 0 ? 'text-green-600' : 'text-red-500'}`}>
                 {summary.dayPnL >= 0 ? <TrendingUp size={14}/> : <TrendingDown size={14}/>}
-                {(Math.abs(summary.dayPnL / summary.totalBalance) * 100).toFixed(2)}%
+                {formatPercent(Math.abs(summary.dayPnL / summary.totalBalance) * 100)}
             </div>
         </Card>
 
@@ -90,7 +98,7 @@ export const Dashboard: React.FC = () => {
             <span className="text-slate-500 font-medium mb-2">Unrealized P&L</span>
             <div className="text-2xl font-bold text-slate-800 mb-1">{formatCurrency(summary.totalPnL)}</div>
             <div className={`text-sm font-medium flex items-center gap-1 ${summary.totalPnL >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-                 {summary.totalPnL >= 0 ? '+' : ''}{summary.totalPnLPercent.toFixed(2)}% All time
+                 {summary.totalPnL >= 0 ? '+' : ''}{formatPercent(summary.totalPnLPercent)} All time
             </div>
         </Card>
 
@@ -106,6 +114,12 @@ export const Dashboard: React.FC = () => {
         {/* Line Chart */}
         <Card title="Net Worth Trend (30D)" className="lg:col-span-2">
           <div className="h-[300px] w-full">
+            {settings.isPrivacyMode ? (
+                <div className="h-full flex flex-col items-center justify-center text-slate-300">
+                    <EyeOff size={48} className="mb-2"/>
+                    <p>Chart Hidden in Privacy Mode</p>
+                </div>
+            ) : (
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={historyData}>
                 <defs>
@@ -124,12 +138,20 @@ export const Dashboard: React.FC = () => {
                 <Area type="monotone" dataKey="value" stroke="#3b82f6" strokeWidth={3} fillOpacity={1} fill="url(#colorValue)" />
               </AreaChart>
             </ResponsiveContainer>
+            )}
           </div>
         </Card>
 
         {/* Pie Chart */}
         <Card title="Allocation">
           <div className="h-[300px] w-full flex flex-col items-center justify-center relative">
+            {settings.isPrivacyMode ? (
+                 <div className="h-full flex flex-col items-center justify-center text-slate-300">
+                    <EyeOff size={48} className="mb-2"/>
+                    <p>Hidden</p>
+                </div>
+            ) : (
+             <>
              <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
@@ -156,15 +178,19 @@ export const Dashboard: React.FC = () => {
                 <div className="text-xs text-slate-400">Top Asset</div>
                 <div className="font-bold text-slate-700">{allocationData[0]?.name || '-'}</div>
             </div>
+            </>
+            )}
           </div>
-          <div className="flex flex-wrap gap-2 justify-center pb-2">
-              {allocationData.slice(0, 4).map((entry, idx) => (
-                  <div key={entry.name} className="flex items-center gap-1 text-xs text-slate-500">
-                      <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[idx % COLORS.length] }}></div>
-                      {entry.name} {((entry.value / summary.totalBalance) * 100).toFixed(0)}%
-                  </div>
-              ))}
-          </div>
+          {!settings.isPrivacyMode && (
+            <div className="flex flex-wrap gap-2 justify-center pb-2">
+                {allocationData.slice(0, 4).map((entry, idx) => (
+                    <div key={entry.name} className="flex items-center gap-1 text-xs text-slate-500">
+                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[idx % COLORS.length] }}></div>
+                        {entry.name} {((entry.value / summary.totalBalance) * 100).toFixed(0)}%
+                    </div>
+                ))}
+            </div>
+          )}
         </Card>
       </div>
     </div>

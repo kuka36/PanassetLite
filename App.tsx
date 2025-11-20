@@ -7,6 +7,7 @@ import { AssetList } from './components/AssetList';
 import { AddAssetModal } from './components/AddAssetModal';
 import { AddTransactionModal } from './components/AddTransactionModal';
 import { Analytics } from './components/Analytics';
+import { Settings } from './components/Settings';
 import { GeminiAdvisor } from './components/GeminiAdvisor';
 import { Plus, RefreshCw, ArrowRightLeft } from 'lucide-react';
 import { Asset } from './types';
@@ -100,16 +101,6 @@ const AssetsView: React.FC = () => {
   );
 };
 
-// Placeholder for other routes
-const Placeholder: React.FC<{title: string}> = ({title}) => (
-    <div className="flex items-center justify-center h-64 border-2 border-dashed border-slate-200 rounded-2xl">
-        <div className="text-center">
-            <h2 className="text-xl font-semibold text-slate-400">{title}</h2>
-            <p className="text-slate-400">Coming soon in v2.0</p>
-        </div>
-    </div>
-);
-
 const App: React.FC = () => {
   return (
     <PortfolioProvider>
@@ -119,7 +110,7 @@ const App: React.FC = () => {
             <Route path="/" element={<DashboardView />} />
             <Route path="/assets" element={<AssetsView />} />
             <Route path="/analytics" element={<Analytics />} />
-            <Route path="/settings" element={<Placeholder title="Settings" />} />
+            <Route path="/settings" element={<Settings />} />
           </Routes>
         </Layout>
       </HashRouter>

@@ -109,7 +109,7 @@ export const getRiskAssessment = async (assets: Asset[]) => {
     }));
 
     const prompt = `
-    Evaluate the risk profile of this investment portfolio. 请使用 中文 输出结果。
+    Evaluate the risk profile of this investment portfolio.
     Portfolio: ${JSON.stringify(portfolioSummary)}
   `;
 
@@ -131,7 +131,7 @@ export const getRiskAssessment = async (assets: Asset[]) => {
             },
             analysis: {
               type: Type.STRING,
-              description: "A concise paragraph (max 60 words) explaining the primary risk factors."
+              description: "A concise paragraph (max 60 words) explaining the primary risk factors.使用中文"
             }
           },
           required: ["riskScore", "riskLevel", "analysis"]
