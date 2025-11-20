@@ -19,22 +19,24 @@ export const getPortfolioAnalysis = async (assets: Asset[]) => {
   }));
 
   const prompt = `
-    You are a senior financial advisor for "InvestFlow".
-    Analyze the following portfolio JSON:
+    您是 InvestFlow 的顶级财务顾问。请分析以下投资组合 JSON：
     ${JSON.stringify(portfolioSummary)}
 
-    Please provide:
-    1. A brief summary of the asset allocation diversity.
-    2. Potential risks based on the asset types (e.g., too much crypto, sector concentration).
-    3. Constructive suggestions for rebalancing.
+    请提供：
+    1. 资产配置多样性的简要概述。
+    2. 基于资产类型的潜在风险（例如，加密货币配置过高、行业集中度过高）。
+    3. 根据您专业知识及最新市场行情，提供资产配置再平衡的建设性建议。
     
-    Keep the tone professional yet encouraging. Format with markdown headers.
-    Be concise (under 250 words).
+    请保持专业而又不失鼓励的语气。
+    请使用 Markdown 标题进行格式化。
+    请使用 中文 输出结果。
+    请言简意赅（不超过 250 字）。
   `;
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      //model: 'gemini-2.5-flash',
+      model: 'gemini-3-pro-preview',
       contents: prompt,
     });
     return response.text;
