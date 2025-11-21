@@ -11,7 +11,7 @@ import { AddTransactionModal } from './components/AddTransactionModal';
 import { Analytics } from './components/Analytics';
 import { Settings } from './components/Settings';
 import { GeminiAdvisor } from './components/GeminiAdvisor';
-import { Plus, Wallet } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { Asset } from './types';
 
 const DashboardView: React.FC = () => {
@@ -20,7 +20,6 @@ const DashboardView: React.FC = () => {
       <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold text-slate-800">Overview</h1>
-          <p className="text-slate-500">Welcome back, here's your portfolio performance.</p>
         </div>
       </div>
 
@@ -48,9 +47,9 @@ const AssetsView: React.FC = () => {
       setIsAssetModalOpen(true);
   };
 
-  // Transaction Handler
-  const handleRecordTransaction = (asset?: Asset) => {
-      setSelectedAssetIdForTx(asset?.id); // Pre-select if clicked from row
+  // Transaction Handler - Now only called from AssetList
+  const handleRecordTransaction = (asset: Asset) => {
+      setSelectedAssetIdForTx(asset.id);
       setIsTxModalOpen(true);
   };
 
@@ -71,13 +70,7 @@ const AssetsView: React.FC = () => {
                 <h1 className="text-2xl font-bold text-slate-800">Assets Management</h1>
                 <p className="text-slate-500">Manage holdings and record trades.</p>
             </div>
-            <div className="flex gap-2">
-                <button 
-                    onClick={() => handleRecordTransaction()}
-                    className="px-4 py-2.5 bg-white text-blue-600 border border-blue-200 hover:bg-blue-50 font-medium rounded-xl shadow-sm transition-all flex items-center gap-2"
-                >
-                    <Wallet size={18}/> Record Transaction
-                </button>
+            <div>
                 <button 
                     onClick={handleOpenAddAsset}
                     className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl shadow-lg shadow-blue-200 transition-all flex items-center gap-2"

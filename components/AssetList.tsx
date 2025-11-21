@@ -4,6 +4,7 @@ import { usePortfolio } from '../context/PortfolioContext';
 import { Card } from './ui/Card';
 import { ArrowUpRight, ArrowDownRight, Pencil, Trash2, History, ArrowUp, ArrowDown, ArrowRightLeft } from 'lucide-react';
 import { Asset, AssetType, Currency } from '../types';
+import { convertValue } from '../services/marketData';
 
 interface AssetListProps {
     onEdit?: (asset: Asset) => void;
@@ -14,7 +15,7 @@ type SortKey = 'symbol' | 'price' | 'cost' | 'quantity' | 'value' | 'pnl';
 type SortDirection = 'asc' | 'desc';
 
 export const AssetList: React.FC<AssetListProps> = ({ onEdit, onTransaction }) => {
-  const { assets, deleteAsset, updateAssetPrice } = usePortfolio();
+  const { assets, deleteAsset, updateAssetPrice, settings, exchangeRates } = usePortfolio();
   
   // Sorting State
   const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: SortDirection }>({
@@ -53,8 +54,9 @@ export const AssetList: React.FC<AssetListProps> = ({ onEdit, onTransaction }) =
           bValue = b.quantity;
           break;
         case 'value':
-          aValue = a.quantity * a.currentPrice;
-          bValue = b.quantity * b.currentPrice;
+          // Sort by Converted Value (Base Currency) for standardized comparison
+          aValue = convertValue(a.quantity * a.currentPrice, a.currency, settings.baseCurrency, exchangeRates);
+          bValue = convertValue(b.quantity * b.currentPrice, b.currency, settings.baseCurrency, exchangeRates);
           break;
         case 'pnl':
           aValue = getPnl(a);
@@ -69,7 +71,7 @@ export const AssetList: React.FC<AssetListProps> = ({ onEdit, onTransaction }) =
       return 0;
     });
     return sorted;
-  }, [assets, sortConfig]);
+  }, [assets, sortConfig, settings.baseCurrency, exchangeRates]);
 
   const handleSort = (key: SortKey) => {
     setSortConfig(current => ({
@@ -151,22 +153,29 @@ export const AssetList: React.FC<AssetListProps> = ({ onEdit, onTransaction }) =
   return (
     <Card title="Portfolio Holdings" className="animate-slide-up">
       <div className="overflow-x-auto">
-        <table className="w-full text-left border-collapse">
+        <table className="w-full text-left border-collapse min-w-[900px]">
           <thead>
             <tr className="text-xs text-slate-400 uppercase border-b border-slate-100">
               <SortableHeader label="Asset" sortKey="symbol" />
               <SortableHeader label="Current Price" sortKey="price" />
               <SortableHeader label="Avg Cost" sortKey="cost" />
               <SortableHeader label="Holdings" sortKey="quantity" />
-              <SortableHeader label="Value (Native)" sortKey="value" alignRight />
+              <SortableHeader label="Native Val" sortKey="value" alignRight />
+              <th className="pb-3 font-medium text-right pl-2 text-slate-700">
+                 Value ({settings.baseCurrency})
+              </th>
               <SortableHeader label="Status / P&L" sortKey="pnl" alignRight />
-              {(onEdit || onTransaction) && <th className="pb-3 font-medium text-right pr-2">Manage</th>}
+              {(onEdit || onTransaction) && <th className="pb-3 font-medium text-right pr-2">Actions</th>}
             </tr>
           </thead>
           <tbody className="text-sm">
             {sortedAssets.map((asset) => {
               const symbol = getCurrencySymbol(asset.currency);
+              const baseCurrencySymbol = getCurrencySymbol(settings.baseCurrency);
+              
               const currentValue = asset.quantity * asset.currentPrice;
+              const baseValue = convertValue(currentValue, asset.currency, settings.baseCurrency, exchangeRates);
+              
               const costBasis = asset.quantity * asset.avgCost;
               const pnl = currentValue - costBasis;
               const pnlPercent = costBasis > 0 ? (pnl / costBasis) * 100 : 0;
@@ -230,8 +239,13 @@ export const AssetList: React.FC<AssetListProps> = ({ onEdit, onTransaction }) =
                   <td className="py-4">
                     <div className="font-medium text-slate-700">{asset.quantity.toLocaleString()}</div>
                   </td>
-                  <td className={`py-4 text-right font-semibold ${isLiability ? 'text-red-700' : 'text-slate-800'}`}>
+                  {/* Native Value */}
+                  <td className={`py-4 text-right font-medium ${isLiability ? 'text-red-700' : 'text-slate-500'}`}>
                     {isLiability ? '-' : ''}{symbol}{currentValue.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                  </td>
+                  {/* Base Currency Value */}
+                  <td className={`py-4 text-right pr-2 font-bold ${isLiability ? 'text-red-700' : 'text-slate-800'}`}>
+                    {isLiability ? '-' : ''}{baseCurrencySymbol}{baseValue.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
                   </td>
                   <td className="py-4 text-right pr-2">
                     {isManual ? (
@@ -257,7 +271,7 @@ export const AssetList: React.FC<AssetListProps> = ({ onEdit, onTransaction }) =
                   </td>
                   {(onEdit || onTransaction) && (
                     <td className="py-4 text-right pr-2">
-                        <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="flex items-center justify-end gap-2">
                             {onTransaction && (
                                 <button 
                                     onClick={() => onTransaction(asset)}
@@ -293,7 +307,7 @@ export const AssetList: React.FC<AssetListProps> = ({ onEdit, onTransaction }) =
             })}
             {sortedAssets.length === 0 && (
                 <tr>
-                    <td colSpan={onEdit ? 7 : 6} className="text-center py-8 text-slate-400 italic">
+                    <td colSpan={onEdit ? 8 : 7} className="text-center py-8 text-slate-400 italic">
                         No assets found. Click "Add New Asset" to start.
                     </td>
                 </tr>
