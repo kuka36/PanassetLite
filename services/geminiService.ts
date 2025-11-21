@@ -13,12 +13,18 @@ let pendingAdvisorPromise: { hash: string, promise: Promise<string> } | null = n
 
 export const generatePortfolioHash = (assets: Asset[]) => {
   return assets
-    .map(a => `${a.symbol}:${a.quantity}:${a.type}`)
+    .map(a => {
+      // For manual valuation assets, price changes are significant user inputs, so include in hash.
+      // For market assets (Stock/Crypto), we ignore price to prevent cache invalidation on every market tick.
+      const isManualValuation = a.type === AssetType.REAL_ESTATE || a.type === AssetType.LIABILITY || a.type === AssetType.OTHER;
+      const pricePart = isManualValuation ? `:${a.currentPrice}` : '';
+      return `${a.symbol}:${a.quantity}:${a.type}${pricePart}`;
+    })
     .sort()
     .join('|');
 };
 
-export const getPortfolioAnalysis = async (assets: Asset[], apiKey: string) => {
+export const getPortfolioAnalysis = async (assets: Asset[], apiKey: string, forceRefresh: boolean = false) => {
   if (!apiKey) throw new Error("API Key is missing");
   if (assets.length === 0) return "";
 
@@ -26,19 +32,21 @@ export const getPortfolioAnalysis = async (assets: Asset[], apiKey: string) => {
   const now = Date.now();
 
   // 1. Check LocalStorage Cache
-  try {
-    const cachedRaw = localStorage.getItem(ADVISOR_CACHE_KEY);
-    if (cachedRaw) {
-      const { hash, timestamp, data } = JSON.parse(cachedRaw);
-      if (hash === currentHash && (now - timestamp < ADVISOR_CACHE_TTL)) {
-        return data;
+  if (!forceRefresh) {
+    try {
+      const cachedRaw = localStorage.getItem(ADVISOR_CACHE_KEY);
+      if (cachedRaw) {
+        const { hash, timestamp, data } = JSON.parse(cachedRaw);
+        if (hash === currentHash && (now - timestamp < ADVISOR_CACHE_TTL)) {
+          return data;
+        }
       }
+    } catch (e) {
+      console.warn("InvestFlow: Advisor Cache parse error", e);
     }
-  } catch (e) {
-    console.warn("InvestFlow: Advisor Cache parse error", e);
   }
 
-  if (pendingAdvisorPromise && pendingAdvisorPromise.hash === currentHash) {
+  if (pendingAdvisorPromise && pendingAdvisorPromise.hash === currentHash && !forceRefresh) {
     return pendingAdvisorPromise.promise;
   }
 
@@ -116,24 +124,26 @@ export const getPortfolioAnalysis = async (assets: Asset[], apiKey: string) => {
   }
 };
 
-export const getRiskAssessment = async (assets: Asset[], apiKey: string) => {
+export const getRiskAssessment = async (assets: Asset[], apiKey: string, forceRefresh: boolean = false) => {
   if (!apiKey) throw new Error("API Key is missing");
   if (assets.length === 0) return null;
 
   const currentHash = generatePortfolioHash(assets);
   const now = Date.now();
 
-  try {
-    const cachedRaw = localStorage.getItem(RISK_CACHE_KEY);
-    if (cachedRaw) {
-      const { hash, timestamp, data } = JSON.parse(cachedRaw);
-      if (hash === currentHash && (now - timestamp < RISK_CACHE_TTL)) {
-        return data;
+  if (!forceRefresh) {
+    try {
+      const cachedRaw = localStorage.getItem(RISK_CACHE_KEY);
+      if (cachedRaw) {
+        const { hash, timestamp, data } = JSON.parse(cachedRaw);
+        if (hash === currentHash && (now - timestamp < RISK_CACHE_TTL)) {
+          return data;
+        }
       }
-    }
-  } catch (e) {}
+    } catch (e) {}
+  }
 
-  if (pendingRiskPromise && pendingRiskPromise.hash === currentHash) {
+  if (pendingRiskPromise && pendingRiskPromise.hash === currentHash && !forceRefresh) {
      return pendingRiskPromise.promise;
   }
 

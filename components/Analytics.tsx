@@ -8,7 +8,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, ReferenceLine, LabelList
 } from 'recharts';
 import { AssetType } from '../types';
-import { PieChart as PieIcon, Sparkles, Scale, TrendingUp, TrendingDown } from 'lucide-react';
+import { PieChart as PieIcon, Sparkles, Scale, RefreshCw } from 'lucide-react';
 
 const COLORS = ['#0ea5e9', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444', '#6366f1', '#f97316'];
 const RISK_COLORS = {
@@ -48,7 +48,8 @@ export const Analytics: React.FC = () => {
       setRiskError(false);
       
       try {
-        const data = await getRiskAssessment(assets, settings.geminiApiKey);
+        // Auto-fetch relies on cache internally in service (forceRefresh = false)
+        const data = await getRiskAssessment(assets, settings.geminiApiKey, false);
         if (isMounted) {
           setRiskData(data);
         }
@@ -68,6 +69,24 @@ export const Analytics: React.FC = () => {
       isMounted = false;
     };
   }, [assets, settings.geminiApiKey]);
+
+  const handleRefreshRisk = async () => {
+    if (!settings.geminiApiKey || assets.length === 0) return;
+    
+    setLoadingRisk(true);
+    setRiskError(false);
+
+    try {
+        // Force refresh to bypass cache
+        const data = await getRiskAssessment(assets, settings.geminiApiKey, true);
+        setRiskData(data);
+    } catch (e) {
+        console.error("Failed to force refresh risk assessment", e);
+        setRiskError(true);
+    } finally {
+        setLoadingRisk(false);
+    }
+  };
 
   // --- Data Preparations ---
 
@@ -321,15 +340,26 @@ export const Analytics: React.FC = () => {
                         <Sparkles size={14} className="text-purple-500"/>
                         AI Assessment
                     </h4>
-                    {riskData && (
-                        <span className={`text-xs font-bold px-2 py-0.5 rounded border ${
-                            riskData.riskScore > 7 ? 'bg-red-50 text-red-600 border-red-100' : 
-                            riskData.riskScore > 4 ? 'bg-orange-50 text-orange-600 border-orange-100' : 
-                            'bg-green-50 text-green-600 border-green-100'
-                        }`}>
-                            {riskData.riskLevel}
-                        </span>
-                    )}
+                    
+                    <div className="flex items-center gap-2">
+                        {riskData && (
+                            <span className={`text-xs font-bold px-2 py-0.5 rounded border ${
+                                riskData.riskScore > 7 ? 'bg-red-50 text-red-600 border-red-100' : 
+                                riskData.riskScore > 4 ? 'bg-orange-50 text-orange-600 border-orange-100' : 
+                                'bg-green-50 text-green-600 border-green-100'
+                            }`}>
+                                {riskData.riskLevel}
+                            </span>
+                        )}
+                        <button 
+                            onClick={handleRefreshRisk} 
+                            disabled={loadingRisk}
+                            className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-blue-600 transition-colors"
+                            title="Recalculate Risk Analysis"
+                        >
+                            <RefreshCw size={14} className={loadingRisk ? "animate-spin" : ""} />
+                        </button>
+                    </div>
                  </div>
 
                  {riskError ? (
