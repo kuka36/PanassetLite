@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { usePortfolio } from '../context/PortfolioContext';
 import { Card } from './ui/Card';
@@ -14,7 +15,7 @@ type SortKey = 'symbol' | 'price' | 'cost' | 'quantity' | 'value' | 'pnl';
 type SortDirection = 'asc' | 'desc';
 
 export const AssetList: React.FC<AssetListProps> = ({ onEdit, onTransaction }) => {
-  const { assets, deleteAsset, updateAssetPrice, settings, exchangeRates } = usePortfolio();
+  const { assets, deleteAsset, updateAssetPrice, settings, exchangeRates, t } = usePortfolio();
   
   // Sorting State
   const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: SortDirection }>({
@@ -153,18 +154,18 @@ export const AssetList: React.FC<AssetListProps> = ({ onEdit, onTransaction }) =
   );
 
   return (
-    <Card title="Portfolio Holdings" className="animate-slide-up">
+    <Card title={t('portfolioHoldings')} className="animate-slide-up">
       <div className="overflow-x-auto">
         <table className="w-full text-left border-collapse min-w-[900px]">
           <thead>
             <tr className="text-xs text-slate-400 uppercase border-b border-slate-100">
-              <SortableHeader label="Asset" sortKey="symbol" />
-              <SortableHeader label="Current Price" sortKey="price" />
-              <SortableHeader label="Avg Cost" sortKey="cost" />
-              <SortableHeader label="Holdings" sortKey="quantity" />
-              <SortableHeader label="Value" sortKey="value" alignRight />
-              <SortableHeader label="Status / P&L" sortKey="pnl" alignRight />
-              {(onEdit || onTransaction) && <th className="pb-3 font-medium text-right pr-2">Actions</th>}
+              <SortableHeader label={t('asset')} sortKey="symbol" />
+              <SortableHeader label={t('currentPrice')} sortKey="price" />
+              <SortableHeader label={t('avgCost')} sortKey="cost" />
+              <SortableHeader label={t('holdings')} sortKey="quantity" />
+              <SortableHeader label={t('value')} sortKey="value" alignRight />
+              <SortableHeader label={t('statusPnL')} sortKey="pnl" alignRight />
+              {(onEdit || onTransaction) && <th className="pb-3 font-medium text-right pr-2">{t('actions')}</th>}
             </tr>
           </thead>
           <tbody className="text-sm">
@@ -272,41 +273,4 @@ export const AssetList: React.FC<AssetListProps> = ({ onEdit, onTransaction }) =
                                 >
                                     <ArrowRightLeft size={16} />
                                 </button>
-                            )}
-                            {onEdit && (
-                                <button 
-                                    onClick={() => onEdit(asset)}
-                                    className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                                    title="Edit Details"
-                                >
-                                    <Pencil size={16} />
-                                </button>
-                            )}
-                            {onEdit && (
-                                <button 
-                                    onClick={() => handleDelete(asset.id, asset.symbol)}
-                                    className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                    title="Delete"
-                                >
-                                    <Trash2 size={16} />
-                                </button>
-                            )}
-                        </div>
-                    </td>
-                  )}
-                </tr>
-              );
-            })}
-            {sortedAssets.length === 0 && (
-                <tr>
-                    <td colSpan={onEdit ? 7 : 6} className="text-center py-8 text-slate-400 italic">
-                        No assets found. Click "Add New Asset" to start.
-                    </td>
-                </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-    </Card>
-  );
-};
+                            

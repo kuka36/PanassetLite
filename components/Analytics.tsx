@@ -1,3 +1,4 @@
+
 import React, { useMemo, useState, useEffect } from 'react';
 import { usePortfolio } from '../context/PortfolioContext';
 import { getRiskAssessment } from '../services/geminiService';
@@ -24,7 +25,7 @@ interface RiskData {
 }
 
 export const Analytics: React.FC = () => {
-  const { assets, settings, exchangeRates } = usePortfolio();
+  const { assets, settings, exchangeRates, t } = usePortfolio();
   const [riskData, setRiskData] = useState<RiskData | null>(null);
   const [loadingRisk, setLoadingRisk] = useState(false);
   const [riskError, setRiskError] = useState(false);
@@ -49,7 +50,7 @@ export const Analytics: React.FC = () => {
       
       try {
         // Auto-fetch relies on cache internally in service (forceRefresh = false)
-        const data = await getRiskAssessment(assets, settings.geminiApiKey, false);
+        const data = await getRiskAssessment(assets, settings.geminiApiKey, settings.language, false);
         if (isMounted) {
           setRiskData(data);
         }
@@ -68,7 +69,7 @@ export const Analytics: React.FC = () => {
     return () => {
       isMounted = false;
     };
-  }, [assets, settings.geminiApiKey]);
+  }, [assets, settings.geminiApiKey, settings.language]);
 
   const handleRefreshRisk = async () => {
     if (!settings.geminiApiKey || assets.length === 0) return;
@@ -78,7 +79,7 @@ export const Analytics: React.FC = () => {
 
     try {
         // Force refresh to bypass cache
-        const data = await getRiskAssessment(assets, settings.geminiApiKey, true);
+        const data = await getRiskAssessment(assets, settings.geminiApiKey, settings.language, true);
         setRiskData(data);
     } catch (e) {
         console.error("Failed to force refresh risk assessment", e);
@@ -101,9 +102,9 @@ export const Analytics: React.FC = () => {
       dist[a.type] = (dist[a.type] || 0) + val;
     });
     return Object.entries(dist)
-      .map(([name, value]) => ({ name, value }))
+      .map(([name, value]) => ({ name: t(`type_${name.toLowerCase()}`), value }))
       .sort((a, b) => b.value - a.value);
-  }, [assets, settings.baseCurrency, exchangeRates]);
+  }, [assets, settings.baseCurrency, exchangeRates, t]);
 
   // 2. Liabilities Distribution
   const liabilityDistribution = useMemo(() => {
@@ -135,14 +136,14 @@ export const Analytics: React.FC = () => {
 
     return { 
       data: [
-        { name: 'Assets', value: totalAssets, fill: '#10b981' }, // Green
-        { name: 'Liabilities', value: totalLiabilities, fill: '#ef4444' } // Red
+        { name: t('label_assets'), value: totalAssets, fill: '#10b981' }, // Green
+        { name: t('label_liabilities'), value: totalLiabilities, fill: '#ef4444' } // Red
       ],
       totalAssets,
       totalLiabilities,
       ratio: totalAssets > 0 ? (totalLiabilities / totalAssets) * 100 : 0
     };
-  }, [assets, settings.baseCurrency, exchangeRates]);
+  }, [assets, settings.baseCurrency, exchangeRates, t]);
 
   // 4. Top Assets by Value (Excluding Liabilities)
   const topAssets = useMemo(() => {
@@ -181,11 +182,11 @@ export const Analytics: React.FC = () => {
     if (total === 0) return [];
 
     return [
-        { name: 'High (Crypto)', value: high, color: RISK_COLORS.High },
-        { name: 'Medium (Stocks)', value: med, color: RISK_COLORS.Medium },
-        { name: 'Low (Stable)', value: low, color: RISK_COLORS.Low }
+        { name: t('risk_high'), value: high, color: RISK_COLORS.High },
+        { name: t('risk_medium'), value: med, color: RISK_COLORS.Medium },
+        { name: t('risk_low'), value: low, color: RISK_COLORS.Low }
     ].filter(x => x.value > 0);
-  }, [assets, settings.baseCurrency, exchangeRates]);
+  }, [assets, settings.baseCurrency, exchangeRates, t]);
 
   // 6. P&L Ranking
   const pnlRanking = useMemo(() => {
@@ -205,7 +206,7 @@ export const Analytics: React.FC = () => {
     return (
       <div className="flex flex-col items-center justify-center h-96 text-slate-400">
         <PieIcon size={48} className="mb-4 opacity-50" />
-        <p>Add assets to see analytics</p>
+        <p>{t('noAssetsAnalytics')}</p>
       </div>
     );
   }
@@ -214,15 +215,15 @@ export const Analytics: React.FC = () => {
     <div className="space-y-6 animate-fade-in">
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-2 mb-2">
          <div>
-            <h1 className="text-2xl font-bold text-slate-800">Analytics</h1>
-            <p className="text-slate-500 text-sm">Performance metrics & risk analysis</p>
+            <h1 className="text-2xl font-bold text-slate-800">{t('analytics')}</h1>
+            <p className="text-slate-500 text-sm">{t('analyticsSubtitle')}</p>
          </div>
       </div>
 
       {/* --- Section 1: Financial Health (The Big Picture) --- */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {/* 1. Net Worth Structure */}
-          <Card title="Net Worth Structure" className="md:col-span-2">
+          <Card title={t('netWorthStructure')} className="md:col-span-2">
              <div className="h-[200px] w-full">
                 <ResponsiveContainer>
                     <BarChart data={balanceSheet.data} layout="vertical" margin={{left: 0, right: 40, top: 0, bottom: 0}} barSize={32}>
@@ -236,7 +237,7 @@ export const Analytics: React.FC = () => {
                         />
                         <Bar dataKey="value" radius={[0, 6, 6, 0]}>
                             { balanceSheet.data.map((entry, index) => (
-                                <Cell key={`cell-${index}`} fill={entry.name === 'Liabilities' ? '#ef4444' : '#10b981'} />
+                                <Cell key={`cell-${index}`} fill={entry.fill} />
                             ))}
                             {!settings.isPrivacyMode && (
                                 <LabelList dataKey="value" position="right" formatter={formatCurrency} style={{fontSize: '11px', fill: '#64748b', fontWeight: 600}} />
@@ -250,7 +251,7 @@ export const Analytics: React.FC = () => {
           {/* 2. Debt Ratio Indicator */}
           <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 flex flex-col justify-center items-center md:col-span-1 relative overflow-hidden">
               <h3 className="text-slate-500 text-sm font-medium mb-3 flex items-center gap-2 z-10">
-                  <Scale size={16} /> Debt Ratio
+                  <Scale size={16} /> {t('debtRatio')}
               </h3>
               
               <div className="relative z-10 text-center mb-2">
@@ -260,7 +261,7 @@ export const Analytics: React.FC = () => {
                  <div className={`text-xs px-2 py-1 rounded-full inline-block ${
                      balanceSheet.ratio > 30 ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'
                  }`}>
-                     {balanceSheet.ratio > 30 ? "High Leverage" : "Healthy"}
+                     {balanceSheet.ratio > 30 ? t('highLeverage') : t('healthy')}
                  </div>
               </div>
               {/* Visual Progress Bar at bottom */}
@@ -277,7 +278,7 @@ export const Analytics: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
         {/* Asset Allocation */}
-        <Card title="Asset Allocation" className="lg:col-span-1">
+        <Card title={t('assetAllocation')} className="lg:col-span-1">
           <div className="h-[240px] w-full">
             <ResponsiveContainer>
               <PieChart>
@@ -305,7 +306,7 @@ export const Analytics: React.FC = () => {
         </Card>
 
         {/* Risk Profile & AI Insight */}
-        <Card className="lg:col-span-2" title="Risk Analysis">
+        <Card className="lg:col-span-2" title={t('riskAnalysis')}>
            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center h-full">
              <div className="h-[240px]">
                 <ResponsiveContainer>
@@ -338,7 +339,7 @@ export const Analytics: React.FC = () => {
                  <div className="flex items-center justify-between mb-3">
                     <h4 className="font-medium text-slate-600 flex items-center gap-2 text-sm">
                         <Sparkles size={14} className="text-purple-500"/>
-                        AI Assessment
+                        {t('aiAssessment')}
                     </h4>
                     
                     <div className="flex items-center gap-2">
@@ -355,7 +356,7 @@ export const Analytics: React.FC = () => {
                             onClick={handleRefreshRisk} 
                             disabled={loadingRisk}
                             className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-blue-600 transition-colors"
-                            title="Recalculate Risk Analysis"
+                            title={t('recalculate')}
                         >
                             <RefreshCw size={14} className={loadingRisk ? "animate-spin" : ""} />
                         </button>
@@ -363,134 +364,4 @@ export const Analytics: React.FC = () => {
                  </div>
 
                  {riskError ? (
-                    <div className="text-xs text-orange-500 bg-orange-50 p-3 rounded border border-orange-100">
-                        AI features unavailable. Please check your API Key.
-                    </div>
-                 ) : loadingRisk && !riskData ? (
-                     <div className="space-y-2 animate-pulse">
-                         <div className="h-3 bg-slate-100 rounded w-3/4"></div>
-                         <div className="h-3 bg-slate-100 rounded w-full"></div>
-                         <div className="h-3 bg-slate-100 rounded w-5/6"></div>
-                     </div>
-                 ) : riskData ? (
-                     <>
-                        <div className="flex items-center gap-2 mb-3">
-                            <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden relative">
-                                <div 
-                                    className={`absolute top-0 left-0 h-full rounded-full transition-all duration-1000 ${
-                                        riskData.riskScore > 7 ? 'bg-gradient-to-r from-orange-500 to-red-500' :
-                                        riskData.riskScore > 4 ? 'bg-gradient-to-r from-yellow-400 to-orange-500' :
-                                        'bg-gradient-to-r from-green-400 to-green-600'
-                                    }`}
-                                    style={{ width: `${riskData.riskScore * 10}%` }}
-                                ></div>
-                            </div>
-                            <div className="text-xs font-bold text-slate-600 w-8 text-right">{riskData.riskScore}/10</div>
-                        </div>
-                        <p className="text-xs text-slate-500 leading-relaxed border-l-2 border-purple-200 pl-3">
-                            "{riskData.analysis}"
-                        </p>
-                     </>
-                 ) : (
-                     <p className="text-xs text-slate-400 italic">Unable to generate risk analysis.</p>
-                 )}
-             </div>
-           </div>
-        </Card>
-      </div>
-
-      {/* --- Section 3: Performance (The Details) --- */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        
-        {/* Cost vs Value */}
-        <Card title="Cost vs. Value">
-           <div className="h-[250px] w-full">
-            <ResponsiveContainer>
-              <BarChart data={topAssets} layout="vertical" margin={{ left: 0, right: 10, top: 0, bottom: 0 }} barGap={2}>
-                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
-                <XAxis type="number" tickFormatter={formatCurrency} hide />
-                <YAxis 
-                    dataKey="name" 
-                    type="category" 
-                    width={50} 
-                    tick={{fontSize: 11, fill: '#64748b'}} 
-                    interval={0}
-                />
-                <RechartsTooltip 
-                    cursor={{fill: 'transparent'}}
-                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                    formatter={(val: number) => formatCurrency(val)}
-                />
-                <Legend iconSize={8} wrapperStyle={{fontSize: '11px'}}/>
-                <Bar dataKey="cost" name="Cost" fill="#cbd5e1" radius={[0, 3, 3, 0]} barSize={8} />
-                <Bar dataKey="value" name="Value" fill="#3b82f6" radius={[0, 3, 3, 0]} barSize={8} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </Card>
-
-        {/* P&L Performance */}
-        <Card title="Top Movers">
-           <div className="h-[250px] w-full">
-            <ResponsiveContainer>
-              <BarChart data={pnlRanking} margin={{top: 20, bottom: 0}}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="name" tick={{fontSize: 11, fill: '#64748b'}} axisLine={false} tickLine={false} />
-                <YAxis hide />
-                <RechartsTooltip 
-                    cursor={{fill: '#f8fafc'}}
-                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                    formatter={(val: number) => formatCurrency(val)}
-                />
-                <Bar dataKey="pnl" name="Net P&L" radius={[4, 4, 0, 0]}>
-                   {pnlRanking.map((entry, index) => (
-                      <Cell key={`cell-pnl-${index}`} fill={entry.pnl >= 0 ? '#10b981' : '#ef4444'} />
-                   ))}
-                   {!settings.isPrivacyMode && (
-                        <LabelList 
-                            dataKey="pnl" 
-                            position="top" 
-                            formatter={(val: number) => new Intl.NumberFormat('en-US', { notation: "compact" }).format(val)} 
-                            style={{fontSize: '10px', fill: '#94a3b8'}}
-                        />
-                   )}
-                </Bar>
-                <ReferenceLine y={0} stroke="#cbd5e1" />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </Card>
-
-        {/* Liability Breakdown (Conditional Row) */}
-        {liabilityDistribution.length > 0 && (
-            <Card title="Liability Breakdown" className="md:col-span-2">
-                 <div className="h-[180px] w-full flex items-center justify-center">
-                    <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
-                            <Pie
-                                data={liabilityDistribution}
-                                cx="50%"
-                                cy="50%"
-                                innerRadius={50}
-                                outerRadius={70}
-                                paddingAngle={5}
-                                dataKey="value"
-                            >
-                            {liabilityDistribution.map((entry, index) => (
-                                <Cell key={`cell-liab-${index}`} fill={index % 2 === 0 ? '#ef4444' : '#f87171'} stroke="none" />
-                            ))}
-                            </Pie>
-                            <RechartsTooltip 
-                                contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                                formatter={(val: number) => formatCurrency(val)}
-                            />
-                            <Legend iconSize={8} wrapperStyle={{fontSize: '11px'}} layout="vertical" align="right" verticalAlign="middle"/>
-                        </PieChart>
-                    </ResponsiveContainer>
-                 </div>
-            </Card>
-        )}
-      </div>
-    </div>
-  );
-};
+                    <div className="text-xs text-orange-50

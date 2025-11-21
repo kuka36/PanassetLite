@@ -1,3 +1,4 @@
+
 export enum AssetType {
   STOCK = 'STOCK',
   CRYPTO = 'CRYPTO',
@@ -13,6 +14,8 @@ export enum Currency {
   CNY = 'CNY',
   HKD = 'HKD'
 }
+
+export type Language = 'en' | 'zh';
 
 export enum EntryMode {
   SIMPLE = 'SIMPLE',

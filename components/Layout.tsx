@@ -1,8 +1,11 @@
+
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { LayoutDashboard, PieChart, Wallet, Settings, Menu, X, History } from 'lucide-react';
+import { usePortfolio } from '../context/PortfolioContext';
 
 export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { t } = usePortfolio();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
 
   const NavItem = ({ to, icon, label, onClick }: { to: string, icon: React.ReactNode, label: string, onClick?: () => void }) => (
@@ -27,15 +30,15 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
             <span className="text-xl font-bold text-slate-800 tracking-tight">InvestFlow</span>
         </div>
         <nav className="flex-1 px-4 space-y-2 mt-4">
-          <NavItem to="/" icon={<LayoutDashboard size={20}/>} label="Dashboard" />
-          <NavItem to="/assets" icon={<Wallet size={20}/>} label="Assets" />
-          <NavItem to="/history" icon={<History size={20}/>} label="History" />
-          <NavItem to="/analytics" icon={<PieChart size={20}/>} label="Analytics" />
-          <NavItem to="/settings" icon={<Settings size={20}/>} label="Settings" />
+          <NavItem to="/" icon={<LayoutDashboard size={20}/>} label={t('dashboard')} />
+          <NavItem to="/assets" icon={<Wallet size={20}/>} label={t('assets')} />
+          <NavItem to="/history" icon={<History size={20}/>} label={t('history')} />
+          <NavItem to="/analytics" icon={<PieChart size={20}/>} label={t('analytics')} />
+          <NavItem to="/settings" icon={<Settings size={20}/>} label={t('settings')} />
         </nav>
         <div className="p-6 border-t border-slate-100">
             <div className="text-xs text-slate-400">
-                Data provided for demo purposes. Not financial advice.
+                {t('disclaimer')}
             </div>
         </div>
       </aside>
@@ -61,11 +64,11 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
         <div className="fixed inset-0 z-20 bg-slate-900/20 backdrop-blur-sm md:hidden pt-16" onClick={() => setIsMobileMenuOpen(false)}>
            <div className="bg-white border-b border-slate-100 shadow-xl p-4 animate-in slide-in-from-top-5 duration-200" onClick={e => e.stopPropagation()}>
               <nav className="space-y-2">
-                 <NavItem to="/" icon={<LayoutDashboard size={20}/>} label="Dashboard" onClick={() => setIsMobileMenuOpen(false)} />
-                 <NavItem to="/assets" icon={<Wallet size={20}/>} label="Assets" onClick={() => setIsMobileMenuOpen(false)} />
-                 <NavItem to="/history" icon={<History size={20}/>} label="History" onClick={() => setIsMobileMenuOpen(false)} />
-                 <NavItem to="/analytics" icon={<PieChart size={20}/>} label="Analytics" onClick={() => setIsMobileMenuOpen(false)} />
-                 <NavItem to="/settings" icon={<Settings size={20}/>} label="Settings" onClick={() => setIsMobileMenuOpen(false)} />
+                 <NavItem to="/" icon={<LayoutDashboard size={20}/>} label={t('dashboard')} onClick={() => setIsMobileMenuOpen(false)} />
+                 <NavItem to="/assets" icon={<Wallet size={20}/>} label={t('assets')} onClick={() => setIsMobileMenuOpen(false)} />
+                 <NavItem to="/history" icon={<History size={20}/>} label={t('history')} onClick={() => setIsMobileMenuOpen(false)} />
+                 <NavItem to="/analytics" icon={<PieChart size={20}/>} label={t('analytics')} onClick={() => setIsMobileMenuOpen(false)} />
+                 <NavItem to="/settings" icon={<Settings size={20}/>} label={t('settings')} onClick={() => setIsMobileMenuOpen(false)} />
               </nav>
            </div>
         </div>

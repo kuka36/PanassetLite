@@ -1,9 +1,10 @@
+
 import React, { useRef, useState } from 'react';
 import { usePortfolio } from '../context/PortfolioContext';
 import { Card } from './ui/Card';
-import { Currency } from '../types';
+import { Currency, Language } from '../types';
 import { 
-  Download, Upload, Trash2, Shield, Globe, AlertTriangle, CheckCircle, Key
+  Download, Upload, Trash2, Shield, Globe, AlertTriangle, CheckCircle, Key, Languages
 } from 'lucide-react';
 
 export const Settings: React.FC = () => {
@@ -13,7 +14,8 @@ export const Settings: React.FC = () => {
     settings, 
     updateSettings, 
     importData, 
-    clearData 
+    clearData,
+    t
   } = usePortfolio();
 
   const [importStatus, setImportStatus] = useState<{msg: string, type: 'success'|'error'} | null>(null);
@@ -54,10 +56,10 @@ export const Settings: React.FC = () => {
             throw new Error("Invalid backup file format");
         }
         importData({ assets: json.assets, transactions: json.transactions || [] });
-        setImportStatus({ msg: "Data imported successfully!", type: 'success' });
+        setImportStatus({ msg: t('importSuccess'), type: 'success' });
         setTimeout(() => setImportStatus(null), 3000);
       } catch (err) {
-        setImportStatus({ msg: "Failed to parse file. Invalid JSON.", type: 'error' });
+        setImportStatus({ msg: t('importError'), type: 'error' });
       }
     };
     reader.readAsText(file);
@@ -66,9 +68,9 @@ export const Settings: React.FC = () => {
   };
 
   const handleClearData = () => {
-      if (window.confirm("Are you sure? This will permanently delete all your assets and transactions. This action cannot be undone.")) {
+      if (window.confirm(t('resetConfirm'))) {
           clearData();
-          setImportStatus({ msg: "All data has been reset.", type: 'success' });
+          setImportStatus({ msg: t('resetSuccess'), type: 'success' });
           setTimeout(() => setImportStatus(null), 3000);
       }
   };
@@ -77,22 +79,22 @@ export const Settings: React.FC = () => {
     <div className="space-y-6 animate-fade-in max-w-3xl mx-auto">
       <div className="flex items-center justify-between">
         <div>
-            <h1 className="text-2xl font-bold text-slate-800">Settings</h1>
-            <p className="text-slate-500">Manage your preferences and data.</p>
+            <h1 className="text-2xl font-bold text-slate-800">{t('settings')}</h1>
+            <p className="text-slate-500">{t('managePreferences')}</p>
         </div>
       </div>
 
       {/* API Configuration */}
-      <Card title="API Configuration">
+      <Card title={t('apiConfiguration')}>
         <div className="flex items-start gap-3">
              <div className="p-2 bg-purple-50 text-purple-600 rounded-lg mt-1">
                 <Key size={20} />
             </div>
             <div className="flex-1">
-                 <div className="font-medium text-slate-800 mb-1">Gemini API Key</div>
+                 <div className="font-medium text-slate-800 mb-1">{t('geminiKey')}</div>
                  <div className="text-sm text-slate-500 mb-3">
-                    Required for AI Insights and Risk Analysis. Your key is stored locally in your browser. 
-                    <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" className="text-blue-600 hover:underline ml-1">Get a key here</a>.
+                    {t('geminiKeyDesc')}
+                    <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" className="text-blue-600 hover:underline ml-1">{t('getKey')}</a>.
                  </div>
                  <input 
                     type="password" 
@@ -106,7 +108,7 @@ export const Settings: React.FC = () => {
       </Card>
 
       {/* Preferences Section */}
-      <Card title="General Preferences">
+      <Card title={t('generalPreferences')}>
         <div className="space-y-6">
             {/* Currency */}
             <div className="flex items-center justify-between pb-4 border-b border-slate-50 last:border-0 last:pb-0">
@@ -115,8 +117,8 @@ export const Settings: React.FC = () => {
                         <Globe size={20} />
                     </div>
                     <div>
-                        <div className="font-medium text-slate-800">Base Currency</div>
-                        <div className="text-sm text-slate-500">Default currency for portfolio display</div>
+                        <div className="font-medium text-slate-800">{t('baseCurrency')}</div>
+                        <div className="text-sm text-slate-500">{t('baseCurrencyDesc')}</div>
                     </div>
                 </div>
                 <select 
@@ -130,6 +132,27 @@ export const Settings: React.FC = () => {
                 </select>
             </div>
 
+            {/* Language */}
+            <div className="flex items-center justify-between pb-4 border-b border-slate-50 last:border-0 last:pb-0">
+                <div className="flex items-center gap-3">
+                    <div className="p-2 bg-emerald-50 text-emerald-600 rounded-lg">
+                        <Languages size={20} />
+                    </div>
+                    <div>
+                        <div className="font-medium text-slate-800">{t('language')}</div>
+                        <div className="text-sm text-slate-500">{t('languageDesc')}</div>
+                    </div>
+                </div>
+                <select 
+                    value={settings.language}
+                    onChange={(e) => updateSettings({ language: e.target.value as Language })}
+                    className="bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none min-w-[120px]"
+                >
+                    <option value="en">English</option>
+                    <option value="zh">中文 (简体)</option>
+                </select>
+            </div>
+
             {/* Privacy Mode */}
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -137,8 +160,8 @@ export const Settings: React.FC = () => {
                         <Shield size={20} />
                     </div>
                     <div>
-                        <div className="font-medium text-slate-800">Privacy Mode</div>
-                        <div className="text-sm text-slate-500">Mask financial values on the dashboard</div>
+                        <div className="font-medium text-slate-800">{t('privacyMode')}</div>
+                        <div className="text-sm text-slate-500">{t('privacyModeDesc')}</div>
                     </div>
                 </div>
                 <label className="relative inline-flex items-center cursor-pointer">
@@ -155,7 +178,7 @@ export const Settings: React.FC = () => {
       </Card>
 
       {/* Data Management Section */}
-      <Card title="Data Management">
+      <Card title={t('dataManagement')}>
         <div className="space-y-4">
             {importStatus && (
                 <div className={`p-3 rounded-lg text-sm flex items-center gap-2 ${importStatus.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
@@ -173,8 +196,8 @@ export const Settings: React.FC = () => {
                     <div className="p-3 bg-slate-100 text-slate-600 rounded-full mb-3 group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">
                         <Download size={24} />
                     </div>
-                    <span className="font-medium text-slate-700">Export Data</span>
-                    <span className="text-xs text-slate-400 mt-1">Download JSON backup</span>
+                    <span className="font-medium text-slate-700">{t('exportData')}</span>
+                    <span className="text-xs text-slate-400 mt-1">{t('exportDesc')}</span>
                 </button>
 
                 {/* Import */}
@@ -185,8 +208,8 @@ export const Settings: React.FC = () => {
                     <div className="p-3 bg-slate-100 text-slate-600 rounded-full mb-3 group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">
                         <Upload size={24} />
                     </div>
-                    <span className="font-medium text-slate-700">Import Data</span>
-                    <span className="text-xs text-slate-400 mt-1">Restore from JSON</span>
+                    <span className="font-medium text-slate-700">{t('importData')}</span>
+                    <span className="text-xs text-slate-400 mt-1">{t('importDesc')}</span>
                     <input 
                         type="file" 
                         accept=".json" 
@@ -204,15 +227,15 @@ export const Settings: React.FC = () => {
                     <div className="p-3 bg-slate-100 text-slate-600 rounded-full mb-3 group-hover:bg-red-100 group-hover:text-red-600 transition-colors">
                         <Trash2 size={24} />
                     </div>
-                    <span className="font-medium text-slate-700 group-hover:text-red-700">Reset Data</span>
-                    <span className="text-xs text-slate-400 mt-1 group-hover:text-red-400">Clear all assets</span>
+                    <span className="font-medium text-slate-700 group-hover:text-red-700">{t('resetData')}</span>
+                    <span className="text-xs text-slate-400 mt-1 group-hover:text-red-400">{t('resetDesc')}</span>
                 </button>
             </div>
         </div>
       </Card>
 
       <div className="text-center text-slate-400 text-sm pt-4">
-          InvestFlow v1.0.3 • Local Data Storage
+          InvestFlow v1.0.4 • Local Data Storage
       </div>
     </div>
   );

@@ -5,7 +5,7 @@ import react from '@vitejs/plugin-react'
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
   // Load env file based on `mode` in the current working directory.
-  const env = loadEnv(mode, process.cwd(), '');
+  const env = loadEnv(mode, (process as any).cwd(), '');
 
   return {
     base: '/InvestFlow/', // Critical for GitHub Pages hosting
@@ -22,7 +22,7 @@ export default defineConfig(({ mode }) => {
     resolve: {
       alias: {
         // Use process.cwd() instead of __dirname for ESM compatibility
-        '@': path.resolve(process.cwd(), '.'),
+        '@': path.resolve((process as any).cwd(), '.'),
       }
     }
   }

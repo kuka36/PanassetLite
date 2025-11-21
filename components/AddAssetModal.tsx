@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Asset, AssetType, Currency } from '../types';
 import { usePortfolio } from '../context/PortfolioContext';
@@ -9,18 +10,8 @@ interface Props {
   initialAsset?: Asset | null;
 }
 
-const ASSET_TYPES = [
-  { id: AssetType.STOCK, label: 'Stock', icon: TrendingUp, desc: 'US, HK, CN Stocks', color: 'bg-blue-50 text-blue-600 border-blue-200' },
-  { id: AssetType.CRYPTO, label: 'Crypto', icon: Bitcoin, desc: 'Coins & Tokens', color: 'bg-purple-50 text-purple-600 border-purple-200' },
-  { id: AssetType.FUND, label: 'Fund / ETF', icon: PieChart, desc: 'Mutual Funds', color: 'bg-orange-50 text-orange-600 border-orange-200' },
-  { id: AssetType.REAL_ESTATE, label: 'Real Estate', icon: Building, desc: 'Property', color: 'bg-emerald-50 text-emerald-600 border-emerald-200' },
-  { id: AssetType.CASH, label: 'Cash', icon: Banknote, desc: 'Fiat Reserves', color: 'bg-green-50 text-green-600 border-green-200' },
-  { id: AssetType.LIABILITY, label: 'Liability', icon: CreditCard, desc: 'Loans & Debt', color: 'bg-red-50 text-red-600 border-red-200' },
-  { id: AssetType.OTHER, label: 'Custom', icon: Box, desc: 'Art, Watches...', color: 'bg-slate-50 text-slate-600 border-slate-200' },
-];
-
 export const AddAssetModal: React.FC<Props> = ({ isOpen, onClose, initialAsset }) => {
-  const { addAsset, editAsset } = usePortfolio();
+  const { addAsset, editAsset, t } = usePortfolio();
   
   // Form State
   const [step, setStep] = useState<1 | 2>(1);
@@ -32,6 +23,16 @@ export const AddAssetModal: React.FC<Props> = ({ isOpen, onClose, initialAsset }
   const [cost, setCost] = useState(''); // Avg Cost
   const [currentVal, setCurrentVal] = useState(''); // For manual assets
   const [currency, setCurrency] = useState<Currency>(Currency.USD);
+
+  const ASSET_TYPES = [
+    { id: AssetType.STOCK, label: t('type_stock'), icon: TrendingUp, desc: 'US, HK, CN Stocks', color: 'bg-blue-50 text-blue-600 border-blue-200' },
+    { id: AssetType.CRYPTO, label: t('type_crypto'), icon: Bitcoin, desc: 'Coins & Tokens', color: 'bg-purple-50 text-purple-600 border-purple-200' },
+    { id: AssetType.FUND, label: t('type_fund'), icon: PieChart, desc: 'Mutual Funds', color: 'bg-orange-50 text-orange-600 border-orange-200' },
+    { id: AssetType.REAL_ESTATE, label: t('type_real_estate'), icon: Building, desc: 'Property', color: 'bg-emerald-50 text-emerald-600 border-emerald-200' },
+    { id: AssetType.CASH, label: t('type_cash'), icon: Banknote, desc: 'Fiat Reserves', color: 'bg-green-50 text-green-600 border-green-200' },
+    { id: AssetType.LIABILITY, label: t('type_liability'), icon: CreditCard, desc: 'Loans & Debt', color: 'bg-red-50 text-red-600 border-red-200' },
+    { id: AssetType.OTHER, label: t('type_other'), icon: Box, desc: 'Art, Watches...', color: 'bg-slate-50 text-slate-600 border-slate-200' },
+  ];
 
   useEffect(() => {
     if (isOpen) {
@@ -121,10 +122,10 @@ export const AddAssetModal: React.FC<Props> = ({ isOpen, onClose, initialAsset }
         <div className="px-6 py-4 bg-slate-50 border-b border-slate-100 flex justify-between items-center shrink-0">
           <div>
             <h2 className="text-lg font-bold text-slate-800">
-                {initialAsset ? 'Edit Holding' : (step === 1 ? 'Select Asset Type' : 'Asset Details')}
+                {initialAsset ? t('editHolding') : (step === 1 ? t('selectAssetType') : t('assetDetails'))}
             </h2>
             <p className="text-xs text-slate-500">
-                {initialAsset ? 'Update your holding parameters' : (step === 1 ? 'What kind of asset do you want to track?' : `Enter details for ${type}`)}
+                {initialAsset ? t('updateParams') : (step === 1 ? t('whatKind') : `${t('enterDetails')} ${ASSET_TYPES.find(a => a.id === type)?.label}`)}
             </p>
           </div>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 p-1 hover:bg-slate-200 rounded-full transition-colors"><X size={20}/></button>
@@ -160,17 +161,17 @@ export const AddAssetModal: React.FC<Props> = ({ isOpen, onClose, initialAsset }
                     <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 space-y-4">
                          <div className="flex justify-between items-center mb-2">
                             <h3 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-                                1. Identification
+                                {t('identification')}
                             </h3>
                             {!initialAsset && (
-                                <button type="button" onClick={() => setStep(1)} className="text-xs text-blue-600 hover:underline">Change Type</button>
+                                <button type="button" onClick={() => setStep(1)} className="text-xs text-blue-600 hover:underline">{t('changeType')}</button>
                             )}
                          </div>
                          
                          <div className="grid grid-cols-2 gap-4">
                              <div>
                                 <label className="block text-xs font-medium text-slate-500 uppercase mb-1">
-                                    {type === AssetType.LIABILITY ? 'Loan Name' : (type === AssetType.REAL_ESTATE ? 'Property Name' : 'Ticker / Currency Code')}
+                                    {t('tickerLabel')}
                                 </label>
                                 <input 
                                     type="text" 
@@ -185,7 +186,7 @@ export const AddAssetModal: React.FC<Props> = ({ isOpen, onClose, initialAsset }
                                 )}
                              </div>
                              <div>
-                                <label className="block text-xs font-medium text-slate-500 uppercase mb-1">Full Name (Optional)</label>
+                                <label className="block text-xs font-medium text-slate-500 uppercase mb-1">{t('nameLabel')}</label>
                                 <input 
                                     type="text" 
                                     placeholder={type === AssetType.CASH ? "Chinese Yuan" : "e.g. Apple Inc."}
@@ -197,7 +198,7 @@ export const AddAssetModal: React.FC<Props> = ({ isOpen, onClose, initialAsset }
 
                          {isStrictManualAsset(type) && (
                             <div>
-                                <label className="block text-xs font-medium text-slate-500 uppercase mb-1">Currency</label>
+                                <label className="block text-xs font-medium text-slate-500 uppercase mb-1">{t('currencyLabel')}</label>
                                 <select
                                     value={currency}
                                     onChange={(e) => setCurrency(e.target.value as Currency)}
@@ -213,12 +214,12 @@ export const AddAssetModal: React.FC<Props> = ({ isOpen, onClose, initialAsset }
 
                     {/* Financials Section */}
                     <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 space-y-4">
-                        <h3 className="text-sm font-semibold text-slate-700">2. Valuation & Holdings</h3>
+                        <h3 className="text-sm font-semibold text-slate-700">{t('valuationHoldings')}</h3>
                         
                         <div className="grid grid-cols-2 gap-4">
                             <div>
                                 <label className="block text-xs font-medium text-slate-500 uppercase mb-1">
-                                    {type === AssetType.CASH ? 'Balance' : (type === AssetType.LIABILITY ? 'Principal Remaining' : 'Quantity')}
+                                    {type === AssetType.CASH ? t('balance') : (type === AssetType.LIABILITY ? t('principalRemaining') : t('quantity'))}
                                 </label>
                                 <input 
                                     type="number" step="any" 
@@ -233,7 +234,7 @@ export const AddAssetModal: React.FC<Props> = ({ isOpen, onClose, initialAsset }
                             {isStrictManualAsset(type) ? (
                                 <div>
                                     <label className="block text-xs font-medium text-slate-500 uppercase mb-1">
-                                        Current Unit Price
+                                        {t('unitPrice')}
                                     </label>
                                     <input 
                                         type="number" step="any" 
@@ -245,7 +246,7 @@ export const AddAssetModal: React.FC<Props> = ({ isOpen, onClose, initialAsset }
                             ) : (
                                 <div>
                                     <label className="block text-xs font-medium text-slate-500 uppercase mb-1">
-                                        {type === AssetType.CASH ? 'Avg Cost (USD Basis)' : 'Average Cost / Unit'}
+                                        {type === AssetType.CASH ? t('costBasis') : t('avgCostUnit')}
                                     </label>
                                     <input 
                                         type="number" step="any" 
@@ -263,8 +264,8 @@ export const AddAssetModal: React.FC<Props> = ({ isOpen, onClose, initialAsset }
                         {!isStrictManualAsset(type) && (
                             <p className="text-xs text-slate-400 italic">
                                 {type === AssetType.CASH 
-                                  ? "* Live exchange rates (USD) will be fetched automatically."
-                                  : "* Live prices will be fetched automatically based on ticker symbol."}
+                                  ? t('autoFetchCash')
+                                  : t('autoFetch')}
                             </p>
                         )}
                     </div>
@@ -281,7 +282,7 @@ export const AddAssetModal: React.FC<Props> = ({ isOpen, onClose, initialAsset }
                     className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl shadow-lg shadow-blue-200 transition-all flex items-center justify-center gap-2"
                 >
                     <Save size={18}/>
-                    {initialAsset ? 'Save Changes' : 'Add Asset to Portfolio'}
+                    {initialAsset ? t('saveChanges') : t('addToPortfolio')}
                 </button>
             </div>
         )}

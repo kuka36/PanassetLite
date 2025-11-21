@@ -1,3 +1,4 @@
+
 import React, { useMemo } from 'react';
 import { usePortfolio } from '../context/PortfolioContext';
 import { Card } from './ui/Card';
@@ -13,7 +14,7 @@ const isManualValuation = (type: AssetType) =>
   type === AssetType.REAL_ESTATE || type === AssetType.LIABILITY || type === AssetType.OTHER;
 
 export const Dashboard: React.FC = () => {
-  const { assets, settings, exchangeRates } = usePortfolio();
+  const { assets, settings, exchangeRates, t } = usePortfolio();
 
   // Calculate Summaries with Currency Conversion (Handling Liabilities)
   const summary = useMemo(() => {
@@ -144,7 +145,7 @@ export const Dashboard: React.FC = () => {
         <div className="bg-gradient-to-br from-blue-600 to-blue-700 rounded-2xl p-6 text-white shadow-lg relative overflow-hidden">
             {settings.isPrivacyMode && <EyeOff className="absolute top-6 right-6 text-blue-400 opacity-50" size={24} />}
             <div className="flex items-center justify-between mb-4">
-                <span className="text-blue-100 font-medium">Total Net Worth</span>
+                <span className="text-blue-100 font-medium">{t('netWorth')}</span>
                 <div className="p-2 bg-white/20 rounded-lg"><DollarSign size={20} /></div>
             </div>
             <div className="text-3xl font-bold mb-1">{formatCurrency(summary.totalNetWorth)}</div>
@@ -152,38 +153,38 @@ export const Dashboard: React.FC = () => {
                 <span className={summary.totalPnL >= 0 ? "text-green-300" : "text-red-300"}>
                     {summary.totalPnL >= 0 ? '+' : ''}{formatPercent(summary.totalPnLPercent)}
                 </span>
-                All time
+                {t('allTime')}
             </div>
         </div>
 
         {/* 2. Total Assets */}
         <Card className="flex flex-col justify-center">
             <span className="text-slate-500 font-medium mb-2 flex items-center gap-2">
-                <Wallet size={16} className="text-blue-500"/> Total Assets
+                <Wallet size={16} className="text-blue-500"/> {t('totalAssets')}
             </span>
             <div className="text-2xl font-bold text-slate-800 mb-1">{formatCurrency(summary.totalAssetsValue)}</div>
             <div className="text-xs text-slate-400">
-                Gross value before debt
+                {t('grossValue')}
             </div>
         </Card>
 
         {/* 3. Total Liabilities (Red styled if exists) */}
         <Card className={`flex flex-col justify-center ${summary.totalLiabilitiesValue > 0 ? 'border-red-100 bg-red-50/30' : ''}`}>
             <span className="text-slate-500 font-medium mb-2 flex items-center gap-2">
-                <CreditCard size={16} className="text-red-500"/> Total Liabilities
+                <CreditCard size={16} className="text-red-500"/> {t('totalLiabilities')}
             </span>
             <div className={`text-2xl font-bold mb-1 ${summary.totalLiabilitiesValue > 0 ? 'text-red-600' : 'text-slate-800'}`}>
                 {summary.totalLiabilitiesValue > 0 ? '-' : ''}{formatCurrency(summary.totalLiabilitiesValue)}
             </div>
             <div className="text-xs text-slate-400">
-                Outstanding Loans & Debt
+                {t('outstandingDebt')}
             </div>
         </Card>
 
         {/* 4. Day P&L */}
         <Card className="flex flex-col justify-center">
             <span className="text-slate-500 font-medium mb-2 flex items-center gap-2">
-               Today's P&L <Activity size={16} />
+               {t('dayPnL')} <Activity size={16} />
             </span>
             <div className="text-2xl font-bold text-slate-800 mb-1">{formatCurrency(summary.dayPnL)}</div>
             <div className={`text-sm font-medium flex items-center gap-1 ${summary.dayPnL >= 0 ? 'text-green-600' : 'text-red-500'}`}>
@@ -196,12 +197,12 @@ export const Dashboard: React.FC = () => {
       {/* Charts Section */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Line Chart */}
-        <Card title="Net Worth Trend (30D)" className="lg:col-span-2">
+        <Card title={t('netWorthTrend')} className="lg:col-span-2">
           <div className="h-[300px] w-full">
             {settings.isPrivacyMode ? (
                 <div className="h-full flex flex-col items-center justify-center text-slate-300">
                     <EyeOff size={48} className="mb-2"/>
-                    <p>Chart Hidden in Privacy Mode</p>
+                    <p>{t('chartHidden')}</p>
                 </div>
             ) : (
             <ResponsiveContainer width="100%" height="100%">
@@ -217,7 +218,7 @@ export const Dashboard: React.FC = () => {
                 <YAxis tickFormatter={(val) => `$${(val/1000).toFixed(0)}k`} tickLine={false} axisLine={false} tick={{fill: '#64748b', fontSize: 12}} width={40}/>
                 <Tooltip 
                     contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                    formatter={(value: number) => [formatCurrency(value), 'Net Worth']}
+                    formatter={(value: number) => [formatCurrency(value), t('netWorth')]}
                 />
                 <Area type="monotone" dataKey="value" stroke="#3b82f6" strokeWidth={3} fillOpacity={1} fill="url(#colorValue)" />
               </AreaChart>
@@ -227,12 +228,12 @@ export const Dashboard: React.FC = () => {
         </Card>
 
         {/* Pie Chart */}
-        <Card title={`Asset Allocation (${settings.baseCurrency})`}>
+        <Card title={`${t('assetAllocation')} (${settings.baseCurrency})`}>
           <div className="h-[300px] w-full flex flex-col items-center justify-center relative">
             {settings.isPrivacyMode ? (
                  <div className="h-full flex flex-col items-center justify-center text-slate-300">
                     <EyeOff size={48} className="mb-2"/>
-                    <p>Hidden</p>
+                    <p>{t('hidden')}</p>
                 </div>
             ) : (
              <>
@@ -259,7 +260,7 @@ export const Dashboard: React.FC = () => {
             </ResponsiveContainer>
             {/* Center Legend Overlay */}
             <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-center pointer-events-none">
-                <div className="text-xs text-slate-400">Top Asset</div>
+                <div className="text-xs text-slate-400">{t('topAsset')}</div>
                 <div className="font-bold text-slate-700">{allocationData[0]?.name || '-'}</div>
             </div>
             </>

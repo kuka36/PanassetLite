@@ -1,11 +1,14 @@
+
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { Asset, AssetType, Currency, Transaction, TransactionType } from '../types';
+import { Asset, AssetType, Currency, Transaction, TransactionType, Language } from '../types';
 import { fetchExchangeRates, fetchCryptoPrices, fetchStockPrices, ExchangeRates } from '../services/marketData';
+import { translations } from '../utils/i18n';
 
 interface AppSettings {
   baseCurrency: Currency;
   isPrivacyMode: boolean;
   geminiApiKey: string;
+  language: Language;
 }
 
 interface PortfolioContextType {
@@ -23,6 +26,7 @@ interface PortfolioContextType {
   updateSettings: (newSettings: Partial<AppSettings>) => void;
   importData: (data: { assets: Asset[], transactions: Transaction[] }) => void;
   clearData: () => void;
+  t: (key: string) => string;
 }
 
 const PortfolioContext = createContext<PortfolioContextType | undefined>(undefined);
@@ -35,10 +39,17 @@ const INITIAL_ASSETS: Asset[] = [
   { id: '4', symbol: 'USD', name: 'Cash Reserve', type: AssetType.CASH, quantity: 5000, avgCost: 1, currentPrice: 1, currency: Currency.USD, lastUpdated: Date.now() },
 ];
 
+const getBrowserLanguage = (): Language => {
+  const lang = navigator.language.toLowerCase();
+  if (lang.startsWith('zh')) return 'zh';
+  return 'en';
+};
+
 const INITIAL_SETTINGS: AppSettings = {
   baseCurrency: Currency.USD,
   isPrivacyMode: false,
   geminiApiKey: process.env.GEMINI_API_KEY || '',
+  language: getBrowserLanguage(),
 };
 
 export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
@@ -59,7 +70,9 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
       return {
         ...INITIAL_SETTINGS,
         ...parsed,
-        geminiApiKey: parsed.geminiApiKey || INITIAL_SETTINGS.geminiApiKey
+        geminiApiKey: parsed.geminiApiKey || INITIAL_SETTINGS.geminiApiKey,
+        // If language was not saved previously, default to browser
+        language: parsed.language || INITIAL_SETTINGS.language
       };
     }
     return INITIAL_SETTINGS;
@@ -210,6 +223,12 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
     localStorage.removeItem('investflow_transactions');
   };
 
+  // Translation Helper
+  const t = (key: string): string => {
+    const lang = settings.language || 'en';
+    return translations[lang]?.[key] || key;
+  };
+
   return (
     <PortfolioContext.Provider value={{ 
       assets, 
@@ -225,7 +244,8 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
       refreshPrices,
       updateSettings,
       importData,
-      clearData
+      clearData,
+      t
     }}>
       {children}
     </PortfolioContext.Provider>

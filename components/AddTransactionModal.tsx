@@ -11,7 +11,7 @@ interface Props {
 }
 
 export const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, preselectedAssetId }) => {
-  const { assets, addTransaction } = usePortfolio();
+  const { assets, addTransaction, t } = usePortfolio();
   
   const [assetId, setAssetId] = useState('');
   const [type, setType] = useState<TransactionType>(TransactionType.BUY);
@@ -68,7 +68,7 @@ export const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, preselec
         <div className="px-6 py-4 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
           <div className="flex items-center gap-2">
              <div className="p-2 bg-blue-100 text-blue-600 rounded-lg"><ArrowRightLeft size={18}/></div>
-             <h2 className="text-lg font-bold text-slate-800">Record Transaction</h2>
+             <h2 className="text-lg font-bold text-slate-800">{t('recordTransaction')}</h2>
           </div>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X size={20}/></button>
         </div>
@@ -77,7 +77,7 @@ export const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, preselec
           
           {/* Asset Selection */}
           <div>
-            <label className="block text-xs font-medium text-slate-500 uppercase mb-1">Asset</label>
+            <label className="block text-xs font-medium text-slate-500 uppercase mb-1">{t('asset')}</label>
             <select 
                 value={assetId} 
                 onChange={(e) => setAssetId(e.target.value)}
@@ -85,7 +85,7 @@ export const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, preselec
                 required
                 disabled={!!preselectedAssetId}
             >
-                <option value="" disabled>Select an asset...</option>
+                <option value="" disabled>{t('selectAssetPlaceholder')}</option>
                 {availableAssets.map(asset => (
                     <option key={asset.id} value={asset.id}>
                         {asset.symbol} - {asset.name}
@@ -96,16 +96,16 @@ export const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, preselec
 
           {/* Transaction Type */}
           <div>
-             <label className="block text-xs font-medium text-slate-500 uppercase mb-1">Action</label>
+             <label className="block text-xs font-medium text-slate-500 uppercase mb-1">{t('action')}</label>
              <div className="flex p-1 bg-slate-100 rounded-lg">
-                {(['BUY', 'SELL', 'DIVIDEND'] as TransactionType[]).map((t) => (
+                {(['BUY', 'SELL', 'DIVIDEND'] as TransactionType[]).map((tKey) => (
                     <button
-                        key={t}
+                        key={tKey}
                         type="button"
-                        onClick={() => setType(t)}
-                        className={`flex-1 py-2 text-xs font-bold rounded-md transition-all ${type === t ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                        onClick={() => setType(tKey)}
+                        className={`flex-1 py-2 text-xs font-bold rounded-md transition-all ${type === tKey ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                     >
-                        {t}
+                        {t(`tx_${tKey}`)}
                     </button>
                 ))}
              </div>
@@ -113,7 +113,7 @@ export const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, preselec
 
           {/* Date */}
           <div>
-             <label className="block text-xs font-medium text-slate-500 uppercase mb-1">Date</label>
+             <label className="block text-xs font-medium text-slate-500 uppercase mb-1">{t('date')}</label>
              <div className="relative">
                  <Calendar className="absolute left-3 top-2.5 text-slate-400" size={16}/>
                  <input 
@@ -129,7 +129,7 @@ export const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, preselec
           <div className="grid grid-cols-2 gap-4">
              {/* Quantity */}
              <div>
-                <label className="block text-xs font-medium text-slate-500 uppercase mb-1">Quantity</label>
+                <label className="block text-xs font-medium text-slate-500 uppercase mb-1">{t('quantity')}</label>
                 <div className="relative">
                     <Hash className="absolute left-3 top-2.5 text-slate-400" size={16}/>
                     <input 
@@ -143,7 +143,7 @@ export const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, preselec
              
              {/* Price */}
              <div>
-                <label className="block text-xs font-medium text-slate-500 uppercase mb-1">Price per Unit</label>
+                <label className="block text-xs font-medium text-slate-500 uppercase mb-1">{t('pricePerUnit')}</label>
                 <div className="relative">
                     <DollarSign className="absolute left-3 top-2.5 text-slate-400" size={16}/>
                     <input 
@@ -158,7 +158,7 @@ export const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, preselec
 
           {/* Fees */}
           <div>
-                <label className="block text-xs font-medium text-slate-500 uppercase mb-1">Fees</label>
+                <label className="block text-xs font-medium text-slate-500 uppercase mb-1">{t('fees')}</label>
                 <div className="relative">
                     <DollarSign className="absolute left-3 top-2.5 text-slate-400" size={16}/>
                     <input 
@@ -171,7 +171,7 @@ export const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, preselec
 
           {/* Summary */}
           <div className="p-3 bg-slate-100 rounded-lg flex justify-between items-center text-sm">
-              <span className="text-slate-500 font-medium">Total Estimate</span>
+              <span className="text-slate-500 font-medium">{t('totalEstimate')}</span>
               <span className="font-bold text-slate-800">
                   ${((parseFloat(quantity) || 0) * (parseFloat(price) || 0) + (parseFloat(fee) || 0)).toLocaleString(undefined, {minimumFractionDigits: 2})}
               </span>
@@ -182,7 +182,7 @@ export const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, preselec
             className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl shadow-lg shadow-blue-200 transition-all flex items-center justify-center gap-2"
           >
             <Save size={18}/>
-            Record Transaction
+            {t('recordTransaction')}
           </button>
 
         </form>

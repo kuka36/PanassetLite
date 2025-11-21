@@ -1,5 +1,6 @@
+
 import { GoogleGenAI, Type } from "@google/genai";
-import { Asset, AssetType } from "../types";
+import { Asset, AssetType, Language } from "../types";
 
 export const RISK_CACHE_KEY = 'investflow_risk_cache';
 export const RISK_CACHE_TTL = 3600 * 1000; // 1 hour
@@ -24,11 +25,12 @@ export const generatePortfolioHash = (assets: Asset[]) => {
     .join('|');
 };
 
-export const getPortfolioAnalysis = async (assets: Asset[], apiKey: string, forceRefresh: boolean = false) => {
+export const getPortfolioAnalysis = async (assets: Asset[], apiKey: string, language: Language = 'en', forceRefresh: boolean = false) => {
   if (!apiKey) throw new Error("API Key is missing");
   if (assets.length === 0) return "";
 
-  const currentHash = generatePortfolioHash(assets);
+  // Include language in hash to ensure we re-fetch if language changes
+  const currentHash = `${generatePortfolioHash(assets)}:${language}`;
   const now = Date.now();
 
   // 1. Check LocalStorage Cache
@@ -62,6 +64,8 @@ export const getPortfolioAnalysis = async (assets: Asset[], apiKey: string, forc
       curr: a.currency
     }));
 
+    const targetLanguage = language === 'zh' ? 'Chinese (Simplified)' : 'English';
+
     // Optimized System Prompt for Comprehensive Wealth Management
     const prompt = `
     You are the Chief Investment Officer (CIO) for 'InvestFlow', a private wealth management platform.
@@ -76,20 +80,20 @@ export const getPortfolioAnalysis = async (assets: Asset[], apiKey: string, forc
     - **Liabilities**: Loans, Mortgages (Negative impact on Net Worth).
 
     **Task:**
-    Generate a strategic wealth analysis report in **Chinese (Simplified)**. Use Markdown.
+    Generate a strategic wealth analysis report in **${targetLanguage}**. Use Markdown.
 
     **Structure:**
-    1.  **Wealth Health Check (财富健康诊断)**:
+    1.  **Wealth Health Check**:
         - Analyze the **Net Worth** status.
         - Assess **Debt-to-Asset Ratio**. Are they over-leveraged? (Liabilities > 30% is caution).
         - Assess **Liquidity**. Do they have enough cash/stocks vs real estate?
 
-    2.  **Risk & Allocation (风险与配置)**:
+    2.  **Risk & Allocation**:
         - Evaluate exposure to High Volatility (Crypto) vs Stable Assets (Real Estate/Cash).
         - Comment on concentration risk (e.g., too much in one stock or one property).
 
-    3.  **Strategic Recommendations (首席建议)**:
-        - Provide 3 specific, actionable steps to optimize the portfolio (e.g., "Pay down high-interest debt", "Increase emergency fund", "Diversify into global ETFs").
+    3.  **Strategic Recommendations**:
+        - Provide 3 specific, actionable steps to optimize the portfolio.
 
     **Tone:** Professional, insightful, objective, and encouraging.
     **Length:** Concise (~300 words).
@@ -100,7 +104,7 @@ export const getPortfolioAnalysis = async (assets: Asset[], apiKey: string, forc
       contents: prompt,
     });
     
-    const textResult = response.text || "暂时无法生成分析报告。";
+    const textResult = response.text || (language === 'zh' ? "暂时无法生成分析报告。" : "Unable to generate analysis report.");
 
     try {
       localStorage.setItem(ADVISOR_CACHE_KEY, JSON.stringify({
@@ -124,11 +128,11 @@ export const getPortfolioAnalysis = async (assets: Asset[], apiKey: string, forc
   }
 };
 
-export const getRiskAssessment = async (assets: Asset[], apiKey: string, forceRefresh: boolean = false) => {
+export const getRiskAssessment = async (assets: Asset[], apiKey: string, language: Language = 'en', forceRefresh: boolean = false) => {
   if (!apiKey) throw new Error("API Key is missing");
   if (assets.length === 0) return null;
 
-  const currentHash = generatePortfolioHash(assets);
+  const currentHash = `${generatePortfolioHash(assets)}:${language}`;
   const now = Date.now();
 
   if (!forceRefresh) {
@@ -156,6 +160,8 @@ export const getRiskAssessment = async (assets: Asset[], apiKey: string, forceRe
       val: (a.quantity * a.currentPrice).toFixed(0),
     }));
 
+    const targetLanguage = language === 'zh' ? 'Chinese' : 'English';
+
     const prompt = `
       Analyze the risk profile of this portfolio: ${JSON.stringify(portfolioSummary)}.
       Classify assets:
@@ -164,7 +170,7 @@ export const getRiskAssessment = async (assets: Asset[], apiKey: string, forceRe
       - Low/Stable Risk: Cash, Real Estate
       - Liability: Debt (increases overall risk profile if high)
       
-      Return JSON with a riskScore (1-10) and a brief analysis in Chinese.
+      Return JSON with a riskScore (1-10) and a brief analysis in ${targetLanguage}.
     `;
 
     const response = await ai.models.generateContent({
@@ -177,7 +183,7 @@ export const getRiskAssessment = async (assets: Asset[], apiKey: string, forceRe
           properties: {
             riskScore: { type: Type.NUMBER, description: "1-10 Score (10 is Aggressive)" },
             riskLevel: { type: Type.STRING, description: "Conservative, Balanced, Aggressive" },
-            analysis: { type: Type.STRING, description: "Max 60 words summary in Chinese" }
+            analysis: { type: Type.STRING, description: `Max 60 words summary in ${targetLanguage}` }
           },
           required: ["riskScore", "riskLevel", "analysis"]
         }
