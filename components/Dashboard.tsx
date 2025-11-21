@@ -70,6 +70,32 @@ export const Dashboard: React.FC = () => {
       .sort((a, b) => b.value - a.value);
   }, [assets, settings.baseCurrency, exchangeRates]);
 
+  // Weighted Volatility Factor for Mock History
+  // If portfolio is mostly Real Estate, line should be flat. If Crypto, volatile.
+  const portfolioVolatility = useMemo(() => {
+      if (summary.totalBalance === 0) return 0.01;
+
+      let totalWeightedVol = 0;
+      let absoluteTotalValue = 0;
+
+      assets.forEach(asset => {
+          const nativeValue = asset.quantity * asset.currentPrice;
+          const val = convertValue(nativeValue, asset.currency, settings.baseCurrency, exchangeRates);
+          absoluteTotalValue += val;
+
+          let vol = 0.01; // Default (Fund/ETF)
+          if (asset.type === AssetType.CRYPTO) vol = 0.05; // High
+          if (asset.type === AssetType.STOCK) vol = 0.02; // Med
+          if (asset.type === AssetType.REAL_ESTATE) vol = 0.001; // Very Low (Stable)
+          if (asset.type === AssetType.CASH) vol = 0.0005; // Flat
+          if (asset.type === AssetType.LIABILITY) vol = 0.0; // Fixed
+
+          totalWeightedVol += val * vol;
+      });
+
+      return absoluteTotalValue === 0 ? 0.01 : totalWeightedVol / absoluteTotalValue;
+  }, [assets, summary.totalBalance, settings.baseCurrency, exchangeRates]);
+
   // Prepare Mock History Data for Area Chart (Net Worth)
   const historyData = useMemo(() => {
     const data = [];
@@ -83,11 +109,12 @@ export const Dashboard: React.FC = () => {
       const date = new Date();
       date.setDate(date.getDate() - i);
       
-      // Random walk
-      const volatility = (Math.random() - 0.45) * (Math.abs(balance) * 0.02);
-      balance += volatility;
+      // Random walk based on Portfolio Volatility
+      // If mostly Real Estate, this change will be tiny.
+      const change = (Math.random() - 0.48) * (Math.abs(balance) * portfolioVolatility * 2); 
+      balance += change;
       
-      // Force end point to match current
+      // Smooth landing to current value
       if (i === 0) balance = summary.totalBalance;
       
       data.push({
@@ -96,7 +123,7 @@ export const Dashboard: React.FC = () => {
       });
     }
     return data;
-  }, [summary.totalBalance, summary.totalCost, assets.length]);
+  }, [summary.totalBalance, summary.totalCost, assets.length, portfolioVolatility]);
 
   const formatCurrency = (val: number) => {
       if (settings.isPrivacyMode) return '****';

@@ -49,37 +49,41 @@ export const getPortfolioAnalysis = async (assets: Asset[]) => {
       symbol: a.symbol,
       type: a.type,
       qty: a.quantity,
-      estimatedValue: (a.quantity * a.currentPrice).toFixed(0),
-      currency: a.currency
+      val: (a.quantity * a.currentPrice).toFixed(0),
+      curr: a.currency
     }));
 
-    // Optimized System Prompt for Multi-Asset Wealth Management
+    // Optimized System Prompt for Comprehensive Wealth Management
     const prompt = `
-    You are the AI Wealth Advisor for 'InvestFlow', a comprehensive multi-asset tracking application.
-    
-    User's Portfolio Data (JSON):
+    You are the Chief Investment Officer (CIO) for 'InvestFlow', a private wealth management platform.
+
+    **User Portfolio Snapshot:**
     ${JSON.stringify(portfolioSummary)}
 
-    Analyze this portfolio considering these asset classes:
-    - **Liquid Assets**: Stocks, Crypto, Cash (Funds).
-    - **Hard Assets**: Real Estate.
-    - **Liabilities**: Loans, Mortgages (Negative value).
+    **Financial Context:**
+    - **Net Worth** = Total Assets - Total Liabilities.
+    - **Liquid Assets**: Stocks, Crypto, Cash, Funds.
+    - **Illiquid Assets**: Real Estate (Low volatility, hard to sell).
+    - **Liabilities**: Loans, Mortgages (Negative impact on Net Worth).
 
-    Please generate a **concise** strategic report (in Chinese) using Markdown:
+    **Task:**
+    Generate a strategic wealth analysis report in **Chinese (Simplified)**. Use Markdown.
 
-    ### 1. 资产概览 (Portfolio Overview)
-    Briefly summarize the Net Worth health. Are they over-leveraged (High Debt)? Is liquidity low (Too much Real Estate)?
-    
-    ### 2. 风险评估 (Risk Assessment)
-    Identify concentration risks. 
-    *Note: Crypto is High Risk. Real Estate is Illiquid. Single Stock concentration is risky.*
-    
-    ### 3. 优化建议 (Actionable Advice)
-    Provide 3 specific bullet points on how to balance the portfolio (e.g., "Pay down high-interest debt", "Diversify into ETFs", "Increase cash reserves").
+    **Structure:**
+    1.  **Wealth Health Check (财富健康诊断)**:
+        - Analyze the **Net Worth** status.
+        - Assess **Debt-to-Asset Ratio**. Are they over-leveraged? (Liabilities > 30% is caution).
+        - Assess **Liquidity**. Do they have enough cash/stocks vs real estate?
 
-    **Tone:** Professional, Insightful, Objective.
-    **Language:** Chinese (Simplified).
-    **Length:** Max 300 words.
+    2.  **Risk & Allocation (风险与配置)**:
+        - Evaluate exposure to High Volatility (Crypto) vs Stable Assets (Real Estate/Cash).
+        - Comment on concentration risk (e.g., too much in one stock or one property).
+
+    3.  **Strategic Recommendations (首席建议)**:
+        - Provide 3 specific, actionable steps to optimize the portfolio (e.g., "Pay down high-interest debt", "Increase emergency fund", "Diversify into global ETFs").
+
+    **Tone:** Professional, insightful, objective, and encouraging.
+    **Length:** Concise (~300 words).
     `;
 
     const response = await ai.models.generateContent({
@@ -139,9 +143,14 @@ export const getRiskAssessment = async (assets: Asset[]) => {
     }));
 
     const prompt = `
-      Analyze the risk of this portfolio structure: ${JSON.stringify(portfolioSummary)}.
-      Consider: Crypto (High), Stocks (Med-High), Real Estate (Low/Illiquid), Cash (Low).
-      Return JSON.
+      Analyze the risk profile of this portfolio: ${JSON.stringify(portfolioSummary)}.
+      Classify assets:
+      - High Risk: Crypto
+      - Medium Risk: Stocks, Funds
+      - Low/Stable Risk: Cash, Real Estate
+      - Liability: Debt (increases overall risk profile if high)
+      
+      Return JSON with a riskScore (1-10) and a brief analysis in Chinese.
     `;
 
     const response = await ai.models.generateContent({
@@ -152,8 +161,8 @@ export const getRiskAssessment = async (assets: Asset[]) => {
         responseSchema: {
           type: Type.OBJECT,
           properties: {
-            riskScore: { type: Type.NUMBER, description: "1-10 Score" },
-            riskLevel: { type: Type.STRING, description: "Conservative to Aggressive" },
+            riskScore: { type: Type.NUMBER, description: "1-10 Score (10 is Aggressive)" },
+            riskLevel: { type: Type.STRING, description: "Conservative, Balanced, Aggressive" },
             analysis: { type: Type.STRING, description: "Max 60 words summary in Chinese" }
           },
           required: ["riskScore", "riskLevel", "analysis"]
