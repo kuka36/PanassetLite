@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { HashRouter, Routes, Route } from 'react-router-dom';
-import { PortfolioProvider, usePortfolio } from './context/PortfolioContext';
+import { PortfolioProvider } from './context/PortfolioContext';
 import { Layout } from './components/Layout';
 import { Dashboard } from './components/Dashboard';
 import { AssetList } from './components/AssetList';
@@ -11,28 +11,16 @@ import { AddTransactionModal } from './components/AddTransactionModal';
 import { Analytics } from './components/Analytics';
 import { Settings } from './components/Settings';
 import { GeminiAdvisor } from './components/GeminiAdvisor';
-import { Plus, RefreshCw, Wallet } from 'lucide-react';
+import { Plus, Wallet } from 'lucide-react';
 import { Asset } from './types';
 
 const DashboardView: React.FC = () => {
-  const { refreshPrices, isRefreshing } = usePortfolio();
-
   return (
     <div className="space-y-8">
       <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold text-slate-800">Overview</h1>
           <p className="text-slate-500">Welcome back, here's your portfolio performance.</p>
-        </div>
-        <div className="flex items-center gap-2">
-           <button 
-            onClick={() => refreshPrices()}
-            disabled={isRefreshing}
-            className="px-4 py-2.5 bg-white text-slate-600 border border-slate-200 hover:bg-slate-50 font-medium rounded-xl shadow-sm transition-all flex items-center gap-2 disabled:opacity-50"
-           >
-             <RefreshCw size={18} className={isRefreshing ? "animate-spin" : ""} />
-             <span className="hidden sm:inline">{isRefreshing ? "Refreshing..." : "Refresh Data"}</span>
-           </button>
         </div>
       </div>
 
