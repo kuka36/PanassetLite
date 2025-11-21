@@ -30,7 +30,7 @@ const PortfolioContext = createContext<PortfolioContextType | undefined>(undefin
 const INITIAL_ASSETS: Asset[] = [
   { id: '1', symbol: 'AAPL', name: 'Apple Inc.', type: AssetType.STOCK, quantity: 10, avgCost: 150, currentPrice: 175.5, currency: Currency.USD },
   { id: '2', symbol: 'BTC', name: 'Bitcoin', type: AssetType.CRYPTO, quantity: 0.1, avgCost: 42000, currentPrice: 64000, currency: Currency.USD },
-  { id: '3', symbol: '0700', name: 'Tencent', type: AssetType.STOCK, quantity: 100, avgCost: 300, currentPrice: 380, currency: Currency.HKD },
+  { id: '3', symbol: '0700.HK', name: 'Tencent', type: AssetType.STOCK, quantity: 100, avgCost: 300, currentPrice: 380, currency: Currency.HKD },
   { id: '4', symbol: 'USD', name: 'Cash Reserve', type: AssetType.CASH, quantity: 5000, avgCost: 1, currentPrice: 1, currency: Currency.USD },
 ];
 
@@ -128,7 +128,8 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
       setExchangeRates(rates);
 
       // 2. Fetch Asset Prices (Parallel)
-      const [cryptoPrices, stockPrices] = await Promise.all([
+      // Note: fetchStockPrices now returns { price, currency }
+      const [cryptoPrices, stockData] = await Promise.all([
         fetchCryptoPrices(assets),
         fetchStockPrices(assets)
       ]);
@@ -138,15 +139,21 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
         if (asset.type === AssetType.CASH) return asset; // Cash is always 1 relative to itself
 
         let newPrice = asset.currentPrice;
+        let newCurrency = asset.currency;
 
         if (asset.type === AssetType.CRYPTO && cryptoPrices[asset.id]) {
           newPrice = cryptoPrices[asset.id];
-        } else if ((asset.type === AssetType.STOCK || asset.type === AssetType.FUND) && stockPrices[asset.id]) {
-          newPrice = stockPrices[asset.id];
+          // Crypto is generally always in USD from this API call
+          newCurrency = Currency.USD; 
+        } else if ((asset.type === AssetType.STOCK || asset.type === AssetType.FUND) && stockData[asset.id]) {
+          newPrice = stockData[asset.id].price;
+          // Update currency if the stock API detected a specific currency based on symbol
+          // This fixes cases where user entered 0700.HK but left currency as USD
+          newCurrency = stockData[asset.id].currency;
         } 
-        // else: keep existing price (or mocked fallback if needed, but here we prefer stale data over bad random data)
+        // else: keep existing price
 
-        return { ...asset, currentPrice: newPrice };
+        return { ...asset, currentPrice: newPrice, currency: newCurrency };
       }));
 
     } catch (error) {

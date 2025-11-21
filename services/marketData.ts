@@ -6,7 +6,7 @@ const COINGECKO_API = 'https://api.coingecko.com/api/v3/simple/price';
 
 // Cache Keys
 const CACHE_RATES_KEY = 'investflow_rates';
-const CACHE_PRICES_KEY = 'investflow_prices';
+// const CACHE_PRICES_KEY = 'investflow_prices'; // Not used yet
 
 // Cache Duration (ms)
 const RATES_TTL = 3600 * 1000; // 1 hour
@@ -28,6 +28,24 @@ const CRYPTO_MAP: Record<string, string> = {
 export interface ExchangeRates {
   [key: string]: number; // USD relative rates (e.g., USD: 1, CNY: 7.2)
 }
+
+export interface StockPriceResult {
+  price: number;
+  currency: Currency;
+}
+
+// --- Helper: Detect Currency from Symbol ---
+export const detectCurrencyFromSymbol = (symbol: string): Currency => {
+  const upper = symbol.toUpperCase();
+  if (upper.endsWith('.SS') || upper.endsWith('.SZ')) {
+    return Currency.CNY;
+  }
+  if (upper.endsWith('.HK')) {
+    return Currency.HKD;
+  }
+  // Default to USD for US stocks (no suffix) or others
+  return Currency.USD;
+};
 
 // --- 1. Exchange Rates ---
 
@@ -94,9 +112,9 @@ export const fetchCryptoPrices = async (assets: Asset[]): Promise<Record<string,
 // Helper to delay execution to respect rate limits (approx 5 calls/minute for free tier)
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-export const fetchStockPrices = async (assets: Asset[]): Promise<Record<string, number>> => {
+export const fetchStockPrices = async (assets: Asset[]): Promise<Record<string, StockPriceResult>> => {
   const stockAssets = assets.filter(a => a.type === AssetType.STOCK || a.type === AssetType.FUND);
-  const priceMap: Record<string, number> = {};
+  const priceMap: Record<string, StockPriceResult> = {};
   
   // Only fetch the first 3 to avoid instant rate limit on free tier during demo
   // In production, you would need a backend queue or paid tier.
@@ -108,16 +126,27 @@ export const fetchStockPrices = async (assets: Asset[]): Promise<Record<string, 
       // Alpha Vantage symbols: IBM, 0700.HK, 600000.SS
       let querySymbol = asset.symbol; 
       
-      // Heuristic: If currency is HKD and no suffix, add .HK
-      if (asset.currency === Currency.HKD && !asset.symbol.includes('.')) {
-          querySymbol = `${asset.symbol}.HK`;
+      // Heuristic: If user specified HKD but didn't add suffix, try adding .HK for the query
+      if (asset.currency === Currency.HKD && !querySymbol.includes('.')) {
+          querySymbol = `${querySymbol}.HK`;
       }
+      // Heuristic: If user specified CNY but didn't add suffix, we might need .SS or .SZ
+      // This is harder to guess, so we rely on user input or default to trying without suffix (which usually fails or finds a US ticker)
 
       const res = await fetch(`https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${querySymbol}&apikey=${ALPHA_VANTAGE_KEY}`);
       const data = await res.json();
 
       if (data['Global Quote'] && data['Global Quote']['05. price']) {
-        priceMap[asset.id] = parseFloat(data['Global Quote']['05. price']);
+        const price = parseFloat(data['Global Quote']['05. price']);
+        
+        // Detect currency based on the SYMBOL we queried
+        // This ensures that if we queried 0700.HK, we treat the price as HKD
+        const detectedCurrency = detectCurrencyFromSymbol(data['Global Quote']['01. symbol'] || querySymbol);
+
+        priceMap[asset.id] = {
+          price,
+          currency: detectedCurrency
+        };
       } else if (data['Note']) {
           console.warn("Alpha Vantage Rate Limit reached");
           break; // Stop processing loop
