@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { usePortfolio } from '../context/PortfolioContext';
 import { Card } from './ui/Card';
@@ -54,9 +53,12 @@ export const AssetList: React.FC<AssetListProps> = ({ onEdit, onTransaction }) =
           bValue = b.quantity;
           break;
         case 'value':
-          // Sort by Converted Value (Base Currency) for standardized comparison
-          aValue = convertValue(a.quantity * a.currentPrice, a.currency, settings.baseCurrency, exchangeRates);
-          bValue = convertValue(b.quantity * b.currentPrice, b.currency, settings.baseCurrency, exchangeRates);
+          // Sort by Converted Value. 
+          // CRITICAL: Treat Liabilities as negative values so they appear at bottom in Descending sort
+          const valA = convertValue(a.quantity * a.currentPrice, a.currency, settings.baseCurrency, exchangeRates);
+          const valB = convertValue(b.quantity * b.currentPrice, b.currency, settings.baseCurrency, exchangeRates);
+          aValue = a.type === AssetType.LIABILITY ? -valA : valA;
+          bValue = b.type === AssetType.LIABILITY ? -valB : valB;
           break;
         case 'pnl':
           aValue = getPnl(a);
@@ -215,7 +217,7 @@ export const AssetList: React.FC<AssetListProps> = ({ onEdit, onTransaction }) =
                          </div>
                     ) : (
                         <div className="font-medium text-slate-700 flex items-center gap-2">
-                            {symbol}{asset.currentPrice.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                            {symbol}{asset.currentPrice.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 6})}
                             {isManual && onEdit && (
                                 <button 
                                     onClick={() => handleUpdateClick(asset)}
@@ -230,7 +232,7 @@ export const AssetList: React.FC<AssetListProps> = ({ onEdit, onTransaction }) =
                   </td>
                   <td className="py-4">
                     <div className="font-medium text-slate-700">
-                        {symbol}{asset.avgCost.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                        {symbol}{asset.avgCost.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 6})}
                     </div>
                   </td>
                   <td className="py-4">
@@ -241,13 +243,10 @@ export const AssetList: React.FC<AssetListProps> = ({ onEdit, onTransaction }) =
                     {isLiability ? '-' : ''}{baseCurrencySymbol}{baseValue.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
                   </td>
                   <td className="py-4 text-right pr-2">
-                    {isManual ? (
+                    {isManual && !pnl ? (
                         <div className="text-right">
                              <div className="text-xs font-medium text-slate-500 bg-slate-100 inline-block px-2 py-0.5 rounded-md">
                                 Last val: {formatLastUpdated(asset.lastUpdated)}
-                             </div>
-                             <div className={`text-xs mt-0.5 ${pnl >= 0 ? 'text-green-600/70' : 'text-red-500/70'}`}>
-                                Total: {pnl >= 0 ? '+' : ''}{Math.abs(pnlPercent).toFixed(1)}%
                              </div>
                         </div>
                     ) : (

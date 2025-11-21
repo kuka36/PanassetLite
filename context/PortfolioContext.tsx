@@ -19,7 +19,7 @@ interface PortfolioContextType {
   deleteAsset: (id: string) => void;
   addTransaction: (transaction: Omit<Transaction, 'id'>) => void;
   updateAssetPrice: (id: string, newPrice: number) => void;
-  refreshPrices: () => Promise<void>;
+  refreshPrices: (assetsOverride?: Asset[]) => Promise<void>;
   updateSettings: (newSettings: Partial<AppSettings>) => void;
   importData: (data: { assets: Asset[], transactions: Transaction[] }) => void;
   clearData: () => void;
@@ -95,7 +95,13 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
   const addAsset = (newAsset: Asset) => {
     // Ensure lastUpdated is set
     const assetWithMeta = { ...newAsset, lastUpdated: newAsset.lastUpdated || Date.now() };
-    setAssets(prev => [...prev, assetWithMeta]);
+    
+    // 1. Update State immediately
+    const updatedList = [...assets, assetWithMeta];
+    setAssets(updatedList);
+
+    // 2. Trigger immediate price fetch for the new list
+    refreshPrices(updatedList);
   };
 
   const editAsset = (updatedAsset: Asset) => {
@@ -133,8 +139,11 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
     setAssets(prev => prev.map(a => a.id === id ? { ...a, currentPrice: newPrice, lastUpdated: Date.now() } : a));
   };
 
-  const refreshPrices = async () => {
+  // Modified: Accept optional assets list to support immediate fetch after add
+  const refreshPrices = async (assetsOverride?: Asset[]) => {
     setIsRefreshing(true);
+    const targetAssets = assetsOverride || assets;
+
     try {
       // 1. Fetch Rates
       const rates = await fetchExchangeRates();
@@ -143,14 +152,12 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
       // 2. Fetch Asset Prices (Parallel)
       // Note: fetchStockPrices now returns { price, currency }
       const [cryptoPrices, stockData] = await Promise.all([
-        fetchCryptoPrices(assets),
-        fetchStockPrices(assets)
+        fetchCryptoPrices(targetAssets),
+        fetchStockPrices(targetAssets)
       ]);
 
       // 3. Update State
       setAssets(prev => prev.map(asset => {
-        if (asset.type === AssetType.CASH) return asset; // Cash is always 1 relative to itself
-
         let newPrice = asset.currentPrice;
         let newCurrency = asset.currency;
         let timestamp = asset.lastUpdated || Date.now();
@@ -163,7 +170,16 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
           newPrice = stockData[asset.id].price;
           newCurrency = stockData[asset.id].currency;
           timestamp = Date.now();
-        } 
+        } else if (asset.type === AssetType.CASH) {
+            // Smart Cash: Update price based on exchange rate if symbol matches a known currency
+            // Logic: rates are "1 USD = X Unit". So Price in USD = 1 / X.
+            const rate = rates[asset.symbol];
+            if (rate) {
+                newPrice = 1 / rate;
+                newCurrency = Currency.USD; // Cash value is normalized to USD price per unit
+                timestamp = Date.now();
+            }
+        }
         // Manual assets (Real Estate, Liabilities) are skipped here and retain their existing values
 
         return { ...asset, currentPrice: newPrice, currency: newCurrency, lastUpdated: timestamp };

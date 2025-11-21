@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Asset, AssetType, Currency } from '../types';
 import { usePortfolio } from '../context/PortfolioContext';
@@ -62,8 +61,9 @@ export const AddAssetModal: React.FC<Props> = ({ isOpen, onClose, initialAsset }
 
   if (!isOpen) return null;
 
-  const isManualAsset = (t: AssetType) => 
-    t === AssetType.REAL_ESTATE || t === AssetType.LIABILITY || t === AssetType.OTHER || t === AssetType.CASH;
+  // Strict manual assets (No API fetch). CASH is now treated as "Market Asset" for Price, but "Manual" for identification if needed
+  const isStrictManualAsset = (t: AssetType) => 
+    t === AssetType.REAL_ESTATE || t === AssetType.LIABILITY || t === AssetType.OTHER;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -72,14 +72,14 @@ export const AddAssetModal: React.FC<Props> = ({ isOpen, onClose, initialAsset }
     let costNum = parseFloat(cost);
     let currentPriceNum = parseFloat(currentVal);
 
-    if (isManualAsset(type)) {
+    if (isStrictManualAsset(type)) {
         // For manual assets, cost is often not relevant or equal to current value if just tracking balance
         if (isNaN(costNum) && !isNaN(currentPriceNum)) costNum = currentPriceNum; 
         if (isNaN(currentPriceNum) && !isNaN(costNum)) currentPriceNum = costNum;
     } else {
-        // For market assets, we don't set currentPrice (it comes from API), 
-        // unless it's the very first entry, we default to cost to avoid 0 value before first fetch
-        if (isNaN(currentPriceNum)) currentPriceNum = costNum;
+        // For market assets (Stock, Crypto, Cash), we don't set currentPrice manually (it comes from API)
+        // unless it's the very first entry and we want a fallback, we default to cost
+        if (isNaN(currentPriceNum)) currentPriceNum = costNum || 0;
     }
 
     if (!symbol || isNaN(qtyNum)) return;
@@ -92,13 +92,15 @@ export const AddAssetModal: React.FC<Props> = ({ isOpen, onClose, initialAsset }
       quantity: qtyNum,
       avgCost: costNum || 0,
       currentPrice: currentPriceNum || 0,
-      currency: isManualAsset(type) ? currency : Currency.USD, // Market assets default to USD until API updates them
+      // Manual assets use selected currency. Market assets (Stock/Crypto/Cash) default to USD logic until API updates them
+      // However, user might want to associate Cash with its currency for display? No, Cash ID is symbol 'CNY'. 
+      currency: isStrictManualAsset(type) ? currency : Currency.USD, 
       lastUpdated: Date.now()
     };
 
     if (initialAsset) {
       // Preserve current price for market assets if we are editing just meta
-      if (!isManualAsset(type)) {
+      if (!isStrictManualAsset(type)) {
           assetData.currentPrice = initialAsset.currentPrice;
           assetData.currency = initialAsset.currency;
       }
@@ -167,29 +169,32 @@ export const AddAssetModal: React.FC<Props> = ({ isOpen, onClose, initialAsset }
                          <div className="grid grid-cols-2 gap-4">
                              <div>
                                 <label className="block text-xs font-medium text-slate-500 uppercase mb-1">
-                                    {type === AssetType.LIABILITY ? 'Loan Name' : (type === AssetType.REAL_ESTATE ? 'Property Name' : 'Ticker Symbol')}
+                                    {type === AssetType.LIABILITY ? 'Loan Name' : (type === AssetType.REAL_ESTATE ? 'Property Name' : 'Ticker / Currency Code')}
                                 </label>
                                 <input 
                                     type="text" 
-                                    placeholder={type === AssetType.STOCK ? "AAPL" : (type === AssetType.REAL_ESTATE ? "Downtown Apt" : "BTC")}
+                                    placeholder={type === AssetType.STOCK ? "AAPL" : (type === AssetType.CASH ? "CNY" : "BTC")}
                                     value={symbol} onChange={e => setSymbol(e.target.value)}
                                     className="w-full p-2.5 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none font-medium"
                                     autoFocus
                                     required
                                 />
+                                {type === AssetType.CASH && (
+                                    <p className="text-[10px] text-slate-400 mt-1">Enter Code (e.g., CNY, HKD, EUR)</p>
+                                )}
                              </div>
                              <div>
                                 <label className="block text-xs font-medium text-slate-500 uppercase mb-1">Full Name (Optional)</label>
                                 <input 
                                     type="text" 
-                                    placeholder="e.g. Apple Inc."
+                                    placeholder={type === AssetType.CASH ? "Chinese Yuan" : "e.g. Apple Inc."}
                                     value={name} onChange={e => setName(e.target.value)}
                                     className="w-full p-2.5 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
                                 />
                              </div>
                          </div>
 
-                         {isManualAsset(type) && (
+                         {isStrictManualAsset(type) && (
                             <div>
                                 <label className="block text-xs font-medium text-slate-500 uppercase mb-1">Currency</label>
                                 <select
@@ -223,35 +228,42 @@ export const AddAssetModal: React.FC<Props> = ({ isOpen, onClose, initialAsset }
                                 />
                             </div>
 
-                            {isManualAsset(type) ? (
+                            {/* Logic Update: Market Assets OR Cash show Average Cost input. Strict Manual Assets show "Current Price". */}
+                            {isStrictManualAsset(type) ? (
                                 <div>
                                     <label className="block text-xs font-medium text-slate-500 uppercase mb-1">
-                                        {type === AssetType.CASH ? 'Exchange Rate (to USD)' : 'Current Unit Price'}
+                                        Current Unit Price
                                     </label>
                                     <input 
                                         type="number" step="any" 
-                                        placeholder={type === AssetType.CASH ? "1.0" : "0.00"}
+                                        placeholder="0.00"
                                         value={currentVal} onChange={e => setCurrentVal(e.target.value)}
                                         className="w-full p-2.5 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
                                     />
-                                    {type === AssetType.CASH && <p className="text-[10px] text-slate-400 mt-1">1 if USD</p>}
                                 </div>
                             ) : (
                                 <div>
-                                    <label className="block text-xs font-medium text-slate-500 uppercase mb-1">Average Cost / Unit</label>
+                                    <label className="block text-xs font-medium text-slate-500 uppercase mb-1">
+                                        {type === AssetType.CASH ? 'Avg Cost (USD Basis)' : 'Average Cost / Unit'}
+                                    </label>
                                     <input 
                                         type="number" step="any" 
                                         placeholder="0.00"
                                         value={cost} onChange={e => setCost(e.target.value)}
                                         className="w-full p-2.5 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
                                     />
+                                    {type === AssetType.CASH && (
+                                        <p className="text-[10px] text-slate-400 mt-1">Your cost basis per unit in USD</p>
+                                    )}
                                 </div>
                             )}
                         </div>
                         
-                        {!isManualAsset(type) && (
+                        {!isStrictManualAsset(type) && (
                             <p className="text-xs text-slate-400 italic">
-                                * Live prices will be fetched automatically based on ticker symbol.
+                                {type === AssetType.CASH 
+                                  ? "* Live exchange rates (USD) will be fetched automatically."
+                                  : "* Live prices will be fetched automatically based on ticker symbol."}
                             </p>
                         )}
                     </div>
