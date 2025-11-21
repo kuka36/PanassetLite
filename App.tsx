@@ -5,6 +5,7 @@ import { PortfolioProvider, usePortfolio } from './context/PortfolioContext';
 import { Layout } from './components/Layout';
 import { Dashboard } from './components/Dashboard';
 import { AssetList } from './components/AssetList';
+import { TransactionHistory } from './components/TransactionHistory';
 import { AddAssetModal } from './components/AddAssetModal';
 import { AddTransactionModal } from './components/AddTransactionModal';
 import { Analytics } from './components/Analytics';
@@ -111,6 +112,7 @@ const App: React.FC = () => {
           <Routes>
             <Route path="/" element={<DashboardView />} />
             <Route path="/assets" element={<AssetsView />} />
+            <Route path="/history" element={<TransactionHistory />} />
             <Route path="/analytics" element={<Analytics />} />
             <Route path="/settings" element={<Settings />} />
           </Routes>

@@ -1,13 +1,14 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, PieChart, Wallet, Settings, Menu } from 'lucide-react';
+import { LayoutDashboard, PieChart, Wallet, Settings, Menu, X, History } from 'lucide-react';
 
 export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
 
-  const NavItem = ({ to, icon, label }: { to: string, icon: React.ReactNode, label: string }) => (
+  const NavItem = ({ to, icon, label, onClick }: { to: string, icon: React.ReactNode, label: string, onClick?: () => void }) => (
     <NavLink 
       to={to} 
+      onClick={onClick}
       className={({ isActive }) => `flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${isActive ? 'bg-blue-600 text-white shadow-md shadow-blue-200' : 'text-slate-500 hover:bg-slate-100'}`}
     >
       {icon}
@@ -28,6 +29,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
         <nav className="flex-1 px-4 space-y-2 mt-4">
           <NavItem to="/" icon={<LayoutDashboard size={20}/>} label="Dashboard" />
           <NavItem to="/assets" icon={<Wallet size={20}/>} label="Assets" />
+          <NavItem to="/history" icon={<History size={20}/>} label="History" />
           <NavItem to="/analytics" icon={<PieChart size={20}/>} label="Analytics" />
           <NavItem to="/settings" icon={<Settings size={20}/>} label="Settings" />
         </nav>
@@ -39,20 +41,38 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
       </aside>
 
       {/* Mobile Header */}
-      <div className="md:hidden fixed top-0 left-0 right-0 bg-white z-30 px-4 py-3 border-b border-slate-100 flex justify-between items-center">
+      <div className="md:hidden fixed top-0 left-0 right-0 bg-white z-30 px-4 py-3 border-b border-slate-100 flex justify-between items-center shadow-sm">
         <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
                 <span className="text-white font-bold">IF</span>
             </div>
             <span className="text-lg font-bold text-slate-800">InvestFlow</span>
         </div>
-        <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2 text-slate-600">
-            <Menu size={24} />
+        <button 
+            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} 
+            className="p-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+        >
+            {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
         </button>
       </div>
 
+      {/* Mobile Menu Overlay */}
+      {isMobileMenuOpen && (
+        <div className="fixed inset-0 z-20 bg-slate-900/20 backdrop-blur-sm md:hidden pt-16" onClick={() => setIsMobileMenuOpen(false)}>
+           <div className="bg-white border-b border-slate-100 shadow-xl p-4 animate-in slide-in-from-top-5 duration-200" onClick={e => e.stopPropagation()}>
+              <nav className="space-y-2">
+                 <NavItem to="/" icon={<LayoutDashboard size={20}/>} label="Dashboard" onClick={() => setIsMobileMenuOpen(false)} />
+                 <NavItem to="/assets" icon={<Wallet size={20}/>} label="Assets" onClick={() => setIsMobileMenuOpen(false)} />
+                 <NavItem to="/history" icon={<History size={20}/>} label="History" onClick={() => setIsMobileMenuOpen(false)} />
+                 <NavItem to="/analytics" icon={<PieChart size={20}/>} label="Analytics" onClick={() => setIsMobileMenuOpen(false)} />
+                 <NavItem to="/settings" icon={<Settings size={20}/>} label="Settings" onClick={() => setIsMobileMenuOpen(false)} />
+              </nav>
+           </div>
+        </div>
+      )}
+
       {/* Main Content */}
-      <main className="flex-1 md:ml-64 pt-16 md:pt-0 p-4 md:p-8 max-w-7xl mx-auto">
+      <main className="flex-1 md:ml-64 pt-20 md:p-8 p-4 max-w-7xl mx-auto w-full">
         {children}
       </main>
     </div>
