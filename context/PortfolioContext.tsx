@@ -28,10 +28,10 @@ const PortfolioContext = createContext<PortfolioContextType | undefined>(undefin
 
 // Mock Initial Data
 const INITIAL_ASSETS: Asset[] = [
-  { id: '1', symbol: 'AAPL', name: 'Apple Inc.', type: AssetType.STOCK, quantity: 10, avgCost: 150, currentPrice: 175.5, currency: Currency.USD },
-  { id: '2', symbol: 'BTC', name: 'Bitcoin', type: AssetType.CRYPTO, quantity: 0.1, avgCost: 42000, currentPrice: 64000, currency: Currency.USD },
-  { id: '3', symbol: '0700.HK', name: 'Tencent', type: AssetType.STOCK, quantity: 100, avgCost: 300, currentPrice: 380, currency: Currency.HKD },
-  { id: '4', symbol: 'USD', name: 'Cash Reserve', type: AssetType.CASH, quantity: 5000, avgCost: 1, currentPrice: 1, currency: Currency.USD },
+  { id: '1', symbol: 'AAPL', name: 'Apple Inc.', type: AssetType.STOCK, quantity: 10, avgCost: 150, currentPrice: 175.5, currency: Currency.USD, lastUpdated: Date.now() },
+  { id: '2', symbol: 'BTC', name: 'Bitcoin', type: AssetType.CRYPTO, quantity: 0.1, avgCost: 42000, currentPrice: 64000, currency: Currency.USD, lastUpdated: Date.now() },
+  { id: '3', symbol: '0700.HK', name: 'Tencent', type: AssetType.STOCK, quantity: 100, avgCost: 300, currentPrice: 380, currency: Currency.HKD, lastUpdated: Date.now() },
+  { id: '4', symbol: 'USD', name: 'Cash Reserve', type: AssetType.CASH, quantity: 5000, avgCost: 1, currentPrice: 1, currency: Currency.USD, lastUpdated: Date.now() },
 ];
 
 const INITIAL_SETTINGS: AppSettings = {
@@ -82,7 +82,9 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
   }, []);
 
   const addAsset = (newAsset: Asset) => {
-    setAssets(prev => [...prev, newAsset]);
+    // Ensure lastUpdated is set
+    const assetWithMeta = { ...newAsset, lastUpdated: newAsset.lastUpdated || Date.now() };
+    setAssets(prev => [...prev, assetWithMeta]);
   };
 
   const editAsset = (updatedAsset: Asset) => {
@@ -117,7 +119,7 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
   };
 
   const updateAssetPrice = (id: string, newPrice: number) => {
-    setAssets(prev => prev.map(a => a.id === id ? { ...a, currentPrice: newPrice } : a));
+    setAssets(prev => prev.map(a => a.id === id ? { ...a, currentPrice: newPrice, lastUpdated: Date.now() } : a));
   };
 
   const refreshPrices = async () => {
@@ -140,20 +142,20 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
 
         let newPrice = asset.currentPrice;
         let newCurrency = asset.currency;
+        let timestamp = asset.lastUpdated || Date.now();
 
         if (asset.type === AssetType.CRYPTO && cryptoPrices[asset.id]) {
           newPrice = cryptoPrices[asset.id];
-          // Crypto is generally always in USD from this API call
           newCurrency = Currency.USD; 
+          timestamp = Date.now();
         } else if ((asset.type === AssetType.STOCK || asset.type === AssetType.FUND) && stockData[asset.id]) {
           newPrice = stockData[asset.id].price;
-          // Update currency if the stock API detected a specific currency based on symbol
-          // This fixes cases where user entered 0700.HK but left currency as USD
           newCurrency = stockData[asset.id].currency;
+          timestamp = Date.now();
         } 
-        // else: keep existing price
+        // Manual assets (Real Estate, Liabilities) are skipped here and retain their existing values
 
-        return { ...asset, currentPrice: newPrice, currency: newCurrency };
+        return { ...asset, currentPrice: newPrice, currency: newCurrency, lastUpdated: timestamp };
       }));
 
     } catch (error) {
@@ -168,7 +170,11 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
   };
 
   const importData = (data: { assets: Asset[], transactions: Transaction[] }) => {
-    if (Array.isArray(data.assets)) setAssets(data.assets);
+    if (Array.isArray(data.assets)) {
+      // Add default timestamp if missing in imported data
+      const assetsWithMeta = data.assets.map(a => ({ ...a, lastUpdated: a.lastUpdated || Date.now() }));
+      setAssets(assetsWithMeta);
+    }
     if (Array.isArray(data.transactions)) setTransactions(data.transactions);
   };
 

@@ -8,6 +8,10 @@ import { AssetType } from '../types';
 
 const COLORS = ['#0ea5e9', '#6366f1', '#8b5cf6', '#ec4899', '#10b981', '#f59e0b', '#f97316'];
 
+// Manual valuation assets should not have "fake" market noise
+const isManualValuation = (type: AssetType) => 
+  type === AssetType.REAL_ESTATE || type === AssetType.LIABILITY || type === AssetType.OTHER;
+
 export const Dashboard: React.FC = () => {
   const { assets, settings, exchangeRates } = usePortfolio();
 
@@ -32,15 +36,15 @@ export const Dashboard: React.FC = () => {
         // Cost (Principal) decreases Net Worth Basis
         totalBalance -= convertedValue;
         totalCost -= convertedCost;
-        // If Liability Value didn't change, PnL is 0.
-        // We add small fake volatility for demo unless it's a liability which is usually stable
-        dayPnL -= convertedValue * (Math.random() * 0.005 - 0.001); 
+        // No daily P&L volatility for liabilities
       } else {
         totalBalance += convertedValue;
         totalCost += convertedCost;
         
-        // Mocking Day PnL
-        dayPnL += convertedValue * (Math.random() * 0.03 - 0.01); 
+        // Mocking Day P&L for Market Assets only
+        if (!isManualValuation(asset.type)) {
+            dayPnL += convertedValue * (Math.random() * 0.03 - 0.01); 
+        }
       }
     });
 

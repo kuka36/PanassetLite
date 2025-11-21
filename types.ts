@@ -38,13 +38,14 @@ export interface Transaction {
 
 export interface Asset {
   id: string;
-  symbol: string; // e.g., AAPL, BTC
+  symbol: string; // e.g., AAPL, BTC, or "Apt 4B"
   name: string;
   type: AssetType;
   quantity: number;
   avgCost: number; // Weighted average cost
-  currentPrice: number; // Mocked live price
+  currentPrice: number; // Mocked live price OR Manual Valuation
   currency: Currency;
+  lastUpdated?: number; // Timestamp of last price update
   // Computed fields for UI convenience
   currentValue?: number;
   totalCost?: number;

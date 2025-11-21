@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { usePortfolio } from '../context/PortfolioContext';
 import { Card } from './ui/Card';
-import { ArrowUpRight, ArrowDownRight, Pencil, Trash2 } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight, Pencil, Trash2, History, TrendingUp } from 'lucide-react';
 import { Asset, AssetType, Currency } from '../types';
 
 interface AssetListProps {
@@ -9,7 +9,11 @@ interface AssetListProps {
 }
 
 export const AssetList: React.FC<AssetListProps> = ({ onEdit }) => {
-  const { assets, deleteAsset } = usePortfolio();
+  const { assets, deleteAsset, updateAssetPrice } = usePortfolio();
+  
+  // Simple internal state for quick valuation update prompt
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [newValuation, setNewValuation] = useState('');
 
   // Helper for conditional styling
   const getTypeColor = (type: AssetType) => {
@@ -23,6 +27,9 @@ export const AssetList: React.FC<AssetListProps> = ({ onEdit }) => {
         default: return 'bg-slate-100 text-slate-700';
     }
   };
+
+  const isManualValuation = (type: AssetType) => 
+    type === AssetType.REAL_ESTATE || type === AssetType.LIABILITY || type === AssetType.OTHER;
 
   // Helper to get currency symbol
   const getCurrencySymbol = (curr: Currency) => {
@@ -40,6 +47,25 @@ export const AssetList: React.FC<AssetListProps> = ({ onEdit }) => {
       }
   };
 
+  const handleUpdateClick = (asset: Asset) => {
+    setUpdatingId(asset.id);
+    setNewValuation(asset.currentPrice.toString());
+  };
+
+  const handleSaveValuation = (id: string) => {
+    const price = parseFloat(newValuation);
+    if (!isNaN(price)) {
+        updateAssetPrice(id, price);
+        setUpdatingId(null);
+    }
+  };
+
+  const formatLastUpdated = (timestamp?: number) => {
+      if (!timestamp) return 'N/A';
+      const date = new Date(timestamp);
+      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  };
+
   return (
     <Card title="Portfolio Holdings" className="animate-slide-up">
       <div className="overflow-x-auto">
@@ -47,11 +73,11 @@ export const AssetList: React.FC<AssetListProps> = ({ onEdit }) => {
           <thead>
             <tr className="text-xs text-slate-400 uppercase border-b border-slate-100">
               <th className="pb-3 font-medium pl-2">Asset</th>
-              <th className="pb-3 font-medium">Price (Native)</th>
+              <th className="pb-3 font-medium">Current Price</th>
               <th className="pb-3 font-medium">Avg Cost / Principal</th>
               <th className="pb-3 font-medium">Holdings</th>
               <th className="pb-3 font-medium text-right">Value (Native)</th>
-              <th className="pb-3 font-medium text-right pr-2">P&L</th>
+              <th className="pb-3 font-medium text-right pr-2">Status / P&L</th>
               {onEdit && <th className="pb-3 font-medium text-right pr-2">Actions</th>}
             </tr>
           </thead>
@@ -63,6 +89,8 @@ export const AssetList: React.FC<AssetListProps> = ({ onEdit }) => {
               const pnl = currentValue - costBasis;
               const pnlPercent = costBasis > 0 ? (pnl / costBasis) * 100 : 0;
               const isLiability = asset.type === AssetType.LIABILITY;
+              const isManual = isManualValuation(asset.type);
+              const isUpdating = updatingId === asset.id;
 
               return (
                 <tr key={asset.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors group">
@@ -81,9 +109,36 @@ export const AssetList: React.FC<AssetListProps> = ({ onEdit }) => {
                     </div>
                   </td>
                   <td className="py-4">
-                    <div className="font-medium text-slate-700">
-                        {symbol}{asset.currentPrice.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
-                    </div>
+                    {isUpdating ? (
+                         <div className="flex items-center gap-1">
+                            <span className="text-slate-400 text-xs">{symbol}</span>
+                            <input 
+                                type="number" 
+                                autoFocus
+                                className="w-20 p-1 text-sm border border-blue-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                value={newValuation}
+                                onChange={(e) => setNewValuation(e.target.value)}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') handleSaveValuation(asset.id);
+                                    if (e.key === 'Escape') setUpdatingId(null);
+                                }}
+                                onBlur={() => handleSaveValuation(asset.id)}
+                            />
+                         </div>
+                    ) : (
+                        <div className="font-medium text-slate-700 flex items-center gap-2">
+                            {symbol}{asset.currentPrice.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                            {isManual && onEdit && (
+                                <button 
+                                    onClick={() => handleUpdateClick(asset)}
+                                    className="opacity-0 group-hover:opacity-100 transition-opacity text-slate-300 hover:text-blue-600"
+                                    title="Update Valuation"
+                                >
+                                    <History size={14} />
+                                </button>
+                            )}
+                        </div>
+                    )}
                   </td>
                   <td className="py-4">
                     <div className="font-medium text-slate-700">
@@ -97,13 +152,26 @@ export const AssetList: React.FC<AssetListProps> = ({ onEdit }) => {
                     {isLiability ? '-' : ''}{symbol}{currentValue.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
                   </td>
                   <td className="py-4 text-right pr-2">
-                    <div className={`flex items-center justify-end gap-1 font-medium ${pnl >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-                      {pnl >= 0 ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
-                      {Math.abs(pnlPercent).toFixed(2)}%
-                    </div>
-                    <div className={`text-xs ${pnl >= 0 ? 'text-green-600/70' : 'text-red-500/70'}`}>
-                      {pnl >= 0 ? '+' : '-'}{symbol}{Math.abs(pnl).toLocaleString(undefined, {maximumFractionDigits: 0})}
-                    </div>
+                    {isManual ? (
+                        <div className="text-right">
+                             <div className="text-xs font-medium text-slate-500 bg-slate-100 inline-block px-2 py-0.5 rounded-md">
+                                Last val: {formatLastUpdated(asset.lastUpdated)}
+                             </div>
+                             <div className={`text-xs mt-0.5 ${pnl >= 0 ? 'text-green-600/70' : 'text-red-500/70'}`}>
+                                Total: {pnl >= 0 ? '+' : ''}{Math.abs(pnlPercent).toFixed(1)}%
+                             </div>
+                        </div>
+                    ) : (
+                        <>
+                            <div className={`flex items-center justify-end gap-1 font-medium ${pnl >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                            {pnl >= 0 ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
+                            {Math.abs(pnlPercent).toFixed(2)}%
+                            </div>
+                            <div className={`text-xs ${pnl >= 0 ? 'text-green-600/70' : 'text-red-500/70'}`}>
+                            {pnl >= 0 ? '+' : '-'}{symbol}{Math.abs(pnl).toLocaleString(undefined, {maximumFractionDigits: 0})}
+                            </div>
+                        </>
+                    )}
                   </td>
                   {onEdit && (
                     <td className="py-4 text-right pr-2">
@@ -111,7 +179,7 @@ export const AssetList: React.FC<AssetListProps> = ({ onEdit }) => {
                             <button 
                                 onClick={() => onEdit(asset)}
                                 className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                                title="Edit"
+                                title="Edit Details"
                             >
                                 <Pencil size={16} />
                             </button>
