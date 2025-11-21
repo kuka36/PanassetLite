@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card } from './ui/Card';
 import { usePortfolio } from '../context/PortfolioContext';
@@ -6,7 +7,7 @@ import { Sparkles, ChevronDown, ChevronUp, RefreshCw, CheckCircle, Key } from 'l
 import { Link } from 'react-router-dom';
 
 export const GeminiAdvisor: React.FC = () => {
-  const { assets, settings } = usePortfolio();
+  const { assets, settings, t } = usePortfolio();
   const [analysis, setAnalysis] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -54,7 +55,7 @@ export const GeminiAdvisor: React.FC = () => {
     if (e) e.stopPropagation();
     
     if (!settings.geminiApiKey) {
-      setError("API Key is missing. Please set it in Settings.");
+      setError(t('apiKeyMissing'));
       setIsExpanded(true);
       return;
     }
@@ -71,12 +72,12 @@ export const GeminiAdvisor: React.FC = () => {
       // The service handles the logic, but calling this will fetch fresh data 
       // if we are in a 'canAnalyze' state (hash diff or stale).
       // We also force localStorage update inside the service.
-      const result = await getPortfolioAnalysis(assets, settings.geminiApiKey);
+      const result = await getPortfolioAnalysis(assets, settings.geminiApiKey, settings.language);
       setAnalysis(result);
       setCanAnalyze(false); // Analysis is now fresh
     } catch (err: any) {
       console.error(err);
-      setError(err.message || "Could not generate analysis. Check API Key.");
+      setError(err.message || t('aiUnavailable'));
     } finally {
       setLoading(false);
     }
@@ -95,8 +96,8 @@ export const GeminiAdvisor: React.FC = () => {
                 <Sparkles className="text-white" size={20} />
             </div>
             <div>
-                <h3 className="font-bold text-slate-800">AI Portfolio Insights</h3>
-                <p className="text-xs text-slate-500">Wealth Management & Optimization</p>
+                <h3 className="font-bold text-slate-800">{t('aiInsights')}</h3>
+                <p className="text-xs text-slate-500">{t('wealthManagement')}</p>
             </div>
         </div>
         
@@ -107,11 +108,11 @@ export const GeminiAdvisor: React.FC = () => {
                     disabled={loading}
                     className="text-sm px-4 py-2 bg-white border border-slate-200 hover:border-purple-300 text-purple-600 hover:text-purple-700 hover:bg-purple-50 rounded-lg transition-all flex items-center gap-2 shadow-sm z-10 font-medium"
                 >
-                    {loading ? <RefreshCw className="animate-spin" size={16}/> : <><Sparkles size={16} /> Analyze Now</>}
+                    {loading ? <RefreshCw className="animate-spin" size={16}/> : <><Sparkles size={16} /> {t('analyzeNow')}</>}
                 </button>
             ) : (
                 <div className="text-xs px-3 py-1.5 bg-green-50 text-green-600 rounded-lg border border-green-100 flex items-center gap-1">
-                    <CheckCircle size={12} /> Up to date
+                    <CheckCircle size={12} /> {t('upToDate')}
                 </div>
             )}
             <div className="text-slate-400 hover:text-purple-600 transition-colors p-1">
@@ -135,7 +136,7 @@ export const GeminiAdvisor: React.FC = () => {
                   <span>{error}</span>
                   {!settings.geminiApiKey && (
                     <Link to="/settings" className="flex items-center gap-1 text-blue-600 hover:underline font-medium">
-                       <Key size={14}/> Set Key
+                       <Key size={14}/> {t('setKey')}
                     </Link>
                   )}
                 </div>

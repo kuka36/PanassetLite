@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { usePortfolio } from '../context/PortfolioContext';
 import { Card } from './ui/Card';
@@ -5,7 +6,7 @@ import { TransactionType, Currency } from '../types';
 import { Filter, Download, ArrowDownLeft, ArrowUpRight, DollarSign } from 'lucide-react';
 
 export const TransactionHistory: React.FC = () => {
-  const { transactions, assets } = usePortfolio();
+  const { transactions, assets, t } = usePortfolio();
   const [selectedAssetId, setSelectedAssetId] = useState<string>('all');
   const [filterType, setFilterType] = useState<string>('all');
   const [startDate, setStartDate] = useState('');
@@ -57,7 +58,7 @@ export const TransactionHistory: React.FC = () => {
   };
 
   const handleExportCSV = () => {
-     const headers = ["Date", "Type", "Asset", "Quantity", "Price", "Fees", "Total"];
+     const headers = [t('date'), t('type'), t('asset'), t('quantity'), t('pricePerUnit'), t('fees'), t('total')];
      const rows = filteredTransactions.map(t => {
          const info = getAssetInfo(t.assetId);
          return [
@@ -92,14 +93,14 @@ export const TransactionHistory: React.FC = () => {
     <div className="space-y-6 animate-fade-in">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-            <h1 className="text-2xl font-bold text-slate-800">Transaction History</h1>
-            <p className="text-slate-500">View and filter your investment activity.</p>
+            <h1 className="text-2xl font-bold text-slate-800">{t('transactionHistory')}</h1>
+            <p className="text-slate-500">{t('historySubtitle')}</p>
         </div>
         <button 
             onClick={handleExportCSV}
             className="px-4 py-2 bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 font-medium rounded-xl shadow-sm flex items-center gap-2 transition-colors"
         >
-            <Download size={18}/> <span className="hidden sm:inline">Export CSV</span>
+            <Download size={18}/> <span className="hidden sm:inline">{t('exportCSV')}</span>
         </button>
       </div>
 
@@ -107,14 +108,14 @@ export const TransactionHistory: React.FC = () => {
         {/* Filters */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6 pb-6 border-b border-slate-100">
             <div>
-                <label className="block text-xs font-medium text-slate-500 uppercase mb-1">Asset</label>
+                <label className="block text-xs font-medium text-slate-500 uppercase mb-1">{t('asset')}</label>
                 <div className="relative">
                     <select
                         value={selectedAssetId}
                         onChange={(e) => setSelectedAssetId(e.target.value)}
                         className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none appearance-none"
                     >
-                        <option value="all">All Assets</option>
+                        <option value="all">{t('allAssets')}</option>
                         {availableAssets.map(a => (
                             <option key={a.id} value={a.id}>{a.symbol} - {a.name}</option>
                         ))}
@@ -124,24 +125,24 @@ export const TransactionHistory: React.FC = () => {
             </div>
             
              <div>
-                <label className="block text-xs font-medium text-slate-500 uppercase mb-1">Type</label>
+                <label className="block text-xs font-medium text-slate-500 uppercase mb-1">{t('type')}</label>
                 <div className="relative">
                     <select
                         value={filterType}
                         onChange={(e) => setFilterType(e.target.value)}
                         className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none appearance-none"
                     >
-                        <option value="all">All Types</option>
-                        <option value="BUY">Buy</option>
-                        <option value="SELL">Sell</option>
-                        <option value="DIVIDEND">Dividend</option>
+                        <option value="all">{t('allTypes')}</option>
+                        <option value="BUY">{t('tx_BUY')}</option>
+                        <option value="SELL">{t('tx_SELL')}</option>
+                        <option value="DIVIDEND">{t('tx_DIVIDEND')}</option>
                     </select>
                     <Filter className="absolute right-3 top-3 text-slate-400 pointer-events-none" size={16} />
                 </div>
             </div>
 
             <div>
-                <label className="block text-xs font-medium text-slate-500 uppercase mb-1">From Date</label>
+                <label className="block text-xs font-medium text-slate-500 uppercase mb-1">{t('fromDate')}</label>
                 <input 
                     type="date"
                     value={startDate}
@@ -151,7 +152,7 @@ export const TransactionHistory: React.FC = () => {
             </div>
 
             <div>
-                <label className="block text-xs font-medium text-slate-500 uppercase mb-1">To Date</label>
+                <label className="block text-xs font-medium text-slate-500 uppercase mb-1">{t('toDate')}</label>
                 <input 
                     type="date"
                     value={endDate}
@@ -166,13 +167,13 @@ export const TransactionHistory: React.FC = () => {
             <table className="w-full text-left border-collapse">
                 <thead>
                     <tr className="text-xs text-slate-400 uppercase border-b border-slate-100">
-                        <th className="pb-3 pl-2 font-medium">Date</th>
-                        <th className="pb-3 font-medium">Asset</th>
-                        <th className="pb-3 font-medium">Type</th>
-                        <th className="pb-3 font-medium text-right">Quantity</th>
-                        <th className="pb-3 font-medium text-right">Price</th>
-                        <th className="pb-3 font-medium text-right">Fees</th>
-                        <th className="pb-3 font-medium text-right pr-2">Total</th>
+                        <th className="pb-3 pl-2 font-medium">{t('date')}</th>
+                        <th className="pb-3 font-medium">{t('asset')}</th>
+                        <th className="pb-3 font-medium">{t('type')}</th>
+                        <th className="pb-3 font-medium text-right">{t('quantity')}</th>
+                        <th className="pb-3 font-medium text-right">{t('pricePerUnit')}</th>
+                        <th className="pb-3 font-medium text-right">{t('fees')}</th>
+                        <th className="pb-3 font-medium text-right pr-2">{t('total')}</th>
                     </tr>
                 </thead>
                 <tbody className="text-sm">
@@ -192,7 +193,7 @@ export const TransactionHistory: React.FC = () => {
                                 <td className="py-4">
                                     <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium ${getTypeStyle(tx.type)}`}>
                                         {getTypeIcon(tx.type)}
-                                        {tx.type}
+                                        {t(`tx_${tx.type}`)}
                                     </span>
                                 </td>
                                 <td className="py-4 text-right font-medium text-slate-700">
@@ -213,7 +214,7 @@ export const TransactionHistory: React.FC = () => {
                     {filteredTransactions.length === 0 && (
                         <tr>
                             <td colSpan={7} className="py-12 text-center text-slate-400 italic">
-                                No transactions found matching your filters.
+                                {t('noTransactions')}
                             </td>
                         </tr>
                     )}

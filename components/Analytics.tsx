@@ -6,7 +6,7 @@ import { convertValue } from '../services/marketData';
 import { Card } from './ui/Card';
 import { 
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, Legend,
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, ReferenceLine, LabelList
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, LabelList
 } from 'recharts';
 import { AssetType } from '../types';
 import { PieChart as PieIcon, Sparkles, Scale, RefreshCw } from 'lucide-react';
@@ -106,19 +106,7 @@ export const Analytics: React.FC = () => {
       .sort((a, b) => b.value - a.value);
   }, [assets, settings.baseCurrency, exchangeRates, t]);
 
-  // 2. Liabilities Distribution
-  const liabilityDistribution = useMemo(() => {
-    return assets
-      .filter(a => a.type === AssetType.LIABILITY)
-      .map(a => {
-        const rawVal = a.quantity * a.currentPrice;
-        const val = convertValue(rawVal, a.currency, settings.baseCurrency, exchangeRates);
-        return { name: a.name || a.symbol, value: val };
-      })
-      .sort((a, b) => b.value - a.value);
-  }, [assets, settings.baseCurrency, exchangeRates]);
-
-  // 3. Balance Sheet Summary (Assets vs Liabilities)
+  // 2. Balance Sheet Summary (Assets vs Liabilities)
   const balanceSheet = useMemo(() => {
     let totalAssets = 0;
     let totalLiabilities = 0;
@@ -145,25 +133,7 @@ export const Analytics: React.FC = () => {
     };
   }, [assets, settings.baseCurrency, exchangeRates, t]);
 
-  // 4. Top Assets by Value (Excluding Liabilities)
-  const topAssets = useMemo(() => {
-    return [...assets]
-      .filter(a => a.type !== AssetType.LIABILITY) 
-      .map(a => {
-        const value = convertValue(a.quantity * a.currentPrice, a.currency, settings.baseCurrency, exchangeRates);
-        const cost = convertValue(a.quantity * a.avgCost, a.currency, settings.baseCurrency, exchangeRates);
-        return {
-            name: a.symbol,
-            value,
-            cost,
-            pnl: value - cost
-        };
-      })
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 6);
-  }, [assets, settings.baseCurrency, exchangeRates]);
-
-  // 5. Visual Risk Distribution (Assets Only)
+  // 3. Visual Risk Distribution (Assets Only)
   const riskProfile = useMemo(() => {
     let high = 0, med = 0, low = 0;
     assets.forEach(a => {
@@ -187,20 +157,6 @@ export const Analytics: React.FC = () => {
         { name: t('risk_low'), value: low, color: RISK_COLORS.Low }
     ].filter(x => x.value > 0);
   }, [assets, settings.baseCurrency, exchangeRates, t]);
-
-  // 6. P&L Ranking
-  const pnlRanking = useMemo(() => {
-    return [...assets]
-      .filter(a => a.type !== AssetType.LIABILITY)
-      .map(a => {
-        const value = convertValue(a.quantity * a.currentPrice, a.currency, settings.baseCurrency, exchangeRates);
-        const cost = convertValue(a.quantity * a.avgCost, a.currency, settings.baseCurrency, exchangeRates);
-        const pnl = value - cost;
-        return { name: a.symbol, pnl };
-      })
-      .sort((a, b) => b.pnl - a.pnl)
-      .slice(0, 8);
-  }, [assets, settings.baseCurrency, exchangeRates]);
 
   if (assets.length === 0) {
     return (
@@ -364,4 +320,20 @@ export const Analytics: React.FC = () => {
                  </div>
 
                  {riskError ? (
-                    <div className="text-xs text-orange-50
+                    <div className="text-xs text-orange-500 bg-orange-50 p-2 rounded border border-orange-100 mt-2">
+                        {t('unableToGenerate')}
+                    </div>
+                 ) : (
+                    riskData && (
+                        <p className="text-xs text-slate-500 mt-2 leading-relaxed border-l-2 border-purple-200 pl-2">
+                            {riskData.analysis}
+                        </p>
+                    )
+                 )}
+             </div>
+           </div>
+        </Card>
+      </div>
+    </div>
+  );
+};
