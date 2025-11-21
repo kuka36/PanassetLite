@@ -160,10 +160,7 @@ export const AssetList: React.FC<AssetListProps> = ({ onEdit, onTransaction }) =
               <SortableHeader label="Current Price" sortKey="price" />
               <SortableHeader label="Avg Cost" sortKey="cost" />
               <SortableHeader label="Holdings" sortKey="quantity" />
-              <SortableHeader label="Native Val" sortKey="value" alignRight />
-              <th className="pb-3 font-medium text-right pl-2 text-slate-700">
-                 Value ({settings.baseCurrency})
-              </th>
+              <SortableHeader label="Value" sortKey="value" alignRight />
               <SortableHeader label="Status / P&L" sortKey="pnl" alignRight />
               {(onEdit || onTransaction) && <th className="pb-3 font-medium text-right pr-2">Actions</th>}
             </tr>
@@ -239,10 +236,6 @@ export const AssetList: React.FC<AssetListProps> = ({ onEdit, onTransaction }) =
                   <td className="py-4">
                     <div className="font-medium text-slate-700">{asset.quantity.toLocaleString()}</div>
                   </td>
-                  {/* Native Value */}
-                  <td className={`py-4 text-right font-medium ${isLiability ? 'text-red-700' : 'text-slate-500'}`}>
-                    {isLiability ? '-' : ''}{symbol}{currentValue.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
-                  </td>
                   {/* Base Currency Value */}
                   <td className={`py-4 text-right pr-2 font-bold ${isLiability ? 'text-red-700' : 'text-slate-800'}`}>
                     {isLiability ? '-' : ''}{baseCurrencySymbol}{baseValue.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
@@ -307,7 +300,7 @@ export const AssetList: React.FC<AssetListProps> = ({ onEdit, onTransaction }) =
             })}
             {sortedAssets.length === 0 && (
                 <tr>
-                    <td colSpan={onEdit ? 8 : 7} className="text-center py-8 text-slate-400 italic">
+                    <td colSpan={onEdit ? 7 : 6} className="text-center py-8 text-slate-400 italic">
                         No assets found. Click "Add New Asset" to start.
                     </td>
                 </tr>
