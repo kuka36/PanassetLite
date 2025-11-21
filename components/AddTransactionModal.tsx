@@ -2,14 +2,15 @@
 import React, { useState, useEffect } from 'react';
 import { usePortfolio } from '../context/PortfolioContext';
 import { TransactionType } from '../types';
-import { X, Save, Calendar, DollarSign, Hash } from 'lucide-react';
+import { X, Save, Calendar, DollarSign, Hash, ArrowRightLeft } from 'lucide-react';
 
 interface Props {
   isOpen: boolean;
   onClose: () => void;
+  preselectedAssetId?: string;
 }
 
-export const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose }) => {
+export const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, preselectedAssetId }) => {
   const { assets, addTransaction } = usePortfolio();
   
   const [assetId, setAssetId] = useState('');
@@ -22,14 +23,14 @@ export const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose }) => {
   // Reset form when opening
   useEffect(() => {
     if (isOpen) {
-        setAssetId('');
+        setAssetId(preselectedAssetId || '');
         setType(TransactionType.BUY);
         setDate(new Date().toISOString().split('T')[0]);
         setQuantity('');
         setPrice('');
         setFee('0');
     }
-  }, [isOpen]);
+  }, [isOpen, preselectedAssetId]);
 
   if (!isOpen) return null;
 
@@ -58,8 +59,6 @@ export const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose }) => {
     onClose();
   };
 
-  // Filter assets to show in dropdown (e.g. only current holdings, though usually you can buy more of what you have or add new via Add Asset)
-  // For transaction mode on existing assets, we list available assets.
   const availableAssets = assets.sort((a, b) => a.symbol.localeCompare(b.symbol));
 
   return (
@@ -67,34 +66,24 @@ export const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose }) => {
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-slide-up">
         
         <div className="px-6 py-4 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
-          <h2 className="text-lg font-bold text-slate-800">Record Transaction</h2>
+          <div className="flex items-center gap-2">
+             <div className="p-2 bg-blue-100 text-blue-600 rounded-lg"><ArrowRightLeft size={18}/></div>
+             <h2 className="text-lg font-bold text-slate-800">Record Transaction</h2>
+          </div>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X size={20}/></button>
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           
-          {/* Transaction Type */}
-          <div className="flex p-1 bg-slate-100 rounded-lg">
-            {(['BUY', 'SELL', 'DIVIDEND'] as TransactionType[]).map((t) => (
-                <button
-                    key={t}
-                    type="button"
-                    onClick={() => setType(t)}
-                    className={`flex-1 py-2 text-xs font-bold rounded-md transition-all ${type === t ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                >
-                    {t}
-                </button>
-            ))}
-          </div>
-
           {/* Asset Selection */}
           <div>
             <label className="block text-xs font-medium text-slate-500 uppercase mb-1">Asset</label>
             <select 
                 value={assetId} 
                 onChange={(e) => setAssetId(e.target.value)}
-                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none disabled:bg-slate-100 disabled:text-slate-500"
                 required
+                disabled={!!preselectedAssetId}
             >
                 <option value="" disabled>Select an asset...</option>
                 {availableAssets.map(asset => (
@@ -103,9 +92,23 @@ export const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose }) => {
                     </option>
                 ))}
             </select>
-            {availableAssets.length === 0 && (
-                <p className="text-xs text-red-500 mt-1">No assets found. Add an asset first.</p>
-            )}
+          </div>
+
+          {/* Transaction Type */}
+          <div>
+             <label className="block text-xs font-medium text-slate-500 uppercase mb-1">Action</label>
+             <div className="flex p-1 bg-slate-100 rounded-lg">
+                {(['BUY', 'SELL', 'DIVIDEND'] as TransactionType[]).map((t) => (
+                    <button
+                        key={t}
+                        type="button"
+                        onClick={() => setType(t)}
+                        className={`flex-1 py-2 text-xs font-bold rounded-md transition-all ${type === t ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                    >
+                        {t}
+                    </button>
+                ))}
+             </div>
           </div>
 
           {/* Date */}

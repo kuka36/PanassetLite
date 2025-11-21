@@ -1,17 +1,19 @@
+
 import React, { useState, useMemo } from 'react';
 import { usePortfolio } from '../context/PortfolioContext';
 import { Card } from './ui/Card';
-import { ArrowUpRight, ArrowDownRight, Pencil, Trash2, History, ArrowUp, ArrowDown } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight, Pencil, Trash2, History, ArrowUp, ArrowDown, ArrowRightLeft } from 'lucide-react';
 import { Asset, AssetType, Currency } from '../types';
 
 interface AssetListProps {
     onEdit?: (asset: Asset) => void;
+    onTransaction?: (asset: Asset) => void;
 }
 
 type SortKey = 'symbol' | 'price' | 'cost' | 'quantity' | 'value' | 'pnl';
 type SortDirection = 'asc' | 'desc';
 
-export const AssetList: React.FC<AssetListProps> = ({ onEdit }) => {
+export const AssetList: React.FC<AssetListProps> = ({ onEdit, onTransaction }) => {
   const { assets, deleteAsset, updateAssetPrice } = usePortfolio();
   
   // Sorting State
@@ -95,7 +97,7 @@ export const AssetList: React.FC<AssetListProps> = ({ onEdit }) => {
   };
 
   const isManualValuation = (type: AssetType) => 
-    type === AssetType.REAL_ESTATE || type === AssetType.LIABILITY || type === AssetType.OTHER;
+    type === AssetType.REAL_ESTATE || type === AssetType.LIABILITY || type === AssetType.OTHER || type === AssetType.CASH;
 
   const getCurrencySymbol = (curr: Currency) => {
       switch(curr) {
@@ -158,7 +160,7 @@ export const AssetList: React.FC<AssetListProps> = ({ onEdit }) => {
               <SortableHeader label="Holdings" sortKey="quantity" />
               <SortableHeader label="Value (Native)" sortKey="value" alignRight />
               <SortableHeader label="Status / P&L" sortKey="pnl" alignRight />
-              {onEdit && <th className="pb-3 font-medium text-right pr-2">Actions</th>}
+              {(onEdit || onTransaction) && <th className="pb-3 font-medium text-right pr-2">Manage</th>}
             </tr>
           </thead>
           <tbody className="text-sm">
@@ -253,23 +255,36 @@ export const AssetList: React.FC<AssetListProps> = ({ onEdit }) => {
                         </>
                     )}
                   </td>
-                  {onEdit && (
+                  {(onEdit || onTransaction) && (
                     <td className="py-4 text-right pr-2">
                         <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button 
-                                onClick={() => onEdit(asset)}
-                                className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                                title="Edit Details"
-                            >
-                                <Pencil size={16} />
-                            </button>
-                            <button 
-                                onClick={() => handleDelete(asset.id, asset.symbol)}
-                                className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                title="Delete"
-                            >
-                                <Trash2 size={16} />
-                            </button>
+                            {onTransaction && (
+                                <button 
+                                    onClick={() => onTransaction(asset)}
+                                    className="p-1.5 text-slate-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                                    title="Record Trade/Transaction"
+                                >
+                                    <ArrowRightLeft size={16} />
+                                </button>
+                            )}
+                            {onEdit && (
+                                <button 
+                                    onClick={() => onEdit(asset)}
+                                    className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                    title="Edit Details"
+                                >
+                                    <Pencil size={16} />
+                                </button>
+                            )}
+                            {onEdit && (
+                                <button 
+                                    onClick={() => handleDelete(asset.id, asset.symbol)}
+                                    className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                    title="Delete"
+                                >
+                                    <Trash2 size={16} />
+                                </button>
+                            )}
                         </div>
                     </td>
                   )}
@@ -279,7 +294,7 @@ export const AssetList: React.FC<AssetListProps> = ({ onEdit }) => {
             {sortedAssets.length === 0 && (
                 <tr>
                     <td colSpan={onEdit ? 7 : 6} className="text-center py-8 text-slate-400 italic">
-                        No assets found. Click "Add Asset" to start tracking.
+                        No assets found. Click "Add New Asset" to start.
                     </td>
                 </tr>
             )}
