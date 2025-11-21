@@ -30,8 +30,10 @@ const PortfolioContext = createContext<PortfolioContextType | undefined>(undefin
 const INITIAL_ASSETS: Asset[] = [
   { id: '1', symbol: 'AAPL', name: 'Apple Inc.', type: AssetType.STOCK, quantity: 10, avgCost: 150, currentPrice: 175.5, currency: Currency.USD },
   { id: '2', symbol: 'BTC', name: 'Bitcoin', type: AssetType.CRYPTO, quantity: 0.1, avgCost: 42000, currentPrice: 64000, currency: Currency.USD },
-  { id: '3', symbol: '0700', name: 'Tencent', type: AssetType.STOCK, quantity: 100, avgCost: 300, currentPrice: 380, currency: Currency.HKD },
-  { id: '4', symbol: 'USD', name: 'Cash Reserve', type: AssetType.CASH, quantity: 5000, avgCost: 1, currentPrice: 1, currency: Currency.USD },
+  { id: '3', symbol: '0700.HK', name: 'Tencent', type: AssetType.STOCK, quantity: 100, avgCost: 300, currentPrice: 380, currency: Currency.HKD },
+  { id: '4', symbol: '513050.SS', name: '中概ETF', type: AssetType.STOCK, quantity: 676, avgCost: 1.57, currentPrice: 1.55, currency: Currency.CNY },
+  { id: '5', symbol: '000217', name: '华安黄金ETF联接C', type: AssetType.STOCK, quantity: 401.3, avgCost: 1.65, currentPrice: 2, currency: Currency.CNY },
+  { id: '6', symbol: 'USD', name: 'Cash Reserve', type: AssetType.CASH, quantity: 5000, avgCost: 1, currentPrice: 1, currency: Currency.USD },
 ];
 
 const INITIAL_SETTINGS: AppSettings = {
