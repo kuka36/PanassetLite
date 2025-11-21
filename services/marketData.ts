@@ -10,14 +10,14 @@ const CACHE_CRYPTO_KEY = 'investflow_crypto_prices';
 const CACHE_STOCKS_KEY = 'investflow_stock_prices';
 
 // Cache Duration (ms)
-// Rates: 24 hours (Currencies are relatively stable per day for general estimation)
+// Rates: 24 hours
 const RATES_TTL = 24 * 3600 * 1000; 
-// Crypto: 10 minutes (Volatile, but we want to save API calls)
+// Crypto: 10 minutes
 const CRYPTO_TTL = 10 * 60 * 1000; 
-// Stocks: 60 minutes (To respect Alpha Vantage limits)
-const STOCK_TTL = 60 * 60 * 1000;
+// Stocks: 4 hours (Increased to save API calls and use "manual/stale" data longer)
+const STOCK_TTL = 4 * 60 * 60 * 1000;
 
-// Simple Crypto Mapping (Symbol -> CoinGecko ID)
+// Simple Crypto Mapping
 const CRYPTO_MAP: Record<string, string> = {
   'BTC': 'bitcoin',
   'ETH': 'ethereum',
@@ -27,11 +27,13 @@ const CRYPTO_MAP: Record<string, string> = {
   'XRP': 'ripple',
   'ADA': 'cardano',
   'DOGE': 'dogecoin',
-  'DOT': 'polkadot'
+  'DOT': 'polkadot',
+  'MATIC': 'matic-network',
+  'LINK': 'chainlink'
 };
 
 export interface ExchangeRates {
-  [key: string]: number; // USD relative rates (e.g., USD: 1, CNY: 7.2)
+  [key: string]: number;
 }
 
 export interface StockPriceResult {
@@ -40,31 +42,22 @@ export interface StockPriceResult {
   lastUpdated?: number;
 }
 
-// --- Helper: Detect Currency from Symbol ---
 export const detectCurrencyFromSymbol = (symbol: string): Currency => {
   const upper = symbol.toUpperCase();
-  if (upper.endsWith('.SS') || upper.endsWith('.SZ')) {
-    return Currency.CNY;
-  }
-  if (upper.endsWith('.HK')) {
-    return Currency.HKD;
-  }
-  // Default to USD for US stocks (no suffix) or others
+  if (upper.endsWith('.SS') || upper.endsWith('.SZ')) return Currency.CNY;
+  if (upper.endsWith('.HK')) return Currency.HKD;
   return Currency.USD;
 };
 
-// --- Helper: Cache Wrapper ---
-const getFromCache = <T>(key: string, ttl: number): { data: T | null, isStale: boolean } => {
+// --- Helper: Cache Access ---
+const getFromCache = <T>(key: string): { data: T | null, timestamp: number } => {
   try {
     const cached = localStorage.getItem(key);
-    if (!cached) return { data: null, isStale: true };
-    
+    if (!cached) return { data: null, timestamp: 0 };
     const { timestamp, data } = JSON.parse(cached);
-    const isStale = (Date.now() - timestamp) > ttl;
-    
-    return { data, isStale };
+    return { data, timestamp };
   } catch (e) {
-    return { data: null, isStale: true };
+    return { data: null, timestamp: 0 };
   }
 };
 
@@ -77,47 +70,42 @@ const saveToCache = (key: string, data: any) => {
 };
 
 // --- 1. Exchange Rates ---
-
 export const fetchExchangeRates = async (): Promise<ExchangeRates> => {
-  const { data: cachedRates, isStale } = getFromCache<ExchangeRates>(CACHE_RATES_KEY, RATES_TTL);
+  const { data: cachedRates, timestamp } = getFromCache<ExchangeRates>(CACHE_RATES_KEY);
+  const isStale = (Date.now() - timestamp) > RATES_TTL;
   
-  // Return cached if fresh
-  if (cachedRates && !isStale) {
-    return cachedRates;
-  }
+  // If fresh, use cache
+  if (cachedRates && !isStale) return cachedRates;
 
   try {
     const res = await fetch(EXCHANGE_RATE_API);
     if (!res.ok) throw new Error("Network response was not ok");
     const data = await res.json();
-    const rates = data.rates;
-    
-    saveToCache(CACHE_RATES_KEY, rates);
-    return rates;
+    saveToCache(CACHE_RATES_KEY, data.rates);
+    return data.rates;
   } catch (error) {
-    console.warn("Failed to fetch exchange rates, using fallback/cache", error);
-    // Return stale cache if available, otherwise default
+    console.warn("Exchange Rate API failed, using fallback cache", error);
+    // Fallback: Return stale cache if exists, else default
     return cachedRates || { USD: 1, CNY: 7.2, HKD: 7.8 };
   }
 };
 
-// --- 2. Crypto Prices (CoinGecko) ---
-
+// --- 2. Crypto Prices ---
 export const fetchCryptoPrices = async (assets: Asset[]): Promise<Record<string, number>> => {
   const cryptoAssets = assets.filter(a => a.type === AssetType.CRYPTO);
   if (cryptoAssets.length === 0) return {};
 
-  const { data: cachedPrices, isStale } = getFromCache<Record<string, number>>(CACHE_CRYPTO_KEY, CRYPTO_TTL);
+  const { data: cachedPrices, timestamp } = getFromCache<Record<string, number>>(CACHE_CRYPTO_KEY);
+  const isStale = (Date.now() - timestamp) > CRYPTO_TTL;
 
-  // If we have cached data and it's fresh enough, use it to save API calls
+  // Use cache if fresh and complete
   if (cachedPrices && !isStale) {
-    // Check if we have all assets covered
     const allCovered = cryptoAssets.every(a => cachedPrices[a.id] !== undefined);
     if (allCovered) return cachedPrices;
   }
 
   const ids = cryptoAssets
-    .map(a => CRYPTO_MAP[a.symbol.toUpperCase()] || a.name.toLowerCase())
+    .map(a => CRYPTO_MAP[a.symbol.toUpperCase()] || a.name.toLowerCase().replace(/\s+/g, '-'))
     .join(',');
 
   if (!ids) return cachedPrices || {};
@@ -128,9 +116,8 @@ export const fetchCryptoPrices = async (assets: Asset[]): Promise<Record<string,
     const data = await res.json();
     
     const newPriceMap: Record<string, number> = { ...(cachedPrices || {}) };
-    
     cryptoAssets.forEach(asset => {
-      const id = CRYPTO_MAP[asset.symbol.toUpperCase()] || asset.name.toLowerCase();
+      const id = CRYPTO_MAP[asset.symbol.toUpperCase()] || asset.name.toLowerCase().replace(/\s+/g, '-');
       if (data[id] && data[id].usd) {
         newPriceMap[asset.id] = data[id].usd;
       }
@@ -139,37 +126,34 @@ export const fetchCryptoPrices = async (assets: Asset[]): Promise<Record<string,
     saveToCache(CACHE_CRYPTO_KEY, newPriceMap);
     return newPriceMap;
   } catch (error) {
-    console.warn("CoinGecko API Limit or Error, using cache", error);
+    console.warn("Crypto API failed, using stale cache", error);
     return cachedPrices || {};
   }
 };
 
-// --- 3. Stock Prices (Alpha Vantage) ---
-
+// --- 3. Stock Prices ---
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 export const fetchStockPrices = async (assets: Asset[]): Promise<Record<string, StockPriceResult>> => {
   const stockAssets = assets.filter(a => a.type === AssetType.STOCK || a.type === AssetType.FUND);
   if (stockAssets.length === 0) return {};
 
-  // Load entire stock cache
-  const { data: fullCache } = getFromCache<Record<string, StockPriceResult>>(CACHE_STOCKS_KEY, STOCK_TTL); // TTL check handled manually per item
-  const priceMap: Record<string, StockPriceResult> = { ...(fullCache || {}) };
+  // 1. Load existing cache (we will update this object)
+  const { data: cachedMap } = getFromCache<Record<string, StockPriceResult>>(CACHE_STOCKS_KEY);
+  const priceMap: Record<string, StockPriceResult> = { ...(cachedMap || {}) };
   
-  const assetsToFetch: Asset[] = [];
   const now = Date.now();
+  const assetsToFetch: Asset[] = [];
 
-  // Filter which assets actually NEED fetching
+  // 2. Identify assets that strictly NEED update (Older than TTL)
   for (const asset of stockAssets) {
     const cachedItem = priceMap[asset.id];
-    // If exists and less than STOCK_TTL old, skip fetch
-    if (cachedItem && cachedItem.lastUpdated && (now - cachedItem.lastUpdated < STOCK_TTL)) {
-      continue;
+    if (!cachedItem || !cachedItem.lastUpdated || (now - cachedItem.lastUpdated > STOCK_TTL)) {
+      assetsToFetch.push(asset);
     }
-    assetsToFetch.push(asset);
   }
 
-  // Limit to 3 per batch to respect rate limits
+  // 3. Batch processing (Max 3 to save limits)
   const limitedQueue = assetsToFetch.slice(0, 3);
   let dataUpdated = false;
 
@@ -178,46 +162,52 @@ export const fetchStockPrices = async (assets: Asset[]): Promise<Record<string, 
       let querySymbol = asset.symbol; 
       if (asset.currency === Currency.HKD && !querySymbol.includes('.')) {
           querySymbol = `${querySymbol}.HK`;
+      } else if (asset.currency === Currency.CNY && !querySymbol.includes('.')) {
+          // Heuristic for Shanghai/Shenzhen
+          querySymbol = querySymbol.startsWith('6') ? `${querySymbol}.SS` : `${querySymbol}.SZ`;
       }
 
       const res = await fetch(`https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${querySymbol}&apikey=${ALPHA_VANTAGE_KEY}`);
       const data = await res.json();
 
+      // Check for Rate Limit Note
+      if (data['Note'] || data['Information']) {
+          console.warn("Alpha Vantage Rate Limit hit:", data['Note'] || data['Information']);
+          break; // Stop processing, keep existing cache
+      }
+
       if (data['Global Quote'] && data['Global Quote']['05. price']) {
         const price = parseFloat(data['Global Quote']['05. price']);
         const detectedCurrency = detectCurrencyFromSymbol(data['Global Quote']['01. symbol'] || querySymbol);
-
+        
         priceMap[asset.id] = {
           price,
           currency: detectedCurrency,
           lastUpdated: Date.now()
         };
         dataUpdated = true;
-      } else if (data['Note'] || data['Information']) {
-          console.warn("Alpha Vantage Rate Limit reached:", data['Note'] || data['Information']);
-          break; 
+      } else {
+        console.warn(`No price data found for ${querySymbol}`);
       }
+      
+      // Only delay if we actually made a call and plan to make another
+      if (limitedQueue.length > 1) await delay(12000); 
 
-      await delay(12000); // Rate limit delay
     } catch (e) {
       console.error(`Failed to fetch stock ${asset.symbol}`, e);
+      // Continue to next asset, keep existing value in map
     }
   }
 
+  // 4. Always save if we updated anything
   if (dataUpdated) {
-    // We manually use localStorage directly here because our custom `saveToCache` overwrites timestamp for the whole object,
-    // but here we have individual timestamps inside the object. 
-    // Actually, `saveToCache` timestamp is for the whole blob, but we rely on `lastUpdated` inside `StockPriceResult`.
-    // So using `saveToCache` is fine as a container.
     saveToCache(CACHE_STOCKS_KEY, priceMap);
   }
 
+  // 5. Return the map (which contains a mix of fresh and stale data)
   return priceMap;
 };
 
-/**
- * Converts a value from an Asset's currency to the Base Currency
- */
 export const convertValue = (
   value: number, 
   fromCurrency: Currency, 
@@ -225,12 +215,8 @@ export const convertValue = (
   rates: ExchangeRates
 ): number => {
   if (fromCurrency === toBase) return value;
-  
-  // Rates are USD based. 
   const rateFrom = rates[fromCurrency] || 1;
   const rateTo = rates[toBase] || 1;
-
   if (rateFrom === 0) return value;
-
   return (value / rateFrom) * rateTo;
 };

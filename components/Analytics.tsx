@@ -64,7 +64,7 @@ export const Analytics: React.FC = () => {
   const typeDistribution = useMemo(() => {
     const dist: Record<string, number> = {};
     assets.forEach(a => {
-      if (a.type === AssetType.LIABILITY) return; // Exclude debt from asset breakdown
+      if (a.type === AssetType.LIABILITY) return; // Exclude debt
 
       const rawVal = a.quantity * a.currentPrice;
       const val = convertValue(rawVal, a.currency, settings.baseCurrency, exchangeRates);
@@ -78,13 +78,7 @@ export const Analytics: React.FC = () => {
   // 2. Top Assets by Value (Converted, Excluding Liabilities)
   const topAssets = useMemo(() => {
     return [...assets]
-      .filter(a => a.type !== AssetType.LIABILITY)
-      .sort((a, b) => {
-          const valA = convertValue(a.quantity * a.currentPrice, a.currency, settings.baseCurrency, exchangeRates);
-          const valB = convertValue(b.quantity * b.currentPrice, b.currency, settings.baseCurrency, exchangeRates);
-          return valB - valA;
-      })
-      .slice(0, 6)
+      .filter(a => a.type !== AssetType.LIABILITY) // Exclude Liabilities from Top Assets
       .map(a => {
         const value = convertValue(a.quantity * a.currentPrice, a.currency, settings.baseCurrency, exchangeRates);
         const cost = convertValue(a.quantity * a.avgCost, a.currency, settings.baseCurrency, exchangeRates);
@@ -94,22 +88,24 @@ export const Analytics: React.FC = () => {
             cost,
             pnl: value - cost
         };
-      });
+      })
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 6);
   }, [assets, settings.baseCurrency, exchangeRates]);
 
   // 3. Visual Risk Distribution (Converted)
   const riskProfile = useMemo(() => {
     let high = 0, med = 0, low = 0;
     assets.forEach(a => {
-        if (a.type === AssetType.LIABILITY) return; // Liabilities don't have standard "Risk" in this context
+        if (a.type === AssetType.LIABILITY) return; 
 
         const rawVal = a.quantity * a.currentPrice;
         const val = convertValue(rawVal, a.currency, settings.baseCurrency, exchangeRates);
         
         if(a.type === AssetType.CRYPTO) high += val;
         else if(a.type === AssetType.STOCK) med += val;
-        else if(a.type === AssetType.REAL_ESTATE) low += val; // Real Estate treated as stable/low here
-        else low += val; // Funds, Cash
+        else if(a.type === AssetType.REAL_ESTATE) low += val; 
+        else low += val; 
     });
     
     const total = high + med + low;
@@ -122,9 +118,10 @@ export const Analytics: React.FC = () => {
     ].filter(x => x.value > 0);
   }, [assets, settings.baseCurrency, exchangeRates]);
 
-  // 4. P&L Ranking (Converted, Includes all because paying off debt is a "gain" in NW)
+  // 4. P&L Ranking (Converted, Exclude Liabilities)
   const pnlRanking = useMemo(() => {
     return [...assets]
+      .filter(a => a.type !== AssetType.LIABILITY) // Exclude Liabilities
       .map(a => {
         const value = convertValue(a.quantity * a.currentPrice, a.currency, settings.baseCurrency, exchangeRates);
         const cost = convertValue(a.quantity * a.avgCost, a.currency, settings.baseCurrency, exchangeRates);
@@ -185,7 +182,7 @@ export const Analytics: React.FC = () => {
         </Card>
 
         {/* Risk Profile */}
-        <Card className="lg:col-span-2" title="Risk Exposure Profile (Assets)">
+        <Card className="lg:col-span-2" title="Risk Exposure Profile (Assets Only)">
            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center h-full">
              <div className="h-[250px]">
                 <ResponsiveContainer>
@@ -302,7 +299,6 @@ export const Analytics: React.FC = () => {
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                 <XAxis dataKey="name" tick={{fontSize: 12, fill: '#64748b'}} axisLine={false} tickLine={false} />
                 <YAxis tickFormatter={(v) => {
-                    // Compact formatting for Y axis
                     if (v >= 1000 || v <= -1000) return `${(v/1000).toFixed(0)}k`;
                     return v.toString();
                 }} width={40} tick={{fontSize: 12, fill: '#64748b'}} axisLine={false} tickLine={false} />

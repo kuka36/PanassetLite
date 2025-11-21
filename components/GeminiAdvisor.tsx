@@ -12,7 +12,6 @@ export const GeminiAdvisor: React.FC = () => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [canAnalyze, setCanAnalyze] = useState(false);
 
-  // Check cache status whenever assets change or component mounts
   useEffect(() => {
     const checkCache = () => {
         if (assets.length === 0) {
@@ -26,9 +25,6 @@ export const GeminiAdvisor: React.FC = () => {
         if (!cachedRaw) {
             // No cache -> Enable Analysis
             setCanAnalyze(true);
-            // Also try to auto-fetch if this is the very first load and no analysis exists?
-            // User preference usually implies manual "Analyze" for costs, but we can auto-load if desired.
-            // For now, we just enable the button.
         } else {
             try {
                 const { hash, timestamp, data } = JSON.parse(cachedRaw);
@@ -36,12 +32,12 @@ export const GeminiAdvisor: React.FC = () => {
                 const isStale = age > ADVISOR_CACHE_TTL;
                 const hasChanged = hash !== currentHash;
 
-                // If data is already loaded into state, fine. If not, load it from cache.
+                // Load cached data into view if available and we haven't generated new data yet
                 if (!analysis && data) {
                     setAnalysis(data);
                 }
 
-                // Enable button ONLY if stale OR changed
+                // The button is enabled ONLY if the portfolio changed OR the data is > 24h old
                 setCanAnalyze(isStale || hasChanged);
 
             } catch (e) {
@@ -53,39 +49,23 @@ export const GeminiAdvisor: React.FC = () => {
     checkCache();
   }, [assets, analysis]);
 
-  // Initial load (from cache only, don't trigger API)
-  useEffect(() => {
-     const loadInitial = () => {
-        const cachedRaw = localStorage.getItem(ADVISOR_CACHE_KEY);
-        if (cachedRaw) {
-            try {
-                const { data } = JSON.parse(cachedRaw);
-                if (data) setAnalysis(data);
-            } catch (e) { /* ignore */ }
-        }
-     };
-     loadInitial();
-  }, []);
-
   const handleAnalyze = async (e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     if (assets.length === 0) return;
     
     setLoading(true);
     setError(null);
+    
+    // Force UI expansion to show loading state
+    setIsExpanded(true);
+
     try {
-      // Force fresh analysis
-      // Note: getPortfolioAnalysis handles caching internally, but since we know we want a refresh 
-      // based on our UI logic, calling it here will use the internal logic.
-      // Actually, getPortfolioAnalysis returns cache if valid. 
-      // If we want to FORCE, we might need to clear cache or just rely on the fact 
-      // that our UI 'canAnalyze' logic aligns with the service's internal logic 
-      // (service returns cache if < 24h and hash same).
-      // If canAnalyze is true, it means hash changed OR time > 24h, so service WILL fetch new data.
+      // The service handles the logic, but calling this will fetch fresh data 
+      // if we are in a 'canAnalyze' state (hash diff or stale).
+      // We also force localStorage update inside the service.
       const result = await getPortfolioAnalysis(assets);
       setAnalysis(result);
-      if (!isExpanded) setIsExpanded(true);
-      setCanAnalyze(false); // Reset button state
+      setCanAnalyze(false); // Analysis is now fresh
     } catch (err) {
       setError("Could not generate analysis. Please check your API Key.");
     } finally {
@@ -107,7 +87,7 @@ export const GeminiAdvisor: React.FC = () => {
             </div>
             <div>
                 <h3 className="font-bold text-slate-800">AI Portfolio Insights</h3>
-                <p className="text-xs text-slate-500">Daily Analysis • Powered by Gemini</p>
+                <p className="text-xs text-slate-500">Wealth Management & Optimization</p>
             </div>
         </div>
         

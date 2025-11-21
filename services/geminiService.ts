@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import { Asset } from "../types";
+import { Asset, AssetType } from "../types";
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
@@ -9,18 +9,13 @@ export const RISK_CACHE_TTL = 3600 * 1000; // 1 hour
 export const ADVISOR_CACHE_KEY = 'investflow_advisor_cache';
 export const ADVISOR_CACHE_TTL = 24 * 3600 * 1000; // 24 hours
 
-// In-memory promise cache to prevent simultaneous duplicate calls (e.g. StrictMode)
+// In-memory promise cache to prevent simultaneous duplicate calls
 let pendingRiskPromise: { hash: string, promise: Promise<any> } | null = null;
 let pendingAdvisorPromise: { hash: string, promise: Promise<string> } | null = null;
 
-/**
- * Generates a simple hash based on asset symbols and quantities.
- * We exclude price to ensure the cache remains valid even if prices update slightly,
- * prioritizing the "Asset Allocation" structure for risk assessment.
- */
 export const generatePortfolioHash = (assets: Asset[]) => {
   return assets
-    .map(a => `${a.symbol}:${a.quantity}`)
+    .map(a => `${a.symbol}:${a.quantity}:${a.type}`)
     .sort()
     .join('|');
 };
@@ -37,7 +32,6 @@ export const getPortfolioAnalysis = async (assets: Asset[]) => {
     const cachedRaw = localStorage.getItem(ADVISOR_CACHE_KEY);
     if (cachedRaw) {
       const { hash, timestamp, data } = JSON.parse(cachedRaw);
-      // Return cached data if portfolio (hash) hasn't changed AND cache is fresh (< 24 hours)
       if (hash === currentHash && (now - timestamp < ADVISOR_CACHE_TTL)) {
         return data;
       }
@@ -46,43 +40,55 @@ export const getPortfolioAnalysis = async (assets: Asset[]) => {
     console.warn("InvestFlow: Advisor Cache parse error", e);
   }
 
-  // 2. Check In-Flight Requests (De-duplication)
   if (pendingAdvisorPromise && pendingAdvisorPromise.hash === currentHash) {
     return pendingAdvisorPromise.promise;
   }
 
-  // 3. Execute API Call
   const apiCall = (async () => {
     const portfolioSummary = assets.map(a => ({
       symbol: a.symbol,
-      name: a.name,
       type: a.type,
-      value: (a.quantity * a.currentPrice).toFixed(2),
+      qty: a.quantity,
+      estimatedValue: (a.quantity * a.currentPrice).toFixed(0),
+      currency: a.currency
     }));
 
+    // Optimized System Prompt for Multi-Asset Wealth Management
     const prompt = `
-    您是 InvestFlow 的顶级财务顾问。请分析以下投资组合 JSON：
+    You are the AI Wealth Advisor for 'InvestFlow', a comprehensive multi-asset tracking application.
+    
+    User's Portfolio Data (JSON):
     ${JSON.stringify(portfolioSummary)}
 
-    请提供：
-    1. 资产配置多样性的简要概述。
-    2. 基于资产类型的潜在风险（例如，加密货币配置过高、行业集中度过高）。
-    3. 根据您专业知识及最新市场行情，提供资产配置再平衡的建设性建议。
+    Analyze this portfolio considering these asset classes:
+    - **Liquid Assets**: Stocks, Crypto, Cash (Funds).
+    - **Hard Assets**: Real Estate.
+    - **Liabilities**: Loans, Mortgages (Negative value).
+
+    Please generate a **concise** strategic report (in Chinese) using Markdown:
+
+    ### 1. 资产概览 (Portfolio Overview)
+    Briefly summarize the Net Worth health. Are they over-leveraged (High Debt)? Is liquidity low (Too much Real Estate)?
     
-    请保持专业而又不失鼓励的语气。
-    请使用 Markdown 标题进行格式化。
-    请使用 中文 输出结果。
-    请言简意赅（不超过 250 字）。
-  `;
+    ### 2. 风险评估 (Risk Assessment)
+    Identify concentration risks. 
+    *Note: Crypto is High Risk. Real Estate is Illiquid. Single Stock concentration is risky.*
+    
+    ### 3. 优化建议 (Actionable Advice)
+    Provide 3 specific bullet points on how to balance the portfolio (e.g., "Pay down high-interest debt", "Diversify into ETFs", "Increase cash reserves").
+
+    **Tone:** Professional, Insightful, Objective.
+    **Language:** Chinese (Simplified).
+    **Length:** Max 300 words.
+    `;
 
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: prompt,
     });
     
-    const textResult = response.text || "Unable to generate analysis.";
+    const textResult = response.text || "暂时无法生成分析报告。";
 
-    // Save to Cache
     try {
       localStorage.setItem(ADVISOR_CACHE_KEY, JSON.stringify({
         hash: currentHash,
@@ -112,36 +118,30 @@ export const getRiskAssessment = async (assets: Asset[]) => {
   const currentHash = generatePortfolioHash(assets);
   const now = Date.now();
 
-  // 1. Check LocalStorage Cache
   try {
     const cachedRaw = localStorage.getItem(RISK_CACHE_KEY);
     if (cachedRaw) {
       const { hash, timestamp, data } = JSON.parse(cachedRaw);
-      // Return cached data if portfolio hasn't changed AND cache is fresh (< 1 hour)
       if (hash === currentHash && (now - timestamp < RISK_CACHE_TTL)) {
         return data;
       }
     }
-  } catch (e) {
-    console.warn("InvestFlow: Cache parse error", e);
-  }
+  } catch (e) {}
 
-  // 2. Check In-Flight Requests (De-duplication)
   if (pendingRiskPromise && pendingRiskPromise.hash === currentHash) {
      return pendingRiskPromise.promise;
   }
 
-  // 3. Prepare and Execute API Call
   const apiCall = (async () => {
     const portfolioSummary = assets.map(a => ({
-      symbol: a.symbol,
       type: a.type,
-      value: (a.quantity * a.currentPrice).toFixed(0),
+      val: (a.quantity * a.currentPrice).toFixed(0),
     }));
 
     const prompt = `
-      Evaluate the risk profile of this investment portfolio.
-      Portfolio: ${JSON.stringify(portfolioSummary)}
+      Analyze the risk of this portfolio structure: ${JSON.stringify(portfolioSummary)}.
+      Consider: Crypto (High), Stocks (Med-High), Real Estate (Low/Illiquid), Cash (Low).
+      Return JSON.
     `;
 
     const response = await ai.models.generateContent({
@@ -152,18 +152,9 @@ export const getRiskAssessment = async (assets: Asset[]) => {
         responseSchema: {
           type: Type.OBJECT,
           properties: {
-            riskScore: {
-              type: Type.NUMBER,
-              description: "A score from 1 (Conservative) to 10 (Highly Speculative)"
-            },
-            riskLevel: {
-              type: Type.STRING,
-              description: "One of: 'Conservative', 'Moderate', 'Aggressive', 'Very Aggressive'"
-            },
-            analysis: {
-              type: Type.STRING,
-              description: "A concise paragraph (max 60 words) explaining the primary risk factors.使用中文"
-            }
+            riskScore: { type: Type.NUMBER, description: "1-10 Score" },
+            riskLevel: { type: Type.STRING, description: "Conservative to Aggressive" },
+            analysis: { type: Type.STRING, description: "Max 60 words summary in Chinese" }
           },
           required: ["riskScore", "riskLevel", "analysis"]
         }
@@ -172,27 +163,22 @@ export const getRiskAssessment = async (assets: Asset[]) => {
 
     const data = JSON.parse(response.text as string);
 
-    // Save to Cache
     try {
       localStorage.setItem(RISK_CACHE_KEY, JSON.stringify({
         hash: currentHash,
         timestamp: Date.now(),
         data: data
       }));
-    } catch (e) {
-      console.warn("InvestFlow: Failed to save to cache", e);
-    }
+    } catch (e) {}
 
     return data;
   })();
 
-  // Store the promise in memory
   pendingRiskPromise = { hash: currentHash, promise: apiCall };
 
   try {
       return await apiCall;
   } finally {
-      // Clear pending promise once done (success or fail)
       pendingRiskPromise = null;
   }
 };
