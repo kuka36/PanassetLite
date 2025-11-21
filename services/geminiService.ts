@@ -3,11 +3,11 @@ import { Asset } from "../types";
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
-const RISK_CACHE_KEY = 'investflow_risk_cache';
-const RISK_CACHE_TTL = 3600 * 1000; // 1 hour
+export const RISK_CACHE_KEY = 'investflow_risk_cache';
+export const RISK_CACHE_TTL = 3600 * 1000; // 1 hour
 
-const ADVISOR_CACHE_KEY = 'investflow_advisor_cache';
-const ADVISOR_CACHE_TTL = 24 * 3600 * 1000; // 24 hours
+export const ADVISOR_CACHE_KEY = 'investflow_advisor_cache';
+export const ADVISOR_CACHE_TTL = 24 * 3600 * 1000; // 24 hours
 
 // In-memory promise cache to prevent simultaneous duplicate calls (e.g. StrictMode)
 let pendingRiskPromise: { hash: string, promise: Promise<any> } | null = null;
@@ -18,7 +18,7 @@ let pendingAdvisorPromise: { hash: string, promise: Promise<string> } | null = n
  * We exclude price to ensure the cache remains valid even if prices update slightly,
  * prioritizing the "Asset Allocation" structure for risk assessment.
  */
-const generatePortfolioHash = (assets: Asset[]) => {
+export const generatePortfolioHash = (assets: Asset[]) => {
   return assets
     .map(a => `${a.symbol}:${a.quantity}`)
     .sort()

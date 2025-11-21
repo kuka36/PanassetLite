@@ -1,6 +1,7 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { usePortfolio } from '../context/PortfolioContext';
 import { getRiskAssessment } from '../services/geminiService';
+import { convertValue } from '../services/marketData';
 import { Card } from './ui/Card';
 import { 
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, Legend,
@@ -23,12 +24,12 @@ interface RiskData {
 }
 
 export const Analytics: React.FC = () => {
-  const { assets } = usePortfolio();
+  const { assets, settings, exchangeRates } = usePortfolio();
   const [riskData, setRiskData] = useState<RiskData | null>(null);
   const [loadingRisk, setLoadingRisk] = useState(false);
 
   const formatCurrency = (val: number) => 
-    new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', notation: 'compact' }).format(val);
+    new Intl.NumberFormat('en-US', { style: 'currency', currency: settings.baseCurrency, notation: 'compact' }).format(val);
 
   useEffect(() => {
     let isMounted = true;
@@ -36,8 +37,6 @@ export const Analytics: React.FC = () => {
     const fetchRisk = async () => {
       if (assets.length === 0) return;
       
-      // Only set loading if we don't have data yet (optional UX choice)
-      // We set it here to show the skeleton if it's a "fresh" fetch
       setLoadingRisk(true);
       
       try {
@@ -61,36 +60,47 @@ export const Analytics: React.FC = () => {
     };
   }, [assets]);
 
-  // 1. Distribution by Asset Type
+  // 1. Distribution by Asset Type (Converted)
   const typeDistribution = useMemo(() => {
     const dist: Record<string, number> = {};
     assets.forEach(a => {
-      const val = a.quantity * a.currentPrice;
+      const rawVal = a.quantity * a.currentPrice;
+      const val = convertValue(rawVal, a.currency, settings.baseCurrency, exchangeRates);
       dist[a.type] = (dist[a.type] || 0) + val;
     });
     return Object.entries(dist)
       .map(([name, value]) => ({ name, value }))
       .sort((a, b) => b.value - a.value);
-  }, [assets]);
+  }, [assets, settings.baseCurrency, exchangeRates]);
 
-  // 2. Top Assets by Value & Cost Comparison
+  // 2. Top Assets by Value & Cost Comparison (Converted)
   const topAssets = useMemo(() => {
     return [...assets]
-      .sort((a, b) => (b.quantity * b.currentPrice) - (a.quantity * a.currentPrice))
+      .sort((a, b) => {
+          const valA = convertValue(a.quantity * a.currentPrice, a.currency, settings.baseCurrency, exchangeRates);
+          const valB = convertValue(b.quantity * b.currentPrice, b.currency, settings.baseCurrency, exchangeRates);
+          return valB - valA;
+      })
       .slice(0, 6)
-      .map(a => ({
-        name: a.symbol,
-        value: a.quantity * a.currentPrice,
-        cost: a.quantity * a.avgCost,
-        pnl: (a.quantity * a.currentPrice) - (a.quantity * a.avgCost)
-      }));
-  }, [assets]);
+      .map(a => {
+        const value = convertValue(a.quantity * a.currentPrice, a.currency, settings.baseCurrency, exchangeRates);
+        const cost = convertValue(a.quantity * a.avgCost, a.currency, settings.baseCurrency, exchangeRates);
+        return {
+            name: a.symbol,
+            value,
+            cost,
+            pnl: value - cost
+        };
+      });
+  }, [assets, settings.baseCurrency, exchangeRates]);
 
-  // 3. Visual Risk Distribution (Local calculation for chart)
+  // 3. Visual Risk Distribution (Converted)
   const riskProfile = useMemo(() => {
     let high = 0, med = 0, low = 0;
     assets.forEach(a => {
-        const val = a.quantity * a.currentPrice;
+        const rawVal = a.quantity * a.currentPrice;
+        const val = convertValue(rawVal, a.currency, settings.baseCurrency, exchangeRates);
+        
         if(a.type === AssetType.CRYPTO) high += val;
         else if(a.type === AssetType.STOCK) med += val;
         else low += val; // Funds, Cash
@@ -104,20 +114,20 @@ export const Analytics: React.FC = () => {
         { name: 'Medium (Stocks)', value: med, color: RISK_COLORS.Medium },
         { name: 'Low (Cash/Funds)', value: low, color: RISK_COLORS.Low }
     ].filter(x => x.value > 0);
-  }, [assets]);
+  }, [assets, settings.baseCurrency, exchangeRates]);
 
-  // 4. P&L Ranking
+  // 4. P&L Ranking (Converted)
   const pnlRanking = useMemo(() => {
     return [...assets]
       .map(a => {
-        const value = a.quantity * a.currentPrice;
-        const cost = a.quantity * a.avgCost;
+        const value = convertValue(a.quantity * a.currentPrice, a.currency, settings.baseCurrency, exchangeRates);
+        const cost = convertValue(a.quantity * a.avgCost, a.currency, settings.baseCurrency, exchangeRates);
         const pnl = value - cost;
         return { name: a.symbol, pnl };
       })
       .sort((a, b) => b.pnl - a.pnl)
       .slice(0, 8);
-  }, [assets]);
+  }, [assets, settings.baseCurrency, exchangeRates]);
 
   if (assets.length === 0) {
     return (
@@ -141,7 +151,7 @@ export const Analytics: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
         {/* Asset Allocation */}
-        <Card title="Allocation by Class" className="lg:col-span-1">
+        <Card title={`Allocation (${settings.baseCurrency})`} className="lg:col-span-1">
           <div className="h-[250px] w-full">
             <ResponsiveContainer>
               <PieChart>
@@ -285,7 +295,11 @@ export const Analytics: React.FC = () => {
               <BarChart data={pnlRanking} margin={{top: 20, bottom: 0}}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                 <XAxis dataKey="name" tick={{fontSize: 12, fill: '#64748b'}} axisLine={false} tickLine={false} />
-                <YAxis tickFormatter={(v) => `$${v/1000}k`} width={40} tick={{fontSize: 12, fill: '#64748b'}} axisLine={false} tickLine={false} />
+                <YAxis tickFormatter={(v) => {
+                    // Compact formatting for Y axis
+                    if (v >= 1000 || v <= -1000) return `${(v/1000).toFixed(0)}k`;
+                    return v.toString();
+                }} width={40} tick={{fontSize: 12, fill: '#64748b'}} axisLine={false} tickLine={false} />
                 <RechartsTooltip 
                     cursor={{fill: '#f8fafc'}}
                     contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
