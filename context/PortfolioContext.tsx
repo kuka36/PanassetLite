@@ -65,6 +65,15 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
     localStorage.setItem('investflow_settings', JSON.stringify(settings));
   }, [settings]);
 
+  // Auto-refresh prices every 10 minutes (600,000 ms)
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      refreshPrices();
+    }, 600000);
+
+    return () => clearInterval(intervalId);
+  }, []);
+
   const addAsset = (newAsset: Asset) => {
     setAssets(prev => [...prev, newAsset]);
   };

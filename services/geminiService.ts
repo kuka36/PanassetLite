@@ -4,10 +4,14 @@ import { Asset } from "../types";
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 const RISK_CACHE_KEY = 'investflow_risk_cache';
-const CACHE_TTL = 3600 * 1000; // 1 hour
+const RISK_CACHE_TTL = 3600 * 1000; // 1 hour
+
+const ADVISOR_CACHE_KEY = 'investflow_advisor_cache';
+const ADVISOR_CACHE_TTL = 24 * 3600 * 1000; // 24 hours
 
 // In-memory promise cache to prevent simultaneous duplicate calls (e.g. StrictMode)
 let pendingRiskPromise: { hash: string, promise: Promise<any> } | null = null;
+let pendingAdvisorPromise: { hash: string, promise: Promise<string> } | null = null;
 
 /**
  * Generates a simple hash based on asset symbols and quantities.
@@ -23,7 +27,32 @@ const generatePortfolioHash = (assets: Asset[]) => {
 
 export const getPortfolioAnalysis = async (assets: Asset[]) => {
   if (!process.env.API_KEY) throw new Error("API Key is missing");
+  if (assets.length === 0) return "";
 
+  const currentHash = generatePortfolioHash(assets);
+  const now = Date.now();
+
+  // 1. Check LocalStorage Cache
+  try {
+    const cachedRaw = localStorage.getItem(ADVISOR_CACHE_KEY);
+    if (cachedRaw) {
+      const { hash, timestamp, data } = JSON.parse(cachedRaw);
+      // Return cached data if portfolio (hash) hasn't changed AND cache is fresh (< 24 hours)
+      if (hash === currentHash && (now - timestamp < ADVISOR_CACHE_TTL)) {
+        return data;
+      }
+    }
+  } catch (e) {
+    console.warn("InvestFlow: Advisor Cache parse error", e);
+  }
+
+  // 2. Check In-Flight Requests (De-duplication)
+  if (pendingAdvisorPromise && pendingAdvisorPromise.hash === currentHash) {
+    return pendingAdvisorPromise.promise;
+  }
+
+  // 3. Execute API Call
+  const apiCall = (async () => {
   const portfolioSummary = assets.map(a => ({
     symbol: a.symbol,
     name: a.name,
@@ -60,16 +89,33 @@ export const getPortfolioAnalysis = async (assets: Asset[]) => {
     请言简意赅（不超过 250 字）。
   `;
 
-  try {
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
-      //model: 'gemini-3-pro-preview',
       contents: prompt,
     });
-    return response.text;
-  } catch (error) {
-    console.error("Gemini API Error:", error);
-    throw error;
+    
+    const textResult = response.text || "Unable to generate analysis.";
+
+    // Save to Cache
+    try {
+      localStorage.setItem(ADVISOR_CACHE_KEY, JSON.stringify({
+        hash: currentHash,
+        timestamp: Date.now(),
+        data: textResult
+      }));
+    } catch (e) {
+      console.warn("InvestFlow: Failed to save advisor cache", e);
+    }
+
+    return textResult;
+  })();
+
+  pendingAdvisorPromise = { hash: currentHash, promise: apiCall };
+
+  try {
+    return await apiCall;
+  } finally {
+    pendingAdvisorPromise = null;
   }
 };
 
@@ -86,7 +132,7 @@ export const getRiskAssessment = async (assets: Asset[]) => {
     if (cachedRaw) {
       const { hash, timestamp, data } = JSON.parse(cachedRaw);
       // Return cached data if portfolio hasn't changed AND cache is fresh (< 1 hour)
-      if (hash === currentHash && (now - timestamp < CACHE_TTL)) {
+      if (hash === currentHash && (now - timestamp < RISK_CACHE_TTL)) {
         return data;
       }
     }

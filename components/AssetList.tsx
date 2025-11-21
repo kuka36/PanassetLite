@@ -36,6 +36,7 @@ export const AssetList: React.FC<AssetListProps> = ({ onEdit }) => {
             <tr className="text-xs text-slate-400 uppercase border-b border-slate-100">
               <th className="pb-3 font-medium pl-2">Asset</th>
               <th className="pb-3 font-medium">Price</th>
+              <th className="pb-3 font-medium">Avg Cost</th>
               <th className="pb-3 font-medium">Holdings</th>
               <th className="pb-3 font-medium text-right">Value</th>
               <th className="pb-3 font-medium text-right pr-2">P&L</th>
@@ -64,6 +65,9 @@ export const AssetList: React.FC<AssetListProps> = ({ onEdit }) => {
                   </td>
                   <td className="py-4">
                     <div className="font-medium text-slate-700">${asset.currentPrice.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
+                  </td>
+                  <td className="py-4">
+                    <div className="font-medium text-slate-700">${asset.avgCost.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
                   </td>
                   <td className="py-4">
                     <div className="font-medium text-slate-700">{asset.quantity.toLocaleString()}</div>
@@ -106,7 +110,7 @@ export const AssetList: React.FC<AssetListProps> = ({ onEdit }) => {
             })}
             {assets.length === 0 && (
                 <tr>
-                    <td colSpan={onEdit ? 6 : 5} className="text-center py-8 text-slate-400 italic">
+                    <td colSpan={onEdit ? 7 : 6} className="text-center py-8 text-slate-400 italic">
                         No assets found. Click "Add Asset" to start tracking.
                     </td>
                 </tr>
