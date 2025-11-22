@@ -4,12 +4,13 @@
 <div align="center">
 
 [![Website](https://img.shields.io/badge/Demo-Visit%20App-blue?style=for-the-badge&logo=google-chrome)](https://kuka36.github.io/PanassetLite/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](https://opensource.org/licenses/MIT)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
+<br/>
 ![React](https://img.shields.io/badge/React-19-61DAFB?style=for-the-badge&logo=react)
 ![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript)
 ![TailwindCSS](https://img.shields.io/badge/Tailwind-38B2AC?style=for-the-badge&logo=tailwind-css)
 
-**一款面向个人用户简易实用的全资产管理应用（盘资产·轻）**
+**一款简易实用的全资产管理应用**
 <br/>
 **具有极好的用户体验、强大的可视化功能和人工智能驱动的投资组合洞察。**
 
@@ -17,7 +18,7 @@
 
 <p align="left">
 这是“零门槛、无需注册、本地数据”的版本。<br/>
-它的精神是：<strong>简单、随时用、轻松地帮你管理资产</strong>。
+它的精神是：<strong>简易、随时用、轻松地帮你管理资产</strong>。
 </p>
 
 </div>
