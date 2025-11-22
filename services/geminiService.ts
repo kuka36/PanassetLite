@@ -66,11 +66,11 @@ export const getPortfolioAnalysis = async (assets: Asset[], apiKey: string, lang
 
     const targetLanguage = language === 'zh' ? 'Chinese (Simplified)' : 'English';
 
-    // Optimized System Prompt for Comprehensive Wealth Management
+    // Optimized System Prompt for Comprehensive Wealth Management with Privacy Protection
     const prompt = `
     You are the Chief Investment Officer (CIO) for 'InvestFlow', a private wealth management platform.
 
-    **User Portfolio Snapshot:**
+    **User Portfolio Snapshot (For Analysis Only):**
     ${JSON.stringify(portfolioSummary)}
 
     **Financial Context:**
@@ -79,21 +79,26 @@ export const getPortfolioAnalysis = async (assets: Asset[], apiKey: string, lang
     - **Illiquid Assets**: Real Estate (Low volatility, hard to sell).
     - **Liabilities**: Loans, Mortgages (Negative impact on Net Worth).
 
+    **STRICT PRIVACY & OUTPUT RULES:**
+    1. **NO ABSOLUTE NUMBERS:** You are generating a report for a privacy-focused dashboard. **DO NOT** output any specific monetary values (e.g., do NOT write "$10,000", "72,361 RMB", or "1.5 BTC") in the final report.
+    2. **USE RATIOS & PERCENTAGES:** Instead of numbers, use percentages (%), ratios, and qualitative terms (e.g., "healthy buffer", "significant portion", "minor allocation").
+    3. **LANGUAGE:** The output must be in **${targetLanguage}**.
+
     **Task:**
-    Generate a strategic wealth analysis report in **${targetLanguage}**. Use Markdown.
+    Generate a strategic wealth analysis report. Use Markdown.
 
     **Structure:**
     1.  **Wealth Health Check**:
-        - Analyze the **Net Worth** status.
-        - Assess **Debt-to-Asset Ratio**. Are they over-leveraged? (Liabilities > 30% is caution).
-        - Assess **Liquidity**. Do they have enough cash/stocks vs real estate?
+        - Analyze the **Net Worth** structure (Asset vs Liability mix) using percentages only.
+        - Assess **Debt-to-Asset Ratio**. (Liabilities > 30% is caution).
+        - Assess **Liquidity**. Are they over-leveraged or too illiquid?
 
     2.  **Risk & Allocation**:
-        - Evaluate exposure to High Volatility (Crypto) vs Stable Assets (Real Estate/Cash).
-        - Comment on concentration risk (e.g., too much in one stock or one property).
+        - Evaluate exposure to High Volatility (Crypto) vs Stable Assets (Real Estate/Cash) based on portfolio weight.
+        - Comment on concentration risk (e.g., "Allocated heavily in a single asset").
 
     3.  **Strategic Recommendations**:
-        - Provide 3 specific, actionable steps to optimize the portfolio.
+        - Provide 3 specific, actionable steps to optimize the portfolio based on the asset mix.
 
     **Tone:** Professional, insightful, objective, and encouraging.
     **Length:** Concise (~300 words).
@@ -164,6 +169,9 @@ export const getRiskAssessment = async (assets: Asset[], apiKey: string, languag
 
     const prompt = `
       Analyze the risk profile of this portfolio: ${JSON.stringify(portfolioSummary)}.
+      
+      **PRIVACY RULE**: Do not mention specific monetary amounts in the 'analysis' text. Use percentages or general terms.
+
       Classify assets:
       - High Risk: Crypto
       - Medium Risk: Stocks, Funds
@@ -183,7 +191,7 @@ export const getRiskAssessment = async (assets: Asset[], apiKey: string, languag
           properties: {
             riskScore: { type: Type.NUMBER, description: "1-10 Score (10 is Aggressive)" },
             riskLevel: { type: Type.STRING, description: "Conservative, Balanced, Aggressive" },
-            analysis: { type: Type.STRING, description: `Max 60 words summary in ${targetLanguage}` }
+            analysis: { type: Type.STRING, description: `Max 60 words summary in ${targetLanguage}, no specific dollar/currency amounts.` }
           },
           required: ["riskScore", "riskLevel", "analysis"]
         }
