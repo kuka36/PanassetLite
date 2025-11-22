@@ -1,6 +1,6 @@
+
 import { Asset, AssetType, Currency } from '../types';
 
-const ALPHA_VANTAGE_KEY = process.env.VITE_ALPHA_VANTAGE_KEY;
 const EXCHANGE_RATE_API = 'https://api.exchangerate-api.com/v4/latest/USD';
 const COINGECKO_API = 'https://api.coingecko.com/api/v3/simple/price';
 
@@ -134,7 +134,7 @@ export const fetchCryptoPrices = async (assets: Asset[]): Promise<Record<string,
 // --- 3. Stock Prices ---
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-export const fetchStockPrices = async (assets: Asset[]): Promise<Record<string, StockPriceResult>> => {
+export const fetchStockPrices = async (assets: Asset[], apiKey?: string): Promise<Record<string, StockPriceResult>> => {
   const stockAssets = assets.filter(a => a.type === AssetType.STOCK || a.type === AssetType.FUND);
   if (stockAssets.length === 0) return {};
 
@@ -157,14 +157,15 @@ export const fetchStockPrices = async (assets: Asset[]): Promise<Record<string, 
   const limitedQueue = assetsToFetch.slice(0, 3);
   let dataUpdated = false;
 
+  // Check if API Key is present only if we have items to fetch
+  if (limitedQueue.length > 0 && !apiKey) {
+    console.warn("Alpha Vantage API Key is missing. Skipping stock price fetch.");
+    // We just return what we have in cache
+    return priceMap;
+  }
+
   for (const asset of limitedQueue) {
     try {
-      // Check if API Key is present
-      if (!ALPHA_VANTAGE_KEY) {
-        console.warn("Alpha Vantage API Key is missing. Please set VITE_ALPHA_VANTAGE_KEY in your environment.");
-        break;
-      }
-
       let querySymbol = asset.symbol; 
       if (asset.currency === Currency.HKD && !querySymbol.includes('.')) {
           querySymbol = `${querySymbol}.HK`;
@@ -173,7 +174,7 @@ export const fetchStockPrices = async (assets: Asset[]): Promise<Record<string, 
           querySymbol = querySymbol.startsWith('6') ? `${querySymbol}.SS` : `${querySymbol}.SZ`;
       }
 
-      const res = await fetch(`https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${querySymbol}&apikey=${ALPHA_VANTAGE_KEY}`);
+      const res = await fetch(`https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${querySymbol}&apikey=${apiKey}`);
       const data = await res.json();
 
       // Check for Rate Limit Note

@@ -1,5 +1,5 @@
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useRef } from 'react';
 import { Asset, AssetType, Currency, Transaction, TransactionType, Language } from '../types';
 import { fetchExchangeRates, fetchCryptoPrices, fetchStockPrices, ExchangeRates } from '../services/marketData';
 import { translations } from '../utils/i18n';
@@ -8,6 +8,7 @@ interface AppSettings {
   baseCurrency: Currency;
   isPrivacyMode: boolean;
   geminiApiKey: string;
+  alphaVantageApiKey: string;
   language: Language;
 }
 
@@ -48,7 +49,8 @@ const getBrowserLanguage = (): Language => {
 const INITIAL_SETTINGS: AppSettings = {
   baseCurrency: Currency.USD,
   isPrivacyMode: false,
-  geminiApiKey: process.env.GEMINI_API_KEY || '',
+  geminiApiKey: '',
+  alphaVantageApiKey: '',
   language: getBrowserLanguage(),
 };
 
@@ -70,13 +72,20 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
       return {
         ...INITIAL_SETTINGS,
         ...parsed,
-        geminiApiKey: parsed.geminiApiKey || INITIAL_SETTINGS.geminiApiKey,
-        // If language was not saved previously, default to browser
+        // Ensure default values if missing in saved data
+        geminiApiKey: parsed.geminiApiKey || '',
+        alphaVantageApiKey: parsed.alphaVantageApiKey || '',
         language: parsed.language || INITIAL_SETTINGS.language
       };
     }
     return INITIAL_SETTINGS;
   });
+
+  // Use ref to access latest settings in async functions without triggering re-runs
+  const settingsRef = useRef(settings);
+  useEffect(() => {
+      settingsRef.current = settings;
+  }, [settings]);
 
   // Default rates (will be updated by API)
   const [exchangeRates, setExchangeRates] = useState<ExchangeRates>({ USD: 1, CNY: 7.2, HKD: 7.8 });
@@ -164,7 +173,7 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
       // 2. Fetch Asset Prices (Parallel)
       const [cryptoPrices, stockData] = await Promise.all([
         fetchCryptoPrices(targetAssets),
-        fetchStockPrices(targetAssets)
+        fetchStockPrices(targetAssets, settingsRef.current.alphaVantageApiKey)
       ]);
 
       // 3. Update State

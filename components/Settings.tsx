@@ -4,7 +4,7 @@ import { usePortfolio } from '../context/PortfolioContext';
 import { Card } from './ui/Card';
 import { Currency, Language } from '../types';
 import { 
-  Download, Upload, Trash2, Shield, Globe, AlertTriangle, CheckCircle, Key, Languages
+  Download, Upload, Trash2, Shield, Globe, AlertTriangle, CheckCircle, Key, Languages, Activity
 } from 'lucide-react';
 
 export const Settings: React.FC = () => {
@@ -86,23 +86,51 @@ export const Settings: React.FC = () => {
 
       {/* API Configuration */}
       <Card title={t('apiConfiguration')}>
-        <div className="flex items-start gap-3">
-             <div className="p-2 bg-purple-50 text-purple-600 rounded-lg mt-1">
-                <Key size={20} />
+        <div className="space-y-6">
+            {/* Gemini API Key */}
+            <div className="flex items-start gap-3">
+                 <div className="p-2 bg-purple-50 text-purple-600 rounded-lg mt-1">
+                    <Key size={20} />
+                </div>
+                <div className="flex-1">
+                     <div className="font-medium text-slate-800 mb-1">{t('geminiKey')}</div>
+                     <div className="text-sm text-slate-500 mb-3 bg-blue-50 p-3 rounded-lg border border-blue-100">
+                        {t('geminiKeyDesc')}
+                        <div className="mt-1">
+                             <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" className="text-blue-600 hover:underline font-medium">{t('getKey')}</a>
+                        </div>
+                     </div>
+                     <input 
+                        type="password" 
+                        placeholder="Paste your Gemini API Key here..."
+                        value={settings.geminiApiKey}
+                        onChange={(e) => updateSettings({ geminiApiKey: e.target.value })}
+                        className="w-full p-3 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm font-mono"
+                     />
+                </div>
             </div>
-            <div className="flex-1">
-                 <div className="font-medium text-slate-800 mb-1">{t('geminiKey')}</div>
-                 <div className="text-sm text-slate-500 mb-3">
-                    {t('geminiKeyDesc')}
-                    <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" className="text-blue-600 hover:underline ml-1">{t('getKey')}</a>.
-                 </div>
-                 <input 
-                    type="password" 
-                    placeholder="Paste your API Key here..."
-                    value={settings.geminiApiKey}
-                    onChange={(e) => updateSettings({ geminiApiKey: e.target.value })}
-                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm font-mono"
-                 />
+
+            <div className="border-t border-slate-100 pt-4"></div>
+
+            {/* Alpha Vantage API Key */}
+            <div className="flex items-start gap-3">
+                 <div className="p-2 bg-teal-50 text-teal-600 rounded-lg mt-1">
+                    <Activity size={20} />
+                </div>
+                <div className="flex-1">
+                     <div className="font-medium text-slate-800 mb-1">{t('alphaVantageKey')}</div>
+                     <div className="text-sm text-slate-500 mb-3">
+                        {t('alphaVantageKeyDesc')}
+                        <a href="https://www.alphavantage.co/support/#api-key" target="_blank" rel="noreferrer" className="text-blue-600 hover:underline ml-1">{t('getKey')}</a>.
+                     </div>
+                     <input 
+                        type="password" 
+                        placeholder="Paste your Alpha Vantage API Key here..."
+                        value={settings.alphaVantageApiKey}
+                        onChange={(e) => updateSettings({ alphaVantageApiKey: e.target.value })}
+                        className="w-full p-3 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm font-mono"
+                     />
+                </div>
             </div>
         </div>
       </Card>
@@ -235,7 +263,7 @@ export const Settings: React.FC = () => {
       </Card>
 
       <div className="text-center text-slate-400 text-sm pt-4">
-          InvestFlow v1.0.4 • Local Data Storage
+          InvestFlow v1.0.5 • Local Data Storage
       </div>
     </div>
   );

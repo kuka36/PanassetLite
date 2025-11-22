@@ -9,7 +9,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, ReferenceLine, LabelList
 } from 'recharts';
 import { AssetType } from '../types';
-import { PieChart as PieIcon, Sparkles, Scale, RefreshCw } from 'lucide-react';
+import { PieChart as PieIcon, Sparkles, Scale, RefreshCw, Zap } from 'lucide-react';
 
 const COLORS = ['#0ea5e9', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444', '#6366f1', '#f97316'];
 const RISK_COLORS = {
@@ -35,54 +35,23 @@ export const Analytics: React.FC = () => {
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: settings.baseCurrency, notation: 'compact' }).format(val);
   };
 
-  useEffect(() => {
-    let isMounted = true;
-
-    const fetchRisk = async () => {
-      if (assets.length === 0) return;
-      if (!settings.geminiApiKey) {
+  const handleRefreshRisk = async () => {
+    if (assets.length === 0) return;
+    
+    if (!settings.geminiApiKey) {
         setRiskError(true);
         return;
-      }
-      
-      setLoadingRisk(true);
-      setRiskError(false);
-      
-      try {
-        // Auto-fetch relies on cache internally in service (forceRefresh = false)
-        const data = await getRiskAssessment(assets, settings.geminiApiKey, settings.language, false);
-        if (isMounted) {
-          setRiskData(data);
-        }
-      } catch (e) {
-        console.error("Failed to fetch risk assessment", e);
-        if (isMounted) setRiskError(true);
-      } finally {
-        if (isMounted) {
-          setLoadingRisk(false);
-        }
-      }
-    };
-
-    fetchRisk();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [assets, settings.geminiApiKey, settings.language]);
-
-  const handleRefreshRisk = async () => {
-    if (!settings.geminiApiKey || assets.length === 0) return;
+    }
     
     setLoadingRisk(true);
     setRiskError(false);
 
     try {
-        // Force refresh to bypass cache
+        // Force refresh or fetch
         const data = await getRiskAssessment(assets, settings.geminiApiKey, settings.language, true);
         setRiskData(data);
     } catch (e) {
-        console.error("Failed to force refresh risk assessment", e);
+        console.error("Failed to refresh risk assessment", e);
         setRiskError(true);
     } finally {
         setLoadingRisk(false);
@@ -342,16 +311,15 @@ export const Analytics: React.FC = () => {
                         {t('aiAssessment')}
                     </h4>
                     
-                    <div className="flex items-center gap-2">
-                        {riskData && (
-                            <span className={`text-xs font-bold px-2 py-0.5 rounded border ${
-                                riskData.riskScore > 7 ? 'bg-red-50 text-red-600 border-red-100' : 
-                                riskData.riskScore > 4 ? 'bg-orange-50 text-orange-600 border-orange-100' : 
-                                'bg-green-50 text-green-600 border-green-100'
-                            }`}>
-                                {riskData.riskLevel}
-                            </span>
-                        )}
+                    {riskData && (
+                      <div className="flex items-center gap-2">
+                        <span className={`text-xs font-bold px-2 py-0.5 rounded border ${
+                            riskData.riskScore > 7 ? 'bg-red-50 text-red-600 border-red-100' : 
+                            riskData.riskScore > 4 ? 'bg-orange-50 text-orange-600 border-orange-100' : 
+                            'bg-green-50 text-green-600 border-green-100'
+                        }`}>
+                            {riskData.riskLevel}
+                        </span>
                         <button 
                             onClick={handleRefreshRisk} 
                             disabled={loadingRisk}
@@ -360,14 +328,17 @@ export const Analytics: React.FC = () => {
                         >
                             <RefreshCw size={14} className={loadingRisk ? "animate-spin" : ""} />
                         </button>
-                    </div>
+                      </div>
+                    )}
                  </div>
 
                  {riskError ? (
-                    <div className="text-xs text-orange-500 bg-orange-50 p-3 rounded border border-orange-100">
-                        {t('unableToGenerate')}
+                    <div className="text-xs text-orange-500 bg-orange-50 p-3 rounded border border-orange-100 mb-2">
+                        {t('unableToGenerate')} {t('apiKeyMissing')}
                     </div>
-                 ) : loadingRisk && !riskData ? (
+                 ) : null}
+
+                 {loadingRisk && !riskData ? (
                      <div className="space-y-2 animate-pulse">
                          <div className="h-3 bg-slate-100 rounded w-3/4"></div>
                          <div className="h-3 bg-slate-100 rounded w-full"></div>
@@ -393,7 +364,18 @@ export const Analytics: React.FC = () => {
                         </p>
                      </>
                  ) : (
-                     <p className="text-xs text-slate-400 italic">Unable to generate risk analysis.</p>
+                     <div className="text-center py-4">
+                        <button 
+                            onClick={handleRefreshRisk}
+                            className="px-4 py-2 bg-purple-50 hover:bg-purple-100 text-purple-600 text-xs font-medium rounded-lg transition-colors flex items-center gap-2 mx-auto"
+                        >
+                            <Zap size={14} />
+                            {t('startRiskAnalysis')}
+                        </button>
+                        <p className="text-[10px] text-slate-400 mt-2 max-w-[200px] mx-auto text-center">
+                           {t('geminiKeyDesc')}
+                        </p>
+                     </div>
                  )}
              </div>
            </div>
