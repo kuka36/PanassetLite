@@ -22,6 +22,7 @@ interface PortfolioContextType {
   editAsset: (asset: Asset) => void;
   deleteAsset: (id: string) => void;
   addTransaction: (transaction: Omit<Transaction, 'id'>) => void;
+  deleteTransaction: (id: string) => void;
   updateAssetPrice: (id: string, newPrice: number) => void;
   refreshPrices: (assetsOverride?: Asset[]) => Promise<void>;
   updateSettings: (newSettings: Partial<AppSettings>) => void;
@@ -156,6 +157,43 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
     }));
   };
 
+  const deleteTransaction = (id: string) => {
+    const tx = transactions.find(t => t.id === id);
+    if (!tx) return;
+
+    // Attempt to reverse the transaction's effect on the asset
+    const asset = assets.find(a => a.id === tx.assetId);
+    if (asset) {
+      let newQty = asset.quantity;
+      let newAvgCost = asset.avgCost;
+
+      if (tx.type === TransactionType.BUY) {
+        // Reverse BUY: Remove quantity and subtract cost basis
+        const currentTotalCost = asset.quantity * asset.avgCost;
+        const txCostContribution = (tx.quantity * tx.price) + tx.fee;
+        
+        const newTotalCost = currentTotalCost - txCostContribution;
+        newQty = asset.quantity - tx.quantity;
+        
+        if (newQty > 0 && newTotalCost > 0) {
+          newAvgCost = newTotalCost / newQty;
+        } else {
+          // If quantity becomes 0 or negative, reset cost to 0 or keep simplified
+          newAvgCost = newQty <= 0 ? 0 : newAvgCost; 
+        }
+      } else if (tx.type === TransactionType.SELL) {
+        // Reverse SELL: Add quantity back. Average cost per unit usually doesn't change on Sell.
+        newQty = asset.quantity + tx.quantity;
+      }
+      
+      // Update asset
+      setAssets(prev => prev.map(a => a.id === asset.id ? { ...a, quantity: newQty, avgCost: newAvgCost } : a));
+    }
+
+    // Remove from history
+    setTransactions(prev => prev.filter(t => t.id !== id));
+  };
+
   const updateAssetPrice = (id: string, newPrice: number) => {
     setAssets(prev => prev.map(a => a.id === id ? { ...a, currentPrice: newPrice, lastUpdated: Date.now() } : a));
   };
@@ -192,8 +230,6 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
           timestamp = Date.now();
         } else if (asset.type === AssetType.CASH) {
             // Smart Cash: Fetch exchange rate against USD automatically
-            // Logic: API rates are "1 USD = X Unit". So Price of 1 Unit in USD = 1 / X.
-            // This treats foreign cash as a commodity priced in USD.
             const rate = rates[asset.symbol];
             if (rate && rate > 0) {
                 newPrice = 1 / rate;
@@ -201,7 +237,6 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
                 timestamp = Date.now();
             }
         }
-        // Manual assets (Real Estate, Liabilities) are skipped here and retain their existing values
 
         return { ...asset, currentPrice: newPrice, currency: newCurrency, lastUpdated: timestamp };
       }));
@@ -248,7 +283,8 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
       addAsset, 
       editAsset,
       deleteAsset,
-      addTransaction, 
+      addTransaction,
+      deleteTransaction,
       updateAssetPrice, 
       refreshPrices,
       updateSettings,

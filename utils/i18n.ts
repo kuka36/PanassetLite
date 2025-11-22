@@ -95,6 +95,8 @@ export const translations: Record<Language, Record<string, string>> = {
     tx_BUY: "Buy",
     tx_SELL: "Sell",
     tx_DIVIDEND: "Dividend",
+    deleteTransaction: "Delete Transaction",
+    confirmDeleteTransaction: "Are you sure you want to delete this transaction? This will attempt to reverse the effect on your asset balance and cost.",
 
     // Analytics
     analyticsSubtitle: "Performance metrics & risk analysis",
@@ -243,6 +245,8 @@ export const translations: Record<Language, Record<string, string>> = {
     tx_BUY: "买入",
     tx_SELL: "卖出",
     tx_DIVIDEND: "股息",
+    deleteTransaction: "删除交易",
+    confirmDeleteTransaction: "您确定要删除这条交易记录吗？系统将尝试回滚该交易对您资产余额和成本的影响。",
 
     analyticsSubtitle: "绩效指标与风险分析",
     noAssetsAnalytics: "添加资产以查看分析",

@@ -3,10 +3,10 @@ import React, { useState, useMemo } from 'react';
 import { usePortfolio } from '../context/PortfolioContext';
 import { Card } from './ui/Card';
 import { TransactionType, Currency } from '../types';
-import { Filter, Download, ArrowDownLeft, ArrowUpRight, DollarSign } from 'lucide-react';
+import { Filter, Download, ArrowDownLeft, ArrowUpRight, DollarSign, Trash2 } from 'lucide-react';
 
 export const TransactionHistory: React.FC = () => {
-  const { transactions, assets, t } = usePortfolio();
+  const { transactions, assets, deleteTransaction, t } = usePortfolio();
   const [selectedAssetId, setSelectedAssetId] = useState<string>('all');
   const [filterType, setFilterType] = useState<string>('all');
   const [startDate, setStartDate] = useState('');
@@ -80,6 +80,12 @@ export const TransactionHistory: React.FC = () => {
      document.body.appendChild(link);
      link.click();
      document.body.removeChild(link);
+  };
+
+  const handleDelete = (id: string) => {
+      if (window.confirm(t('confirmDeleteTransaction'))) {
+          deleteTransaction(id);
+      }
   };
 
   // Get unique assets that are actually in transactions or currently in portfolio
@@ -174,6 +180,7 @@ export const TransactionHistory: React.FC = () => {
                         <th className="pb-3 font-medium text-right">{t('pricePerUnit')}</th>
                         <th className="pb-3 font-medium text-right">{t('fees')}</th>
                         <th className="pb-3 font-medium text-right pr-2">{t('total')}</th>
+                        <th className="pb-3 font-medium text-right pr-2">{t('actions')}</th>
                     </tr>
                 </thead>
                 <tbody className="text-sm">
@@ -208,12 +215,21 @@ export const TransactionHistory: React.FC = () => {
                                 <td className="py-4 text-right pr-2 font-bold text-slate-800 whitespace-nowrap">
                                     {currencySymbol}{tx.total.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
                                 </td>
+                                <td className="py-4 text-right pr-2">
+                                    <button 
+                                        onClick={() => handleDelete(tx.id)}
+                                        className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                        title={t('deleteTransaction')}
+                                    >
+                                        <Trash2 size={16} />
+                                    </button>
+                                </td>
                             </tr>
                         );
                     })}
                     {filteredTransactions.length === 0 && (
                         <tr>
-                            <td colSpan={7} className="py-12 text-center text-slate-400 italic">
+                            <td colSpan={8} className="py-12 text-center text-slate-400 italic">
                                 {t('noTransactions')}
                             </td>
                         </tr>
