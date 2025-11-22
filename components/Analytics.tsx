@@ -6,7 +6,7 @@ import { convertValue } from '../services/marketData';
 import { Card } from './ui/Card';
 import { 
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, Legend,
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, LabelList
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, ReferenceLine, LabelList
 } from 'recharts';
 import { AssetType } from '../types';
 import { PieChart as PieIcon, Sparkles, Scale, RefreshCw } from 'lucide-react';
@@ -106,7 +106,19 @@ export const Analytics: React.FC = () => {
       .sort((a, b) => b.value - a.value);
   }, [assets, settings.baseCurrency, exchangeRates, t]);
 
-  // 2. Balance Sheet Summary (Assets vs Liabilities)
+  // 2. Liabilities Distribution
+  const liabilityDistribution = useMemo(() => {
+    return assets
+      .filter(a => a.type === AssetType.LIABILITY)
+      .map(a => {
+        const rawVal = a.quantity * a.currentPrice;
+        const val = convertValue(rawVal, a.currency, settings.baseCurrency, exchangeRates);
+        return { name: a.name || a.symbol, value: val };
+      })
+      .sort((a, b) => b.value - a.value);
+  }, [assets, settings.baseCurrency, exchangeRates]);
+
+  // 3. Balance Sheet Summary (Assets vs Liabilities)
   const balanceSheet = useMemo(() => {
     let totalAssets = 0;
     let totalLiabilities = 0;
@@ -133,7 +145,25 @@ export const Analytics: React.FC = () => {
     };
   }, [assets, settings.baseCurrency, exchangeRates, t]);
 
-  // 3. Visual Risk Distribution (Assets Only)
+  // 4. Top Assets by Value (Excluding Liabilities)
+  const topAssets = useMemo(() => {
+    return [...assets]
+      .filter(a => a.type !== AssetType.LIABILITY) 
+      .map(a => {
+        const value = convertValue(a.quantity * a.currentPrice, a.currency, settings.baseCurrency, exchangeRates);
+        const cost = convertValue(a.quantity * a.avgCost, a.currency, settings.baseCurrency, exchangeRates);
+        return {
+            name: a.symbol,
+            value,
+            cost,
+            pnl: value - cost
+        };
+      })
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 6);
+  }, [assets, settings.baseCurrency, exchangeRates]);
+
+  // 5. Visual Risk Distribution (Assets Only)
   const riskProfile = useMemo(() => {
     let high = 0, med = 0, low = 0;
     assets.forEach(a => {
@@ -157,6 +187,20 @@ export const Analytics: React.FC = () => {
         { name: t('risk_low'), value: low, color: RISK_COLORS.Low }
     ].filter(x => x.value > 0);
   }, [assets, settings.baseCurrency, exchangeRates, t]);
+
+  // 6. P&L Ranking
+  const pnlRanking = useMemo(() => {
+    return [...assets]
+      .filter(a => a.type !== AssetType.LIABILITY)
+      .map(a => {
+        const value = convertValue(a.quantity * a.currentPrice, a.currency, settings.baseCurrency, exchangeRates);
+        const cost = convertValue(a.quantity * a.avgCost, a.currency, settings.baseCurrency, exchangeRates);
+        const pnl = value - cost;
+        return { name: a.symbol, pnl };
+      })
+      .sort((a, b) => b.pnl - a.pnl)
+      .slice(0, 8);
+  }, [assets, settings.baseCurrency, exchangeRates]);
 
   if (assets.length === 0) {
     return (
@@ -320,19 +364,133 @@ export const Analytics: React.FC = () => {
                  </div>
 
                  {riskError ? (
-                    <div className="text-xs text-orange-500 bg-orange-50 p-2 rounded border border-orange-100 mt-2">
+                    <div className="text-xs text-orange-500 bg-orange-50 p-3 rounded border border-orange-100">
                         {t('unableToGenerate')}
                     </div>
-                 ) : (
-                    riskData && (
-                        <p className="text-xs text-slate-500 mt-2 leading-relaxed border-l-2 border-purple-200 pl-2">
-                            {riskData.analysis}
+                 ) : loadingRisk && !riskData ? (
+                     <div className="space-y-2 animate-pulse">
+                         <div className="h-3 bg-slate-100 rounded w-3/4"></div>
+                         <div className="h-3 bg-slate-100 rounded w-full"></div>
+                         <div className="h-3 bg-slate-100 rounded w-5/6"></div>
+                     </div>
+                 ) : riskData ? (
+                     <>
+                        <div className="flex items-center gap-2 mb-3">
+                            <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden relative">
+                                <div 
+                                    className={`absolute top-0 left-0 h-full rounded-full transition-all duration-1000 ${
+                                        riskData.riskScore > 7 ? 'bg-gradient-to-r from-orange-500 to-red-500' :
+                                        riskData.riskScore > 4 ? 'bg-gradient-to-r from-yellow-400 to-orange-500' :
+                                        'bg-gradient-to-r from-green-400 to-green-600'
+                                    }`}
+                                    style={{ width: `${riskData.riskScore * 10}%` }}
+                                ></div>
+                            </div>
+                            <div className="text-xs font-bold text-slate-600 w-8 text-right">{riskData.riskScore}/10</div>
+                        </div>
+                        <p className="text-xs text-slate-500 leading-relaxed border-l-2 border-purple-200 pl-3">
+                            "{riskData.analysis}"
                         </p>
-                    )
+                     </>
+                 ) : (
+                     <p className="text-xs text-slate-400 italic">Unable to generate risk analysis.</p>
                  )}
              </div>
            </div>
         </Card>
+      </div>
+
+      {/* --- Section 3: Performance (The Details) --- */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        
+        {/* Cost vs Value */}
+        <Card title="Cost vs. Value">
+           <div className="h-[250px] w-full">
+            <ResponsiveContainer>
+              <BarChart data={topAssets} layout="vertical" margin={{ left: 0, right: 10, top: 0, bottom: 0 }} barGap={2}>
+                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
+                <XAxis type="number" tickFormatter={formatCurrency} hide />
+                <YAxis 
+                    dataKey="name" 
+                    type="category" 
+                    width={50} 
+                    tick={{fontSize: 11, fill: '#64748b'}} 
+                    interval={0}
+                />
+                <RechartsTooltip 
+                    cursor={{fill: 'transparent'}}
+                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                    formatter={(val: number) => formatCurrency(val)}
+                />
+                <Legend iconSize={8} wrapperStyle={{fontSize: '11px'}}/>
+                <Bar dataKey="cost" name="Cost" fill="#cbd5e1" radius={[0, 3, 3, 0]} barSize={8} />
+                <Bar dataKey="value" name="Value" fill="#3b82f6" radius={[0, 3, 3, 0]} barSize={8} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
+
+        {/* P&L Performance */}
+        <Card title="Top Movers">
+           <div className="h-[250px] w-full">
+            <ResponsiveContainer>
+              <BarChart data={pnlRanking} margin={{top: 20, bottom: 0}}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                <XAxis dataKey="name" tick={{fontSize: 11, fill: '#64748b'}} axisLine={false} tickLine={false} />
+                <YAxis hide />
+                <RechartsTooltip 
+                    cursor={{fill: '#f8fafc'}}
+                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                    formatter={(val: number) => formatCurrency(val)}
+                />
+                <Bar dataKey="pnl" name="Net P&L" radius={[4, 4, 0, 0]}>
+                   {pnlRanking.map((entry, index) => (
+                      <Cell key={`cell-pnl-${index}`} fill={entry.pnl >= 0 ? '#10b981' : '#ef4444'} />
+                   ))}
+                   {!settings.isPrivacyMode && (
+                        <LabelList 
+                            dataKey="pnl" 
+                            position="top" 
+                            formatter={(val: number) => new Intl.NumberFormat('en-US', { notation: "compact" }).format(val)} 
+                            style={{fontSize: '10px', fill: '#94a3b8'}}
+                        />
+                   )}
+                </Bar>
+                <ReferenceLine y={0} stroke="#cbd5e1" />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
+
+        {/* Liability Breakdown (Conditional Row) */}
+        {liabilityDistribution.length > 0 && (
+            <Card title="Liability Breakdown" className="md:col-span-2">
+                 <div className="h-[180px] w-full flex items-center justify-center">
+                    <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                            <Pie
+                                data={liabilityDistribution}
+                                cx="50%"
+                                cy="50%"
+                                innerRadius={50}
+                                outerRadius={70}
+                                paddingAngle={5}
+                                dataKey="value"
+                            >
+                            {liabilityDistribution.map((entry, index) => (
+                                <Cell key={`cell-liab-${index}`} fill={index % 2 === 0 ? '#ef4444' : '#f87171'} stroke="none" />
+                            ))}
+                            </Pie>
+                            <RechartsTooltip 
+                                contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                                formatter={(val: number) => formatCurrency(val)}
+                            />
+                            <Legend iconSize={8} wrapperStyle={{fontSize: '11px'}} layout="vertical" align="right" verticalAlign="middle"/>
+                        </PieChart>
+                    </ResponsiveContainer>
+                 </div>
+            </Card>
+        )}
       </div>
     </div>
   );

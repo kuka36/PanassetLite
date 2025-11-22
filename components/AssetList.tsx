@@ -273,4 +273,42 @@ export const AssetList: React.FC<AssetListProps> = ({ onEdit, onTransaction }) =
                                 >
                                     <ArrowRightLeft size={16} />
                                 </button>
+                            )}
+                            {onEdit && (
+                                <button 
+                                    onClick={() => onEdit(asset)}
+                                    className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                    title="Edit Details"
+                                >
+                                    <Pencil size={16} />
+                                </button>
+                            )}
+                            {onEdit && (
+                                <button 
+                                    onClick={() => handleDelete(asset.id, asset.symbol)}
+                                    className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                    title="Delete"
+                                >
+                                    <Trash2 size={16} />
+                                </button>
+                            )}
+                        </div>
+                    </td>
+                  )}
+                </tr>
+              );
+            })}
+            {sortedAssets.length === 0 && (
+                <tr>
+                    <td colSpan={onEdit ? 7 : 6} className="text-center py-8 text-slate-400 italic">
+                        No assets found. Click "Add New Asset" to start.
+                    </td>
+                </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </Card>
+  );
+};
                             
