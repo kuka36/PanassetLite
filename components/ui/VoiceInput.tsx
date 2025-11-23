@@ -1,4 +1,5 @@
 
+
 import React, { useState, useRef, useEffect } from 'react';
 import { Mic, MicOff, Loader2, StopCircle } from 'lucide-react';
 import { usePortfolio } from '../../context/PortfolioContext';
@@ -6,12 +7,13 @@ import { parseVoiceCommand } from '../../services/geminiService';
 import { VoiceParseResult } from '../../types';
 
 interface VoiceInputProps {
-  onResult: (data: VoiceParseResult) => void;
-  mode: 'ASSET' | 'TRANSACTION';
+  onResult?: (data: VoiceParseResult) => void;
+  onTextResult?: (text: string) => void;
+  mode: 'ASSET' | 'TRANSACTION' | 'CHAT';
   className?: string;
 }
 
-export const VoiceInput: React.FC<VoiceInputProps> = ({ onResult, mode, className = "" }) => {
+export const VoiceInput: React.FC<VoiceInputProps> = ({ onResult, onTextResult, mode, className = "" }) => {
   const { settings, assets, t } = usePortfolio();
   const [isListening, setIsListening] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -35,11 +37,14 @@ export const VoiceInput: React.FC<VoiceInputProps> = ({ onResult, mode, classNam
       return;
     }
 
-    // Check API Key
-    const apiKey = settings.aiProvider === 'deepseek' ? settings.deepSeekApiKey : settings.geminiApiKey;
-    if (!apiKey) {
-      setError(t('apiKeyMissing'));
-      return;
+    // Check API Key only if we need AI parsing (ASSET/TRANSACTION mode)
+    // CHAT mode is pure STT (Speech to Text) and processed later by the Agent
+    if (mode !== 'CHAT') {
+        const apiKey = settings.aiProvider === 'deepseek' ? settings.deepSeekApiKey : settings.geminiApiKey;
+        if (!apiKey) {
+            setError(t('apiKeyMissing'));
+            return;
+        }
     }
 
     setError(null);
@@ -88,6 +93,13 @@ export const VoiceInput: React.FC<VoiceInputProps> = ({ onResult, mode, classNam
   const handleProcessing = async (text: string) => {
     if (!text) return;
     
+    // For Chat mode, we just return the text immediately
+    if (mode === 'CHAT') {
+        if (onTextResult) onTextResult(text);
+        return;
+    }
+
+    // For other modes, we process via AI
     setIsProcessing(true);
     const apiKey = settings.aiProvider === 'deepseek' ? settings.deepSeekApiKey : settings.geminiApiKey;
     
@@ -97,7 +109,7 @@ export const VoiceInput: React.FC<VoiceInputProps> = ({ onResult, mode, classNam
       
       const result = await parseVoiceCommand(text, mode, apiKey, settings.aiProvider, context);
       
-      if (result) {
+      if (result && onResult) {
         onResult(result);
       }
     } catch (err) {

@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Send, Bot, Sparkles, Check, AlertCircle, Trash2 } from 'lucide-react';
 import { usePortfolio } from '../context/PortfolioContext';
@@ -6,6 +7,7 @@ import { AgentService } from '../services/agentService';
 import { ChatMessage, PendingAction, TransactionType, AssetType } from '../types';
 import { Link } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
+import { VoiceInput } from './ui/VoiceInput';
 
 const HISTORY_KEY = 'panasset_chat_history';
 
@@ -157,6 +159,9 @@ export const AIChatAssistant: React.FC = () => {
       localStorage.removeItem(HISTORY_KEY);
   };
 
+  // Only render if Gemini API Key is present
+  if (!settings.geminiApiKey) return null;
+
   // Styled Markdown Wrapper to fix styling issues
   const MarkdownContent = ({ content }: { content: string }) => (
      <div className="prose prose-sm max-w-none prose-p:leading-relaxed prose-pre:bg-slate-800 prose-pre:text-white prose-p:my-1 prose-ul:my-1 prose-li:my-0">
@@ -166,7 +171,7 @@ export const AIChatAssistant: React.FC = () => {
 
   return (
     <>
-      {/* Floating Action Button (FAB) - Always Visible */}
+      {/* Floating Action Button (FAB) */}
       <button
         onClick={() => setIsOpen(!isOpen)}
         className={`fixed bottom-6 right-6 z-50 p-4 rounded-full shadow-2xl transition-all duration-300 flex items-center justify-center hover:scale-110 ${
@@ -175,9 +180,6 @@ export const AIChatAssistant: React.FC = () => {
         title="AI Assistant"
       >
         {isOpen ? <X className="text-white" size={28} /> : <Bot className="text-white" size={28} />}
-        {!settings.geminiApiKey && !isOpen && (
-             <span className="absolute -top-1 -right-1 w-4 h-4 bg-amber-500 rounded-full border-2 border-white"></span>
-        )}
       </button>
 
       {/* Chat Window */}
@@ -193,8 +195,8 @@ export const AIChatAssistant: React.FC = () => {
               <div>
                 <h3 className="font-bold text-slate-800">Panasset Assistant</h3>
                 <p className="text-xs text-slate-500 flex items-center gap-1">
-                   {settings.geminiApiKey ? <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span> : <span className="w-1.5 h-1.5 bg-amber-500 rounded-full"></span>}
-                   {settings.geminiApiKey ? (settings.language==='zh'?"在线":"Online") : (settings.language==='zh'?"缺少 API Key":"API Key Missing")}
+                   <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span>
+                   {settings.language === 'zh' ? "在线" : "Online"}
                 </p>
               </div>
             </div>
@@ -253,22 +255,18 @@ export const AIChatAssistant: React.FC = () => {
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Fallback Alert if no Key */}
-          {!settings.geminiApiKey && (
-             <div className="px-4 py-3 bg-amber-50 border-t border-amber-100 text-xs text-amber-700 flex justify-between items-center shrink-0">
-                 <span>{settings.language === 'zh' ? "配置 API Key 以使用 AI 功能" : "Setup Gemini API Key for AI features."}</span>
-                 <Link to="/settings" onClick={() => setIsOpen(false)} className="font-bold underline hover:text-amber-800">Settings</Link>
-             </div>
-          )}
-
           {/* Input Area */}
           <div className="p-3 bg-white border-t border-slate-100 flex items-center gap-2 shrink-0">
+            <VoiceInput 
+                mode="CHAT" 
+                onTextResult={(text) => setInput(text)} 
+            />
             <input
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && !isTyping && handleSend()}
-              placeholder={settings.geminiApiKey ? (settings.language==='zh'?"输入消息...":"Type a message...") : (settings.language==='zh'?"请先设置 Key...":"Setup Key first...")}
+              placeholder={settings.language === 'zh' ? "输入消息..." : "Type a message..."}
               disabled={isTyping} 
               className="flex-1 bg-slate-50 border border-slate-200 text-slate-800 text-sm rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
             />
