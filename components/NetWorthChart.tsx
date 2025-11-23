@@ -264,30 +264,30 @@ export const NetWorthChart: React.FC<NetWorthChartProps> = ({
     if (active && payload && payload.length) {
       const data = payload[0].payload;
       return (
-        <div className="bg-white p-4 rounded-xl shadow-xl border border-slate-100 text-sm animate-in fade-in zoom-in-95 duration-150">
-          <p className="text-slate-500 font-medium mb-2 border-b border-slate-50 pb-2">{data.displayDate}</p>
+        <div className="bg-white/95 backdrop-blur-sm p-3 sm:p-4 rounded-xl shadow-xl border border-slate-100 text-xs sm:text-sm animate-in fade-in zoom-in-95 duration-150 max-w-[180px] sm:max-w-none">
+          <p className="text-slate-500 font-medium mb-1.5 sm:mb-2 border-b border-slate-50 pb-1">{data.displayDate}</p>
           
-          <div className="flex items-center justify-between gap-6 mb-1">
+          <div className="flex items-center justify-between gap-3 sm:gap-6 mb-1">
             <span className="text-slate-500 flex items-center gap-1">
-                <div className="w-2 h-2 rounded-full" style={{background: colorMain}}></div>
+                <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full" style={{background: colorMain}}></div>
                 {t('value')}
             </span>
             <span className="font-bold text-slate-700">{formatCurrency(data.value)}</span>
           </div>
 
-          <div className="flex items-center justify-between gap-6 mb-2">
+          <div className="flex items-center justify-between gap-3 sm:gap-6 mb-1.5">
             <span className="text-slate-400 flex items-center gap-1">
-                 <div className="w-2 h-2 rounded-full bg-slate-300"></div>
+                 <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-slate-300"></div>
                  {t('label_cost')}
             </span>
             <span className="font-medium text-slate-400">{formatCurrency(data.cost)}</span>
           </div>
 
-          <div className={`flex items-center justify-between gap-4 pt-2 border-t border-slate-50 font-medium ${data.pnl >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+          <div className={`flex flex-wrap items-center justify-between gap-2 pt-1.5 border-t border-slate-50 font-medium ${data.pnl >= 0 ? 'text-green-600' : 'text-red-600'}`}>
             <span>{data.pnl >= 0 ? t('label_net_pnl') : 'Loss'}</span>
             <div className="flex items-center gap-1">
-                {data.pnl >= 0 ? <TrendingUp size={14}/> : <TrendingDown size={14}/>}
-                <span>{formatCurrency(Math.abs(data.pnl))} ({Math.abs(data.pnlPercent).toFixed(2)}%)</span>
+                {data.pnl >= 0 ? <TrendingUp size={12}/> : <TrendingDown size={12}/>}
+                <span>{formatCurrency(Math.abs(data.pnl))} <span className="text-[10px] opacity-80">({Math.abs(data.pnlPercent).toFixed(1)}%)</span></span>
             </div>
           </div>
         </div>
@@ -313,12 +313,12 @@ export const NetWorthChart: React.FC<NetWorthChartProps> = ({
             </p>
         </div>
 
-        <div className="flex bg-slate-50 p-1 rounded-lg self-start sm:self-auto">
+        <div className="flex bg-slate-50 p-1 rounded-lg self-start sm:self-auto overflow-x-auto max-w-full">
             {(['1W', '1M', '3M', '6M', '1Y', 'ALL'] as TimeRange[]).map((r) => (
                 <button
                     key={r}
                     onClick={() => setRange(r)}
-                    className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${
+                    className={`px-3 py-1 text-xs font-medium rounded-md transition-all whitespace-nowrap ${
                         range === r 
                         ? 'bg-white text-blue-600 shadow-sm' 
                         : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'

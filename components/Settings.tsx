@@ -1,10 +1,11 @@
 
+
 import React, { useRef, useState } from 'react';
 import { usePortfolio } from '../context/PortfolioContext';
 import { Card } from './ui/Card';
 import { Currency, Language, AIProvider } from '../types';
 import { 
-  Download, Upload, Trash2, Shield, Globe, AlertTriangle, CheckCircle, Key, Languages, Activity, Lock, Github, ExternalLink, Bot, Sparkles
+  Download, Upload, Trash2, Shield, Globe, AlertTriangle, CheckCircle, Key, Languages, Activity, Lock, Github, ExternalLink, Bot, Sparkles, Eye, EyeOff
 } from 'lucide-react';
 
 export const Settings: React.FC = () => {
@@ -20,6 +21,11 @@ export const Settings: React.FC = () => {
 
   const [importStatus, setImportStatus] = useState<{msg: string, type: 'success'|'error'} | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Visibility States for API Keys
+  const [showGemini, setShowGemini] = useState(false);
+  const [showDeepSeek, setShowDeepSeek] = useState(false);
+  const [showAlpha, setShowAlpha] = useState(false);
 
   const handleExport = () => {
     const data = {
@@ -174,13 +180,24 @@ export const Settings: React.FC = () => {
                                     <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" className="text-blue-600 hover:underline font-medium">{t('getKey')}</a>
                                 </div>
                             </div>
-                            <input 
-                                type="password" 
-                                placeholder="Paste your Gemini API Key here..."
-                                value={settings.geminiApiKey}
-                                onChange={(e) => updateSettings({ geminiApiKey: e.target.value })}
-                                className="w-full p-3 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm font-mono"
-                            />
+                            <div className="relative">
+                                <input 
+                                    type={showGemini ? "text" : "password"}
+                                    name="gemini_api_key_field"
+                                    autoComplete="off"
+                                    placeholder="Paste your Gemini API Key here..."
+                                    value={settings.geminiApiKey}
+                                    onChange={(e) => updateSettings({ geminiApiKey: e.target.value })}
+                                    className="w-full p-3 pr-10 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm font-mono"
+                                />
+                                <button 
+                                    type="button"
+                                    onClick={() => setShowGemini(!showGemini)}
+                                    className="absolute right-3 top-3 text-slate-400 hover:text-slate-600"
+                                >
+                                    {showGemini ? <EyeOff size={18} /> : <Eye size={18} />}
+                                </button>
+                            </div>
                         </>
                      ) : (
                         <>
@@ -191,13 +208,24 @@ export const Settings: React.FC = () => {
                                     <a href="https://platform.deepseek.com/api_keys" target="_blank" rel="noreferrer" className="text-blue-600 hover:underline font-medium">{t('getKey')}</a>
                                 </div>
                             </div>
-                            <input 
-                                type="password" 
-                                placeholder="Paste your DeepSeek API Key here..."
-                                value={settings.deepSeekApiKey}
-                                onChange={(e) => updateSettings({ deepSeekApiKey: e.target.value })}
-                                className="w-full p-3 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm font-mono"
-                            />
+                            <div className="relative">
+                                <input 
+                                    type={showDeepSeek ? "text" : "password"}
+                                    name="deepseek_api_key_field"
+                                    autoComplete="off"
+                                    placeholder="Paste your DeepSeek API Key here..."
+                                    value={settings.deepSeekApiKey}
+                                    onChange={(e) => updateSettings({ deepSeekApiKey: e.target.value })}
+                                    className="w-full p-3 pr-10 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm font-mono"
+                                />
+                                <button 
+                                    type="button"
+                                    onClick={() => setShowDeepSeek(!showDeepSeek)}
+                                    className="absolute right-3 top-3 text-slate-400 hover:text-slate-600"
+                                >
+                                    {showDeepSeek ? <EyeOff size={18} /> : <Eye size={18} />}
+                                </button>
+                            </div>
                         </>
                      )}
                 </div>
@@ -216,13 +244,24 @@ export const Settings: React.FC = () => {
                         {t('alphaVantageKeyDesc')}
                         <a href="https://www.alphavantage.co/support/#api-key" target="_blank" rel="noreferrer" className="text-blue-600 hover:underline ml-1">{t('getKey')}</a>.
                      </div>
-                     <input 
-                        type="password" 
-                        placeholder="Paste your Alpha Vantage API Key here..."
-                        value={settings.alphaVantageApiKey}
-                        onChange={(e) => updateSettings({ alphaVantageApiKey: e.target.value })}
-                        className="w-full p-3 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm font-mono"
-                     />
+                     <div className="relative">
+                        <input 
+                            type={showAlpha ? "text" : "password"}
+                            name="alphavantage_api_key_field"
+                            autoComplete="off"
+                            placeholder="Paste your Alpha Vantage API Key here..."
+                            value={settings.alphaVantageApiKey}
+                            onChange={(e) => updateSettings({ alphaVantageApiKey: e.target.value })}
+                            className="w-full p-3 pr-10 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm font-mono"
+                        />
+                         <button 
+                            type="button"
+                            onClick={() => setShowAlpha(!showAlpha)}
+                            className="absolute right-3 top-3 text-slate-400 hover:text-slate-600"
+                        >
+                            {showAlpha ? <EyeOff size={18} /> : <Eye size={18} />}
+                        </button>
+                     </div>
                 </div>
             </div>
         </div>
