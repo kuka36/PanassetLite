@@ -1,7 +1,8 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, PieChart, Wallet, Settings, Menu, X, History, MessageSquarePlus, ChevronLeft, ChevronRight } from 'lucide-react';
+import { LayoutDashboard, PieChart, Wallet, Settings, Menu, X, History, MessageSquarePlus, ChevronLeft, ChevronRight, BookOpen } from 'lucide-react';
 import { usePortfolio } from '../context/PortfolioContext';
 
 export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -77,6 +78,16 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
             {!isCollapsed ? (
               <div className="animate-fade-in">
                 <a 
+                    href="https://mp.weixin.qq.com/s/du0wh1As2s-casSadFAgZQ"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center gap-3 text-sm font-medium text-slate-600 hover:text-green-600 transition-colors mb-2 group px-2"
+                >
+                    <BookOpen size={18} className="text-slate-400 group-hover:text-green-500 shrink-0"/>
+                    <span className="whitespace-nowrap">{t('userGuide')}</span>
+                </a>
+
+                <a 
                     href="https://github.com/kuka36/PanassetLite/issues"
                     target="_blank"
                     rel="noreferrer"
@@ -90,15 +101,26 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                 </div>
               </div>
             ) : (
-               <a 
-                  href="https://github.com/kuka36/PanassetLite/issues"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="flex justify-center text-slate-400 hover:text-blue-600 transition-colors"
-                  title={t('haveFeedback')}
-              >
-                  <MessageSquarePlus size={20} />
-              </a>
+               <div className="flex flex-col gap-2 items-center">
+                 <a 
+                    href="https://mp.weixin.qq.com/s/du0wh1As2s-casSadFAgZQ"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex justify-center text-slate-400 hover:text-green-600 transition-colors"
+                    title={t('userGuide')}
+                >
+                    <BookOpen size={20} />
+                </a>
+                 <a 
+                    href="https://github.com/kuka36/PanassetLite/issues"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex justify-center text-slate-400 hover:text-blue-600 transition-colors"
+                    title={t('haveFeedback')}
+                >
+                    <MessageSquarePlus size={20} />
+                </a>
+               </div>
             )}
         </div>
       </aside>
@@ -130,7 +152,16 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                  <NavItem to="/analytics" icon={<PieChart size={20}/>} label={t('analytics')} onClick={() => setIsMobileMenuOpen(false)} />
                  <NavItem to="/settings" icon={<Settings size={20}/>} label={t('settings')} onClick={() => setIsMobileMenuOpen(false)} />
                  
-                 <div className="pt-4 mt-4 border-t border-slate-100">
+                 <div className="pt-4 mt-4 border-t border-slate-100 space-y-2">
+                    <a 
+                        href="https://mp.weixin.qq.com/s/du0wh1As2s-casSadFAgZQ"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex items-center gap-3 px-4 py-3 text-slate-500 hover:bg-slate-50 rounded-xl transition-colors"
+                    >
+                        <BookOpen size={20}/>
+                        <span className="font-medium">{t('userGuide')}</span>
+                    </a>
                     <a 
                         href="https://github.com/kuka36/PanassetLite/issues"
                         target="_blank"

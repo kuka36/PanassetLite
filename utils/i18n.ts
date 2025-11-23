@@ -192,6 +192,7 @@ export const translations: Record<Language, Record<string, string>> = {
     reportBug: "Report a Bug / Suggestion",
     githubLinkText: "Submit on GitHub",
     githubDesc: "Help us improve PanassetLite by submitting issues or feature requests.",
+    userGuide: "User Guide",
   },
   zh: {
     dashboard: "仪表盘",
@@ -372,5 +373,6 @@ export const translations: Record<Language, Record<string, string>> = {
     reportBug: "提交 Bug 或功能建议",
     githubLinkText: "前往 GitHub 提交",
     githubDesc: "提交 Issue 或功能建议，帮助我们改进 PanassetLite。",
+    userGuide: "使用指南",
   }
 };

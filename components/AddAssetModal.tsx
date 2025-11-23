@@ -73,7 +73,11 @@ export const AddAssetModal: React.FC<Props> = ({ isOpen, onClose, initialAsset }
           setStep(2); // Auto advance
       }
       if (data.quantity) setQuantity(data.quantity.toString());
-      if (data.price) setCost(data.price.toString()); // For initial buy, price is cost
+      if (data.price) {
+          const valStr = data.price.toString();
+          setCost(valStr); // Set Avg Cost
+          setCurrentVal(valStr); // Also Set Current Value (for Manual Assets like Real Estate)
+      }
       if (data.date) setDateAcquired(data.date);
       if (data.currency) setCurrency(data.currency);
   };

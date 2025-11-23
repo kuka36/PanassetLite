@@ -40,7 +40,7 @@ const DashboardView: React.FC = () => {
 };
 
 const AssetsView: React.FC = () => {
-  const { t } = usePortfolio();
+  const { t, refreshPrices, isRefreshing } = usePortfolio();
   const [isAssetModalOpen, setIsAssetModalOpen] = useState(false);
   const [isTxModalOpen, setIsTxModalOpen] = useState(false);
   
@@ -81,7 +81,15 @@ const AssetsView: React.FC = () => {
                 <h1 className="text-2xl font-bold text-slate-800">{t('assetsManagement')}</h1>
                 <p className="text-slate-500">{t('assetsSubtitle')}</p>
             </div>
-            <div>
+            <div className="flex items-center gap-2">
+                <button 
+                  onClick={() => refreshPrices()}
+                  disabled={isRefreshing}
+                  className="p-2.5 bg-white hover:bg-slate-50 text-slate-600 border border-slate-200 rounded-xl shadow-sm transition-all"
+                  title={t('refreshPrices')}
+                >
+                   <RefreshCw size={20} className={isRefreshing ? "animate-spin text-blue-600" : "text-slate-400"} />
+                </button>
                 <button 
                     onClick={handleOpenAddAsset}
                     className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl shadow-lg shadow-blue-200 transition-all flex items-center gap-2"

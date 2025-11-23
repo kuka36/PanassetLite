@@ -219,9 +219,17 @@ export const parseVoiceCommand = async (
   ): Promise<VoiceParseResult> => {
     if (!apiKey) throw new Error("API Key is missing");
 
+    // Inject Current Date so LLM can resolve "Today", "Yesterday"
+    const today = new Date().toISOString().split('T')[0];
+
     const prompt = `
       Role: Financial Data Parser.
       Task: Parse user spoken input into structured JSON for an app called 'InvestFlow'.
+      
+      Time Context: 
+      - Current Reference Date: ${today} (YYYY-MM-DD).
+      - Use this date to correctly resolve relative time terms like "today", "yesterday", "last friday".
+
       User Input: "${text}"
       
       Context Mode: ${mode}
@@ -229,20 +237,18 @@ export const parseVoiceCommand = async (
 
       Instructions:
       1. Extract 'symbol', 'quantity', 'price', 'date' (YYYY-MM-DD), 'currency'.
-      2. **SYMBOL MAPPING IS CRITICAL**:
-         - Convert spoken company names to Ticker Symbols.
-         - US Stocks: Apple -> AAPL, Microsoft -> MSFT, Tesla -> TSLA.
-         - HK Stocks: Tencent -> 0700.HK, Alibaba -> 9988.HK.
-         - Crypto: Bitcoin -> BTC, Ethereum -> ETH.
-         - Cash: "RMB" or "Yuan" -> CNY, "Dollar" -> USD.
+      2. **INTELLIGENT MAPPING**:
+         - **Symbols**: Use your broad financial knowledge to map spoken company names or asset classes to standard Ticker Symbols (e.g. "Nvidia" -> "NVDA", "Gold" -> "GOLD", "Maotai" -> "600519.SS"). 
+         - **Manual Assets**: For Real Estate or unique items, generate a logical, concise uppercase ID (e.g. "APT_NY", "ROLEX_SUB").
+         - **Currencies**: Map spoken currency names (e.g. "RMB", "Bucks", "Yuan") to standard ISO 4217 codes (CNY, USD, HKD, etc.).
       3. **TRANSACTION MODE**:
          - If mode is TRANSACTION, map the input to one of the Existing Assets if possible.
          - Determine 'txType' (BUY, SELL, DIVIDEND). Default to BUY if ambiguous.
       4. **ASSET MODE**:
-         - Determine 'type' (STOCK, CRYPTO, FUND, CASH, REAL_ESTATE, LIABILITY).
+         - Determine 'type' (STOCK, CRYPTO, FUND, CASH, REAL_ESTATE, LIABILITY, OTHER).
       
       Return STRICT JSON. No markdown formatting.
-      Fields: symbol, name, type (enum: STOCK, CRYPTO, FUND, CASH, REAL_ESTATE, LIABILITY, OTHER), txType (enum: BUY, SELL, DIVIDEND), quantity (number), price (number), date (string YYYY-MM-DD), currency (enum: USD, CNY, HKD).
+      Fields: symbol, name, type (enum: STOCK, CRYPTO, FUND, CASH, REAL_ESTATE, LIABILITY, OTHER), txType (enum: BUY, SELL, DIVIDEND), quantity (number), price (number), date (string YYYY-MM-DD), currency (string).
     `;
 
     const schema = {
@@ -255,12 +261,10 @@ export const parseVoiceCommand = async (
         quantity: { type: Type.NUMBER },
         price: { type: Type.NUMBER },
         date: { type: Type.STRING },
-        currency: { type: Type.STRING, enum: ["USD", "CNY", "HKD"] }
+        currency: { type: Type.STRING }
       }
     };
 
     const engine = AIEngineFactory.create(provider, apiKey);
-    // DeepSeek handles JSON schemas via prompt mostly, Gemini supports it natively.
-    // The AIEngine abstraction handles the difference.
     return await engine.generateJSON(prompt, schema);
 };
