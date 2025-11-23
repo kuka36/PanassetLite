@@ -10,7 +10,7 @@ import ReactMarkdown from 'react-markdown';
 const HISTORY_KEY = 'panasset_chat_history';
 
 export const AIChatAssistant: React.FC = () => {
-  const { settings, assets, addTransaction, addAsset } = usePortfolio();
+  const { settings, assets, addTransaction, addAsset, t } = usePortfolio();
   const [isOpen, setIsOpen] = useState(false);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
@@ -27,11 +27,13 @@ export const AIChatAssistant: React.FC = () => {
         console.error("Failed to load chat history", e);
       }
     } else {
-      // Initial Greeting
+      // Initial Greeting based on language
       setMessages([{
         id: 'init',
         role: 'model',
-        content: "Hi! I'm your PanassetLite assistant. I can help you track assets or analyze your portfolio. Try saying \"I bought 10 AAPL at 150\".",
+        content: settings.language === 'zh' 
+            ? "您好！我是您的资产助手。我可以帮您记录交易或分析持仓。试试说：“我以 150 的价格买入了 10 股苹果”。"
+            : "Hi! I'm your PanassetLite assistant. I can help you track assets or analyze your portfolio. Try saying \"I bought 10 AAPL at 150\".",
         timestamp: Date.now()
       }]);
     }
@@ -40,7 +42,9 @@ export const AIChatAssistant: React.FC = () => {
   // Save History on Update
   useEffect(() => {
     if (messages.length > 0) {
-      localStorage.setItem(HISTORY_KEY, JSON.stringify(messages.slice(-50))); // Keep last 50
+      // Clean history before saving: ensure no message has empty/undefined content
+      const validMessages = messages.filter(m => m.content && m.content.trim() !== '');
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(validMessages.slice(-50))); 
     }
   }, [messages]);
 
@@ -55,7 +59,7 @@ export const AIChatAssistant: React.FC = () => {
     const userMsg: ChatMessage = {
       id: crypto.randomUUID(),
       role: 'user',
-      content: input,
+      content: input.trim(),
       timestamp: Date.now()
     };
 
@@ -65,13 +69,19 @@ export const AIChatAssistant: React.FC = () => {
 
     const agent = new AgentService(settings.geminiApiKey);
     
-    // We pass messages for context.
-    const response = await agent.processMessage(input, messages, assets, settings.baseCurrency);
+    // Pass current language setting
+    const response = await agent.processMessage(
+        userMsg.content, 
+        messages, 
+        assets, 
+        settings.baseCurrency, 
+        settings.language
+    );
 
     const botMsg: ChatMessage = {
       id: crypto.randomUUID(),
       role: 'model',
-      content: response.text,
+      content: response.text || "", // Ensure string
       timestamp: Date.now(),
       pendingAction: response.action
     };
@@ -128,12 +138,12 @@ export const AIChatAssistant: React.FC = () => {
 
       // Update message to remove the action button (mark as done)
       setMessages(prev => prev.map(m => 
-        m.id === msgId ? { ...m, content: m.content + "\n\n✅ *Action Confirmed & Executed.*", pendingAction: undefined } : m
+        m.id === msgId ? { ...m, content: m.content + (settings.language === 'zh' ? "\n\n✅ *操作已确认执行。*" : "\n\n✅ *Action Confirmed & Executed.*"), pendingAction: undefined } : m
       ));
 
     } catch (e) {
       console.error(e);
-      alert("Failed to execute action.");
+      alert(settings.language === 'zh' ? "执行操作失败。" : "Failed to execute action.");
     }
   };
 
@@ -141,11 +151,18 @@ export const AIChatAssistant: React.FC = () => {
       setMessages([{
         id: crypto.randomUUID(),
         role: 'model',
-        content: "History cleared. How can I help you today?",
+        content: settings.language === 'zh' ? "历史记录已清除。有什么可以帮您？" : "History cleared. How can I help you today?",
         timestamp: Date.now()
       }]);
       localStorage.removeItem(HISTORY_KEY);
   };
+
+  // Styled Markdown Wrapper to fix styling issues
+  const MarkdownContent = ({ content }: { content: string }) => (
+     <div className="prose prose-sm max-w-none prose-p:leading-relaxed prose-pre:bg-slate-800 prose-pre:text-white prose-p:my-1 prose-ul:my-1 prose-li:my-0">
+        <ReactMarkdown>{content}</ReactMarkdown>
+     </div>
+  );
 
   return (
     <>
@@ -177,11 +194,11 @@ export const AIChatAssistant: React.FC = () => {
                 <h3 className="font-bold text-slate-800">Panasset Assistant</h3>
                 <p className="text-xs text-slate-500 flex items-center gap-1">
                    {settings.geminiApiKey ? <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span> : <span className="w-1.5 h-1.5 bg-amber-500 rounded-full"></span>}
-                   {settings.geminiApiKey ? "Online" : "API Key Missing"}
+                   {settings.geminiApiKey ? (settings.language==='zh'?"在线":"Online") : (settings.language==='zh'?"缺少 API Key":"API Key Missing")}
                 </p>
               </div>
             </div>
-            <button onClick={handleClearHistory} className="text-slate-400 hover:text-red-500 transition-colors p-1" title="Clear History">
+            <button onClick={handleClearHistory} className="text-slate-400 hover:text-red-500 transition-colors p-1" title={settings.language==='zh'?"清除历史":"Clear History"}>
                 <Trash2 size={16} />
             </button>
           </div>
@@ -195,11 +212,7 @@ export const AIChatAssistant: React.FC = () => {
                     ? 'bg-blue-600 text-white rounded-tr-none' 
                     : 'bg-white text-slate-700 border border-slate-100 rounded-tl-none'
                 }`}>
-                  <div className="prose prose-sm max-w-none prose-p:leading-relaxed prose-pre:bg-slate-800 prose-pre:text-white">
-                    <ReactMarkdown>
-                      {msg.content}
-                    </ReactMarkdown>
-                  </div>
+                  <MarkdownContent content={msg.content} />
 
                   {/* Pending Action Card */}
                   {msg.pendingAction && (
@@ -207,7 +220,7 @@ export const AIChatAssistant: React.FC = () => {
                         <div className="flex items-start gap-2 mb-2">
                             <AlertCircle size={16} className="text-indigo-600 mt-0.5 shrink-0"/>
                             <div className="text-xs text-indigo-800 font-medium">
-                                Action Required
+                                {settings.language === 'zh' ? "需确认操作" : "Action Required"}
                             </div>
                         </div>
                         <div className="text-sm font-bold text-slate-800 mb-3 pl-6">
@@ -218,7 +231,7 @@ export const AIChatAssistant: React.FC = () => {
                                 onClick={() => handleConfirmAction(msg.id, msg.pendingAction!)}
                                 className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold py-2 rounded-lg flex items-center justify-center gap-1 transition-colors"
                             >
-                                <Check size={14} /> Confirm
+                                <Check size={14} /> {settings.language === 'zh' ? "确认" : "Confirm"}
                             </button>
                         </div>
                     </div>
@@ -243,7 +256,7 @@ export const AIChatAssistant: React.FC = () => {
           {/* Fallback Alert if no Key */}
           {!settings.geminiApiKey && (
              <div className="px-4 py-3 bg-amber-50 border-t border-amber-100 text-xs text-amber-700 flex justify-between items-center shrink-0">
-                 <span>Setup Gemini API Key for AI features.</span>
+                 <span>{settings.language === 'zh' ? "配置 API Key 以使用 AI 功能" : "Setup Gemini API Key for AI features."}</span>
                  <Link to="/settings" onClick={() => setIsOpen(false)} className="font-bold underline hover:text-amber-800">Settings</Link>
              </div>
           )}
@@ -255,8 +268,8 @@ export const AIChatAssistant: React.FC = () => {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && !isTyping && handleSend()}
-              placeholder={settings.geminiApiKey ? "Type a message..." : "Setup Key first..."}
-              disabled={isTyping} // Allow typing even without key, AgentService handles the response
+              placeholder={settings.geminiApiKey ? (settings.language==='zh'?"输入消息...":"Type a message...") : (settings.language==='zh'?"请先设置 Key...":"Setup Key first...")}
+              disabled={isTyping} 
               className="flex-1 bg-slate-50 border border-slate-200 text-slate-800 text-sm rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
             />
             <button 
