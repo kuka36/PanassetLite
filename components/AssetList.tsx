@@ -1,8 +1,9 @@
 
+
 import React, { useState, useMemo } from 'react';
 import { usePortfolio } from '../context/PortfolioContext';
 import { Card } from './ui/Card';
-import { ArrowUpRight, ArrowDownRight, Pencil, Trash2, History, ArrowUp, ArrowDown, ArrowRightLeft, Wifi, PenTool } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight, Pencil, Trash2, History, ArrowUp, ArrowDown, ArrowRightLeft, Wifi, PenTool, WifiOff } from 'lucide-react';
 import { Asset, AssetType, Currency } from '../types';
 import { convertValue } from '../services/marketData';
 
@@ -139,7 +140,14 @@ export const AssetList: React.FC<AssetListProps> = ({ onEdit, onTransaction }) =
   const formatLastUpdated = (timestamp?: number) => {
       if (!timestamp) return 'N/A';
       const date = new Date(timestamp);
-      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  };
+
+  const isAssetStale = (asset: Asset) => {
+      if (!isLiveMarketData(asset.type)) return false;
+      const threshold = 30 * 60 * 1000; // 30 minutes
+      // If no timestamp, it's stale (or initializing). If timestamp is old, it's stale.
+      return (Date.now() - (asset.lastUpdated || 0)) > threshold;
   };
 
   // Table Header Helper
@@ -187,6 +195,7 @@ export const AssetList: React.FC<AssetListProps> = ({ onEdit, onTransaction }) =
               const isManual = isManualValuation(asset.type);
               const isUpdating = updatingId === asset.id;
               const isLive = isLiveMarketData(asset.type);
+              const isStale = isAssetStale(asset);
 
               return (
                 <tr key={asset.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors group">
@@ -237,11 +246,17 @@ export const AssetList: React.FC<AssetListProps> = ({ onEdit, onTransaction }) =
                             </div>
                             <div className="flex items-center gap-1 mt-1">
                                 {isLive ? (
-                                    <span className="text-[10px] text-green-600 flex items-center gap-1 bg-green-50 px-1.5 py-0.5 rounded" title={t('liveData')}>
-                                        <Wifi size={10} /> {t('live')}
-                                    </span>
+                                    isStale ? (
+                                       <span className="text-[10px] text-amber-600 flex items-center gap-1 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-100" title={t('dataStale')}>
+                                          <WifiOff size={10} /> {t('offline')}
+                                       </span>
+                                    ) : (
+                                       <span className="text-[10px] text-green-600 flex items-center gap-1 bg-green-50 px-1.5 py-0.5 rounded border border-green-100" title={t('liveData')}>
+                                          <Wifi size={10} /> {t('live')}
+                                       </span>
+                                    )
                                 ) : (
-                                    <span className="text-[10px] text-slate-400 flex items-center gap-1 bg-slate-100 px-1.5 py-0.5 rounded" title={t('manualValuation')}>
+                                    <span className="text-[10px] text-slate-400 flex items-center gap-1 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200" title={t('manualValuation')}>
                                         <PenTool size={10} /> {t('manual')}
                                     </span>
                                 )}

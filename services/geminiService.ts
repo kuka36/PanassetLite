@@ -1,6 +1,7 @@
 
+
 import { Type } from "@google/genai";
-import { Asset, AssetType, Language, AIProvider } from "../types";
+import { Asset, AssetType, Language, AIProvider, VoiceParseResult } from "../types";
 import { AIEngineFactory } from "./aiEngine";
 
 export const RISK_CACHE_KEY = 'investflow_risk_cache';
@@ -207,4 +208,59 @@ export const getRiskAssessment = async (assets: Asset[], apiKey: string, provide
   } finally {
       pendingRiskPromise = null;
   }
+};
+
+export const parseVoiceCommand = async (
+    text: string, 
+    mode: 'ASSET' | 'TRANSACTION',
+    apiKey: string, 
+    provider: AIProvider,
+    existingContext: { symbol: string, name: string, id: string }[] = []
+  ): Promise<VoiceParseResult> => {
+    if (!apiKey) throw new Error("API Key is missing");
+
+    const prompt = `
+      Role: Financial Data Parser.
+      Task: Parse user spoken input into structured JSON for an app called 'InvestFlow'.
+      User Input: "${text}"
+      
+      Context Mode: ${mode}
+      Existing Assets: ${JSON.stringify(existingContext.map(a => `${a.symbol} (${a.name})`))}
+
+      Instructions:
+      1. Extract 'symbol', 'quantity', 'price', 'date' (YYYY-MM-DD), 'currency'.
+      2. **SYMBOL MAPPING IS CRITICAL**:
+         - Convert spoken company names to Ticker Symbols.
+         - US Stocks: Apple -> AAPL, Microsoft -> MSFT, Tesla -> TSLA.
+         - HK Stocks: Tencent -> 0700.HK, Alibaba -> 9988.HK.
+         - Crypto: Bitcoin -> BTC, Ethereum -> ETH.
+         - Cash: "RMB" or "Yuan" -> CNY, "Dollar" -> USD.
+      3. **TRANSACTION MODE**:
+         - If mode is TRANSACTION, map the input to one of the Existing Assets if possible.
+         - Determine 'txType' (BUY, SELL, DIVIDEND). Default to BUY if ambiguous.
+      4. **ASSET MODE**:
+         - Determine 'type' (STOCK, CRYPTO, FUND, CASH, REAL_ESTATE, LIABILITY).
+      
+      Return STRICT JSON. No markdown formatting.
+      Fields: symbol, name, type (enum: STOCK, CRYPTO, FUND, CASH, REAL_ESTATE, LIABILITY, OTHER), txType (enum: BUY, SELL, DIVIDEND), quantity (number), price (number), date (string YYYY-MM-DD), currency (enum: USD, CNY, HKD).
+    `;
+
+    const schema = {
+      type: Type.OBJECT,
+      properties: {
+        symbol: { type: Type.STRING },
+        name: { type: Type.STRING },
+        type: { type: Type.STRING, enum: ["STOCK", "CRYPTO", "FUND", "CASH", "REAL_ESTATE", "LIABILITY", "OTHER"] },
+        txType: { type: Type.STRING, enum: ["BUY", "SELL", "DIVIDEND"] },
+        quantity: { type: Type.NUMBER },
+        price: { type: Type.NUMBER },
+        date: { type: Type.STRING },
+        currency: { type: Type.STRING, enum: ["USD", "CNY", "HKD"] }
+      }
+    };
+
+    const engine = AIEngineFactory.create(provider, apiKey);
+    // DeepSeek handles JSON schemas via prompt mostly, Gemini supports it natively.
+    // The AIEngine abstraction handles the difference.
+    return await engine.generateJSON(prompt, schema);
 };

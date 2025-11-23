@@ -1,7 +1,9 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { usePortfolio } from '../context/PortfolioContext';
-import { TransactionType } from '../types';
+import { TransactionType, VoiceParseResult } from '../types';
+import { VoiceInput } from './ui/VoiceInput';
 import { X, Save, Calendar, DollarSign, Hash, ArrowRightLeft } from 'lucide-react';
 
 interface Props {
@@ -34,6 +36,26 @@ export const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, preselec
 
   if (!isOpen) return null;
 
+  const availableAssets = assets.sort((a, b) => a.symbol.localeCompare(b.symbol));
+
+  const handleVoiceData = (data: VoiceParseResult) => {
+      // 1. Try to match asset by Symbol
+      if (data.symbol) {
+          const match = availableAssets.find(a => a.symbol === data.symbol);
+          if (match) {
+              setAssetId(match.id);
+          }
+      }
+      
+      // 2. Set Transaction Type
+      if (data.txType) setType(data.txType);
+      
+      // 3. Set Values
+      if (data.quantity) setQuantity(data.quantity.toString());
+      if (data.price) setPrice(data.price.toString());
+      if (data.date) setDate(data.date);
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -59,8 +81,6 @@ export const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, preselec
     onClose();
   };
 
-  const availableAssets = assets.sort((a, b) => a.symbol.localeCompare(b.symbol));
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm transition-opacity">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-slide-up">
@@ -70,7 +90,10 @@ export const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, preselec
              <div className="p-2 bg-blue-100 text-blue-600 rounded-lg"><ArrowRightLeft size={18}/></div>
              <h2 className="text-lg font-bold text-slate-800">{t('recordTransaction')}</h2>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X size={20}/></button>
+          <div className="flex items-center gap-2">
+             {!preselectedAssetId && <VoiceInput mode="TRANSACTION" onResult={handleVoiceData} />}
+             <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X size={20}/></button>
+          </div>
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">

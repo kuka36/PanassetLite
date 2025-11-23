@@ -52,6 +52,8 @@ export const translations: Record<Language, Record<string, string>> = {
     liveData: "Data fetched automatically from API",
     manualValuation: "Valuation set manually",
     lastUpdated: "Last Updated",
+    dataStale: "Update failed or data delayed > 30m",
+    offline: "Offline",
     
     // Add/Edit Asset
     selectAssetType: "Select Asset Type",
@@ -176,6 +178,14 @@ export const translations: Record<Language, Record<string, string>> = {
     unableToGenerate: "Unable to generate risk analysis.",
     aiUnavailable: "AI features unavailable. Please check your API Key.",
 
+    // Voice Input
+    voiceInput: "Voice Input",
+    listening: "Listening...",
+    processing: "Processing...",
+    voiceError: "Voice input failed",
+    voiceNoSupport: "Browser not supported",
+    voiceHint: "Try: \"Bought 10 Apple stocks at 150\"",
+    
     // Feedback
     feedback: "Feedback",
     haveFeedback: "Have feedback?",
@@ -229,6 +239,8 @@ export const translations: Record<Language, Record<string, string>> = {
     liveData: "价格通过 API 自动获取",
     manualValuation: "手动设置的估值",
     lastUpdated: "最后更新",
+    dataStale: "数据更新失败或已过期 >30分",
+    offline: "离线",
 
     selectAssetType: "选择资产类型",
     whatKind: "您想追踪哪类资产？",
@@ -346,6 +358,14 @@ export const translations: Record<Language, Record<string, string>> = {
     setKey: "Set Key",
     unableToGenerate: "Unable to generate risk analysis.",
     aiUnavailable: "AI 功能不可用，请检查 API Key。",
+
+    // Voice Input
+    voiceInput: "语音录入",
+    listening: "聆听中...",
+    processing: "分析中...",
+    voiceError: "识别失败",
+    voiceNoSupport: "浏览器不支持",
+    voiceHint: "尝试说: \"今天以 180 美元买入了 10 股苹果\"",
     
     feedback: "反馈建议",
     haveFeedback: "有反馈意见？",

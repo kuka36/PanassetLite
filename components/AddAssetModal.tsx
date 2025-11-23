@@ -1,7 +1,9 @@
 
+
 import React, { useState, useEffect } from 'react';
-import { Asset, AssetType, Currency } from '../types';
+import { Asset, AssetType, Currency, VoiceParseResult } from '../types';
 import { usePortfolio } from '../context/PortfolioContext';
+import { VoiceInput } from './ui/VoiceInput';
 import { X, Save, TrendingUp, Bitcoin, PieChart, Building, Banknote, CreditCard, Box, Calendar } from 'lucide-react';
 
 interface Props {
@@ -62,6 +64,19 @@ export const AddAssetModal: React.FC<Props> = ({ isOpen, onClose, initialAsset }
       }
     }
   }, [isOpen, initialAsset]);
+
+  const handleVoiceData = (data: VoiceParseResult) => {
+      if (data.symbol) setSymbol(data.symbol);
+      if (data.name) setName(data.name);
+      if (data.type) {
+          setType(data.type);
+          setStep(2); // Auto advance
+      }
+      if (data.quantity) setQuantity(data.quantity.toString());
+      if (data.price) setCost(data.price.toString()); // For initial buy, price is cost
+      if (data.date) setDateAcquired(data.date);
+      if (data.currency) setCurrency(data.currency);
+  };
 
   if (!isOpen) return null;
 
@@ -124,15 +139,18 @@ export const AddAssetModal: React.FC<Props> = ({ isOpen, onClose, initialAsset }
         
         {/* Header */}
         <div className="px-6 py-4 bg-slate-50 border-b border-slate-100 flex justify-between items-center shrink-0">
-          <div>
-            <h2 className="text-lg font-bold text-slate-800">
+          <div className="flex-1">
+            <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
                 {initialAsset ? t('editHolding') : (step === 1 ? t('selectAssetType') : t('assetDetails'))}
             </h2>
             <p className="text-xs text-slate-500">
                 {initialAsset ? t('updateParams') : (step === 1 ? t('whatKind') : `${t('enterDetails')} ${ASSET_TYPES.find(a => a.id === type)?.label}`)}
             </p>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 p-1 hover:bg-slate-200 rounded-full transition-colors"><X size={20}/></button>
+          <div className="flex items-center gap-2">
+              {!initialAsset && <VoiceInput mode="ASSET" onResult={handleVoiceData} />}
+              <button onClick={onClose} className="text-slate-400 hover:text-slate-600 p-1 hover:bg-slate-200 rounded-full transition-colors"><X size={20}/></button>
+          </div>
         </div>
 
         {/* Content Scrollable Area */}
@@ -140,6 +158,7 @@ export const AddAssetModal: React.FC<Props> = ({ isOpen, onClose, initialAsset }
             
             {/* Step 1: Type Selection */}
             {step === 1 && !initialAsset && (
+                <>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                     {ASSET_TYPES.map((t) => (
                         <button
@@ -155,6 +174,10 @@ export const AddAssetModal: React.FC<Props> = ({ isOpen, onClose, initialAsset }
                         </button>
                     ))}
                 </div>
+                <div className="mt-4 text-center text-xs text-slate-400 bg-slate-50 p-2 rounded-lg border border-dashed border-slate-200">
+                    <span className="font-semibold text-slate-500">{t('voiceInput')}:</span> {t('voiceHint')}
+                </div>
+                </>
             )}
 
             {/* Step 2: Details Form */}

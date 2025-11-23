@@ -66,3 +66,14 @@ export interface PortfolioSummary {
   dayPnL: number; // Mocked for demo
   dayPnLPercent: number;
 }
+
+export interface VoiceParseResult {
+  symbol?: string;      
+  name?: string;
+  type?: AssetType;     
+  txType?: TransactionType;
+  quantity?: number;
+  price?: number;
+  date?: string;        
+  currency?: Currency;
+}
