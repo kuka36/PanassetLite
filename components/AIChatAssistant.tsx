@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Send, Sparkles, Check, AlertCircle, Trash2, User } from 'lucide-react';
 import { usePortfolio } from '../context/PortfolioContext';
@@ -32,7 +31,6 @@ export const AIChatAssistant: React.FC<AIChatAssistantProps> = ({ isOpen, onClos
         console.error("Failed to load chat history", e);
       }
     } else {
-      // Initial Greeting based on language
       setMessages([{
         id: 'init',
         role: 'model',
@@ -47,7 +45,6 @@ export const AIChatAssistant: React.FC<AIChatAssistantProps> = ({ isOpen, onClos
   // Save History on Update
   useEffect(() => {
     if (messages.length > 0) {
-      // Clean history before saving: ensure no message has empty/undefined content
       const validMessages = messages.filter(m => m.content && m.content.trim() !== '');
       localStorage.setItem(HISTORY_KEY, JSON.stringify(validMessages.slice(-50))); 
     }
@@ -74,7 +71,6 @@ export const AIChatAssistant: React.FC<AIChatAssistantProps> = ({ isOpen, onClos
 
     const agent = new AgentService(settings.geminiApiKey);
     
-    // Pass current language setting
     const response = await agent.processMessage(
         userMsg.content, 
         messages, 
@@ -86,7 +82,7 @@ export const AIChatAssistant: React.FC<AIChatAssistantProps> = ({ isOpen, onClos
     const botMsg: ChatMessage = {
       id: crypto.randomUUID(),
       role: 'model',
-      content: response.text || "", // Ensure string
+      content: response.text || "", 
       timestamp: Date.now(),
       pendingAction: response.action
     };
@@ -98,18 +94,16 @@ export const AIChatAssistant: React.FC<AIChatAssistantProps> = ({ isOpen, onClos
   const handleConfirmAction = (msgId: string, action: PendingAction) => {
     try {
       if (action.type === 'ADD_TRANSACTION') {
-        // Find asset ID by symbol
         const asset = assets.find(a => a.symbol === action.data.symbol);
         let assetId = asset?.id;
         
-        // If asset doesn't exist, create it implicitly
         if (!assetId) {
              assetId = crypto.randomUUID();
              addAsset({
                  id: assetId,
                  symbol: action.data.symbol,
                  name: action.data.symbol,
-                 type: AssetType.STOCK, // Default assumption if just adding tx
+                 type: AssetType.STOCK, 
                  quantity: 0,
                  avgCost: 0,
                  currentPrice: action.data.price,
@@ -141,7 +135,6 @@ export const AIChatAssistant: React.FC<AIChatAssistantProps> = ({ isOpen, onClos
           });
       }
 
-      // Update message to remove the action button (mark as done)
       setMessages(prev => prev.map(m => 
         m.id === msgId ? { ...m, content: m.content + (settings.language === 'zh' ? "\n\n✅ *操作已确认执行。*" : "\n\n✅ *Action Confirmed & Executed.*"), pendingAction: undefined } : m
       ));
@@ -162,14 +155,10 @@ export const AIChatAssistant: React.FC<AIChatAssistantProps> = ({ isOpen, onClos
       localStorage.removeItem(HISTORY_KEY);
   };
 
-  // Only render if enabled
   if (!settings.isAiAssistantEnabled) return null;
 
-  // Calculate dynamic left position for desktop to sit next to sidebar
-  // Mobile: Full screen (inset-0). Desktop: Floating next to sidebar.
   const desktopLeftClass = isSidebarCollapsed ? 'md:left-24' : 'md:left-72';
 
-  // Styled Markdown Wrapper
   const MarkdownContent = ({ content }: { content: string }) => (
      <div className="prose prose-sm max-w-none prose-p:leading-relaxed prose-pre:bg-slate-800 prose-pre:text-white prose-p:my-1 prose-ul:my-1 prose-li:my-0">
         <ReactMarkdown>{content}</ReactMarkdown>
@@ -179,8 +168,10 @@ export const AIChatAssistant: React.FC<AIChatAssistantProps> = ({ isOpen, onClos
   if (!isOpen) return null;
 
   return (
-    <div className={`
-        fixed z-50 flex flex-col overflow-hidden bg-white/95 backdrop-blur-md shadow-2xl transition-all duration-300
+    <div 
+        onClick={(e) => e.stopPropagation()} 
+        className={`
+        fixed z-50 flex flex-col overflow-hidden bg-white shadow-2xl transition-all duration-300
         inset-0 rounded-none 
         md:inset-auto md:bottom-4 md:right-auto md:w-[400px] md:h-[600px] md:max-h-[80vh] md:rounded-2xl md:border md:border-slate-200 ${desktopLeftClass}
         animate-slide-up origin-bottom-left
@@ -216,15 +207,12 @@ export const AIChatAssistant: React.FC<AIChatAssistantProps> = ({ isOpen, onClos
       <div className="flex-1 overflow-y-auto p-4 space-y-6 bg-slate-50 scroll-smooth">
         {messages.map((msg) => (
           <div key={msg.id} className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
-            
-            {/* Avatar */}
             <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 shadow-sm ${
                 msg.role === 'user' ? 'bg-slate-200 text-slate-500' : 'bg-indigo-100 text-indigo-600'
             }`}>
                 {msg.role === 'user' ? <User size={16} /> : <Sparkles size={16} />}
             </div>
 
-            {/* Bubble */}
             <div className={`max-w-[85%] rounded-2xl p-3.5 text-sm shadow-sm ${
               msg.role === 'user' 
                 ? 'bg-slate-200 text-slate-800 rounded-tr-none' 
@@ -232,7 +220,6 @@ export const AIChatAssistant: React.FC<AIChatAssistantProps> = ({ isOpen, onClos
             }`}>
               <MarkdownContent content={msg.content} />
 
-              {/* Pending Action Card */}
               {msg.pendingAction && (
                 <div className="mt-3 p-3 bg-indigo-50 border border-indigo-100 rounded-xl">
                     <div className="flex items-start gap-2 mb-2">
@@ -274,7 +261,6 @@ export const AIChatAssistant: React.FC<AIChatAssistantProps> = ({ isOpen, onClos
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input Area */}
       <div className="p-3 bg-white border-t border-slate-200 flex items-center gap-2 shrink-0 pb-6 md:pb-3">
         <VoiceInput 
             mode="CHAT" 

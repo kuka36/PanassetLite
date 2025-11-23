@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { Mic, MicOff, Loader2 } from 'lucide-react';
 import { usePortfolio } from '../../context/PortfolioContext';
@@ -19,9 +18,9 @@ export const VoiceInput: React.FC<VoiceInputProps> = ({ onResult, onTextResult, 
   const [error, setError] = useState<string | null>(null);
   
   const recognitionRef = useRef<any>(null);
+  const transcriptBuffer = useRef('');
 
   useEffect(() => {
-    // Cleanup on unmount
     return () => {
       if (recognitionRef.current) {
         recognitionRef.current.stop();
@@ -29,173 +28,14 @@ export const VoiceInput: React.FC<VoiceInputProps> = ({ onResult, onTextResult, 
     };
   }, []);
 
-  const startListening = (e: React.SyntheticEvent) => {
-    e.preventDefault(); // Prevent default behavior (like text selection or context menu)
-    
-    // Check browser support
-    if (!('webkitSpeechRecognition' in window)) {
-      setError(t('voiceNoSupport'));
-      return;
-    }
-
-    // Check API Key only if we need AI parsing
-    if (mode !== 'CHAT') {
-        const apiKey = settings.aiProvider === 'deepseek' ? settings.deepSeekApiKey : settings.geminiApiKey;
-        if (!apiKey) {
-            setError(t('apiKeyMissing'));
-            return;
-        }
-    }
-
-    if (isListening || isProcessing) return;
-
-    setError(null);
-    setIsListening(true);
-
-    const SpeechRecognition = (window as any).webkitSpeechRecognition;
-    const recognition = new SpeechRecognition();
-    recognitionRef.current = recognition;
-
-    recognition.continuous = true; // Keep listening while holding
-    recognition.interimResults = true; // We might want to show partials later, but for now just gathering
-    recognition.lang = settings.language === 'zh' ? 'zh-CN' : 'en-US';
-
-    // We'll store the final transcript here
-    let finalTranscript = '';
-
-    recognition.onresult = (event: any) => {
-      let interimTranscript = '';
-      for (let i = event.resultIndex; i < event.results.length; ++i) {
-        if (event.results[i].isFinal) {
-          finalTranscript += event.results[i][0].transcript;
-        } else {
-          interimTranscript += event.results[i][0].transcript;
-        }
-      }
-    };
-
-    recognition.onerror = (event: any) => {
-      // ignore no-speech error which happens if user presses but doesn't speak immediately
-      if (event.error !== 'no-speech') {
-          console.error("Speech error", event.error);
-          setError(t('voiceError'));
-      }
-      setIsListening(false);
-    };
-    
-    // We handle the 'processing' in stopListening manually using the gathered transcript
-    // because recognition.stop() is async and we need to grab the result.
-    // However, onresult fires continuously. 
-    // The trick with 'continuous=true' is we need to force stop and take what we have.
-    
-    recognition.start();
-  };
-
-  const stopListening = (e: React.SyntheticEvent) => {
-    e.preventDefault();
-    if (!recognitionRef.current || !isListening) return;
-
-    // Small delay to ensure last chunk is caught if user speaks fast
-    setTimeout(() => {
-        recognitionRef.current.stop();
-        setIsListening(false);
-        
-        // Wait for the 'end' event or just process what we have? 
-        // The standard API is tricky with manual stops. 
-        // A robust way for 'Hold to Talk' is to rely on the onresult accumulating 
-        // and then processing the buffer when mouse up happens.
-        
-        // However, since we can't easily access the internal buffer of the 'recognition' object 
-        // from inside this closure without refs, let's rely on the instance 
-        // effectively firing 'onresult' before 'onend'.
-        
-        // Actually, a simpler approach for 'Hold to Talk' with webkitSpeechRecognition:
-        // We set continuous=false. If they hold longer, it might cut off? 
-        // No, continuous=true is better.
-        
-        // Let's attach a "final" processor to onend.
-        recognitionRef.current.onend = () => {
-             // This is slightly hacky because we don't have the transcript text here easily
-             // unless we stored it in a ref.
-             setIsListening(false);
-        };
-    }, 150);
-  };
-
-  // We need to capture the transcript data to process it *after* stop.
-  // We'll use a ref to store the text accumulating during the current session.
-  const transcriptBuffer = useRef('');
-
-  const handleStart = (e: React.SyntheticEvent) => {
-      e.preventDefault();
-      transcriptBuffer.current = ''; // Reset buffer
-      
-      if (!('webkitSpeechRecognition' in window)) {
-        setError(t('voiceNoSupport'));
-        return;
-      }
-
-      if (mode !== 'CHAT') {
-        const apiKey = settings.aiProvider === 'deepseek' ? settings.deepSeekApiKey : settings.geminiApiKey;
-        if (!apiKey) {
-            setError(t('apiKeyMissing'));
-            return;
-        }
-      }
-
-      setIsListening(true);
-      setError(null);
-
-      const SpeechRecognition = (window as any).webkitSpeechRecognition;
-      const recognition = new SpeechRecognition();
-      recognitionRef.current = recognition;
-      recognition.continuous = true;
-      recognition.interimResults = true;
-      recognition.lang = settings.language === 'zh' ? 'zh-CN' : 'en-US';
-
-      recognition.onresult = (event: any) => {
-        let final = '';
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
-            final += event.results[i][0].transcript;
-        }
-        // Simplified accumulation: just take the latest dump or accumulate?
-        // Web Speech API results are tricky. simpler:
-        // Just keep updating the buffer with the full current recognition result (mapped)
-        const currentText = Array.from(event.results)
-            .map((result: any) => result[0].transcript)
-            .join('');
-        transcriptBuffer.current = currentText;
-      };
-
-      recognition.start();
-  };
-
-  const handleStop = (e: React.SyntheticEvent) => {
-      e.preventDefault();
-      if (recognitionRef.current) {
-          recognitionRef.current.stop();
-          setIsListening(false);
-          
-          // Process what we captured
-          setTimeout(() => {
-              const text = transcriptBuffer.current;
-              if (text && text.trim().length > 0) {
-                  handleProcessing(text);
-              }
-          }, 200); // Give a moment for final result events
-      }
-  };
-
   const handleProcessing = async (text: string) => {
-    if (!text) return;
+    if (!text || !text.trim()) return;
     
-    // For Chat mode, we just return the text immediately
     if (mode === 'CHAT') {
         if (onTextResult) onTextResult(text);
         return;
     }
 
-    // For other modes, we process via AI
     setIsProcessing(true);
     const apiKey = settings.aiProvider === 'deepseek' ? settings.deepSeekApiKey : settings.geminiApiKey;
     
@@ -213,10 +53,110 @@ export const VoiceInput: React.FC<VoiceInputProps> = ({ onResult, onTextResult, 
     }
   };
 
+  const stopRecognition = () => {
+    if (recognitionRef.current) {
+        try {
+            recognitionRef.current.stop();
+        } catch (e) {
+            // Ignore error if already stopped
+        }
+        setIsListening(false);
+        
+        // Short delay to ensure final results are captured from the recognition buffer
+        setTimeout(() => {
+            const text = transcriptBuffer.current;
+            if (text && text.trim().length > 0) {
+                handleProcessing(text);
+            }
+        }, 250); 
+    }
+  };
+
+  const handleStart = (e: React.SyntheticEvent) => {
+      // Critical: Stop propagation to prevent interference with underlying page
+      e.preventDefault();
+      e.stopPropagation();
+
+      // Reset
+      transcriptBuffer.current = ''; 
+      setError(null);
+      
+      if (!('webkitSpeechRecognition' in window)) {
+        setError(t('voiceNoSupport'));
+        return;
+      }
+
+      if (mode !== 'CHAT') {
+        const apiKey = settings.aiProvider === 'deepseek' ? settings.deepSeekApiKey : settings.geminiApiKey;
+        if (!apiKey) {
+            setError(t('apiKeyMissing'));
+            return;
+        }
+      }
+
+      setIsListening(true);
+
+      const SpeechRecognition = (window as any).webkitSpeechRecognition;
+      const recognition = new SpeechRecognition();
+      recognitionRef.current = recognition;
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = settings.language === 'zh' ? 'zh-CN' : 'en-US';
+
+      recognition.onresult = (event: any) => {
+        const currentText = Array.from(event.results)
+            .map((result: any) => result[0].transcript)
+            .join('');
+        transcriptBuffer.current = currentText;
+      };
+
+      recognition.onerror = (event: any) => {
+          if (event.error !== 'no-speech') {
+              console.error("Speech error", event.error);
+              setError(t('voiceError'));
+          }
+          // Only stop UI state on critical errors, ignore 'no-speech' during hold as it might just mean silence
+          if (event.error !== 'no-speech') {
+             setIsListening(false);
+          }
+      };
+
+      try {
+        recognition.start();
+      } catch (err) {
+        console.error("Failed to start recognition", err);
+        setIsListening(false);
+      }
+  };
+
+  const handleStop = (e: React.SyntheticEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      if (isListening) {
+          stopRecognition();
+      }
+  };
+
+  const handleContextMenu = (e: React.SyntheticEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (isListening) stopRecognition();
+  };
+
+  // Block clicks to ensure no ghost clicks propagate
+  const handleClick = (e: React.SyntheticEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+  };
+
   return (
-    <div className={`relative flex items-center ${className} select-none`}>
+    <div 
+        className={`relative flex items-center ${className} select-none`}
+        onClick={(e) => e.stopPropagation()} // Extra safety for container
+    >
         {error && (
-            <div className="absolute -top-8 right-0 bg-red-50 text-red-600 text-xs px-2 py-1 rounded border border-red-100 whitespace-nowrap z-10 animate-fade-in">
+            <div className="absolute -top-8 right-0 bg-red-50 text-red-600 text-xs px-2 py-1 rounded border border-red-100 whitespace-nowrap z-10 animate-fade-in shadow-sm pointer-events-none">
                 {error}
             </div>
         )}
@@ -229,45 +169,49 @@ export const VoiceInput: React.FC<VoiceInputProps> = ({ onResult, onTextResult, 
         ) : (
             <button 
                 type="button"
+                // Mouse Events
                 onMouseDown={handleStart}
                 onMouseUp={handleStop}
                 onMouseLeave={handleStop}
+                // Touch Events
                 onTouchStart={handleStart}
                 onTouchEnd={handleStop}
+                onTouchCancel={handleStop}
+                // Misc
+                onContextMenu={handleContextMenu}
+                onClick={handleClick}
+                
                 className={`
                     flex items-center gap-2 transition-all active:scale-95 touch-none select-none
                     ${isListening 
-                        ? 'bg-red-500 text-white shadow-md shadow-red-200 ring-2 ring-red-100' 
+                        ? 'bg-red-500 text-white shadow-md shadow-red-200 ring-4 ring-red-100 scale-105' 
                         : 'text-slate-400 hover:text-blue-600 hover:bg-blue-50'
                     }
                     ${isListening ? 'px-4 py-2 rounded-full' : 'p-2 rounded-full'}
                 `}
+                style={{ 
+                    WebkitTouchCallout: 'none', 
+                    WebkitUserSelect: 'none', 
+                    userSelect: 'none' 
+                }}
                 title={t('voiceInput')}
             >
                 {isListening ? (
                      <>
                         <MicOff size={16} className="animate-pulse"/> 
-                        <span className="text-xs font-bold whitespace-nowrap">
+                        <span className="text-xs font-bold whitespace-nowrap pointer-events-none">
                             {settings.language === 'zh' ? "松开结束" : "Release to Send"}
                         </span>
                      </>
                 ) : (
                     <>
                         <Mic size={20} />
-                        {/* Only show hint text in CHAT mode if space allows, otherwise just icon */}
                          <span className="sr-only">
                              {settings.language === 'zh' ? "按住说话" : "Hold to Talk"}
                          </span>
                     </>
                 )}
             </button>
-        )}
-        
-        {/* Tooltip hint for desktop users who hover */}
-        {!isListening && !isProcessing && (
-            <div className="absolute left-full ml-2 hidden group-hover:block bg-slate-800 text-white text-[10px] px-2 py-1 rounded whitespace-nowrap opacity-0 transition-opacity">
-                {settings.language === 'zh' ? "按住说话" : "Hold to Talk"}
-            </div>
         )}
     </div>
   );
