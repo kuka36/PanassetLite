@@ -195,11 +195,11 @@ export const AIChatAssistant: React.FC = () => {
                     ? 'bg-blue-600 text-white rounded-tr-none' 
                     : 'bg-white text-slate-700 border border-slate-100 rounded-tl-none'
                 }`}>
-                  <ReactMarkdown 
-                    className="prose prose-sm max-w-none prose-p:leading-relaxed prose-pre:bg-slate-800 prose-pre:text-white"
-                  >
-                    {msg.content}
-                  </ReactMarkdown>
+                  <div className="prose prose-sm max-w-none prose-p:leading-relaxed prose-pre:bg-slate-800 prose-pre:text-white">
+                    <ReactMarkdown>
+                      {msg.content}
+                    </ReactMarkdown>
+                  </div>
 
                   {/* Pending Action Card */}
                   {msg.pendingAction && (
