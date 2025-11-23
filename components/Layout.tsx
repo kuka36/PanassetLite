@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
 import { LayoutDashboard, PieChart, Wallet, Settings, Menu, X, History, MessageSquarePlus, ChevronLeft, ChevronRight, BookOpen, Sparkles } from 'lucide-react';
@@ -21,6 +20,9 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   useEffect(() => {
     localStorage.setItem('investflow_sidebar_collapsed', String(isCollapsed));
   }, [isCollapsed]);
+
+  // Logic: AI Assistant is only enabled if the toggle is ON AND the Gemini Key is present.
+  const isAiEnabled = settings.isAiAssistantEnabled && !!settings.geminiApiKey;
 
   const NavItem = ({ to, icon, label, onClick }: { to: string, icon: React.ReactNode, label: string, onClick?: () => void }) => (
     <NavLink 
@@ -70,7 +72,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
         <div className="p-4 border-t border-slate-100 flex flex-col gap-4">
             
             {/* AI Assistant Trigger (Desktop) */}
-            {settings.isAiAssistantEnabled && (
+            {isAiEnabled && (
                 <button
                     onClick={() => setIsChatOpen(prev => !prev)}
                     className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all border border-transparent ${
@@ -153,7 +155,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
             <span className="text-lg font-bold text-slate-800">PanassetLite</span>
         </div>
         <div className="flex items-center gap-2">
-            {settings.isAiAssistantEnabled && (
+            {isAiEnabled && (
                 <button 
                     onClick={() => setIsChatOpen(!isChatOpen)}
                     className={`p-2 rounded-lg transition-colors ${isChatOpen ? 'bg-indigo-600 text-white' : 'text-indigo-600 bg-indigo-50 hover:bg-indigo-100'}`}
@@ -208,17 +210,19 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
 
       {/* Main Content - Dynamic Margin based on Sidebar State */}
       <main 
-        className={`flex-1 pt-20 md:pt-8 md:p-8 p-4 max-w-7xl mx-auto w-full transition-all duration-300 ease-in-out ${isCollapsed ? 'md:ml-20' : 'md:ml-64'}`}
+        className={`flex-1 pt-20 md:pt-8 md:p-8 p-4 w-full transition-all duration-300 ease-in-out ${isCollapsed ? 'md:ml-20' : 'md:ml-64'}`}
       >
         {children}
       </main>
       
       {/* Global AI Chat Assistant */}
-      <AIChatAssistant 
-         isOpen={isChatOpen} 
-         onClose={() => setIsChatOpen(false)}
-         isSidebarCollapsed={isCollapsed}
-      />
+      {isAiEnabled && (
+        <AIChatAssistant 
+           isOpen={isChatOpen} 
+           onClose={() => setIsChatOpen(false)}
+           isSidebarCollapsed={isCollapsed}
+        />
+      )}
     </div>
   );
 };

@@ -1,5 +1,4 @@
 
-
 import React, { useRef, useState } from 'react';
 import { usePortfolio } from '../context/PortfolioContext';
 import { Card } from './ui/Card';
@@ -90,21 +89,27 @@ export const Settings: React.FC = () => {
         <div className="space-y-6">
             
             {/* AI Assistant Toggle */}
-            <div className="flex items-center justify-between p-4 bg-indigo-50/50 rounded-xl border border-indigo-100">
+            <div className={`flex items-center justify-between p-4 rounded-xl border transition-colors ${!settings.geminiApiKey ? 'bg-slate-50 border-slate-200' : 'bg-indigo-50/50 border-indigo-100'}`}>
                 <div className="flex items-center gap-3">
-                    <div className="p-2 bg-indigo-100 text-indigo-600 rounded-lg">
+                    <div className={`p-2 rounded-lg ${!settings.geminiApiKey ? 'bg-slate-200 text-slate-400' : 'bg-indigo-100 text-indigo-600'}`}>
                         <Sparkles size={20} />
                     </div>
                     <div>
-                        <div className="font-medium text-slate-800">{t('enableAiAssistant')}</div>
-                        <div className="text-xs text-slate-500">Show AI chat bubble in the sidebar</div>
+                        <div className={`font-medium ${!settings.geminiApiKey ? 'text-slate-500' : 'text-slate-800'}`}>{t('enableAiAssistant')}</div>
+                        <div className="text-xs text-slate-500">
+                             {!settings.geminiApiKey 
+                               ? (settings.language === 'zh' ? "需要配置 Gemini API Key 才能开启" : "Requires Gemini API Key to enable")
+                               : "Show AI chat bubble in the sidebar"
+                             }
+                        </div>
                     </div>
                 </div>
-                <label className="relative inline-flex items-center cursor-pointer">
+                <label className={`relative inline-flex items-center ${!settings.geminiApiKey ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
                     <input 
                         type="checkbox" 
                         className="sr-only peer"
-                        checked={settings.isAiAssistantEnabled}
+                        checked={settings.isAiAssistantEnabled && !!settings.geminiApiKey}
+                        disabled={!settings.geminiApiKey}
                         onChange={(e) => updateSettings({ isAiAssistantEnabled: e.target.checked })}
                     />
                     <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-100 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
