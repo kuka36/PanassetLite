@@ -1,9 +1,9 @@
 
-
 import React, { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
 import { LayoutDashboard, PieChart, Wallet, Settings, Menu, X, History, MessageSquarePlus, ChevronLeft, ChevronRight, BookOpen } from 'lucide-react';
 import { usePortfolio } from '../context/PortfolioContext';
+import { AIChatAssistant } from './AIChatAssistant';
 
 export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { t } = usePortfolio();
@@ -183,6 +183,9 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
       >
         {children}
       </main>
+      
+      {/* Global AI Chat Assistant - Always rendered */}
+      <AIChatAssistant />
     </div>
   );
 };

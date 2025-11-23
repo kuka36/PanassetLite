@@ -77,3 +77,25 @@ export interface VoiceParseResult {
   date?: string;        
   currency?: Currency;
 }
+
+// --- Chat & Agent Types ---
+
+export interface PendingAction {
+  type: 'ADD_ASSET' | 'ADD_TRANSACTION';
+  data: {
+    symbol: string;
+    quantity: number;
+    price: number;
+    type: AssetType | TransactionType;
+  };
+  summary: string; // Human readable summary like "Buy 10 AAPL at $150"
+}
+
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'model' | 'system';
+  content: string;
+  timestamp: number;
+  pendingAction?: PendingAction; // If the bot proposes an action
+  isError?: boolean;
+}
