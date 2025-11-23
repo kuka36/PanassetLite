@@ -187,6 +187,10 @@ export const translations: Record<Language, Record<string, string>> = {
     voiceError: "Voice input failed",
     voiceNoSupport: "Browser not supported",
     voiceHint: "Try: \"Bought 10 Apple stocks at 150\"",
+    holdToTalk: "Hold to Talk",
+    releaseToSend: "Release to Send",
+    switchToKeyboard: "Switch to Keyboard",
+    switchToVoice: "Switch to Voice",
     
     // Feedback
     feedback: "Feedback",
@@ -371,6 +375,10 @@ export const translations: Record<Language, Record<string, string>> = {
     voiceError: "识别失败",
     voiceNoSupport: "浏览器不支持",
     voiceHint: "尝试说: \"今天以 180 美元买入了 10 股苹果\"",
+    holdToTalk: "按住 说话",
+    releaseToSend: "松开 发送",
+    switchToKeyboard: "切换键盘",
+    switchToVoice: "切换语音",
     
     feedback: "反馈建议",
     haveFeedback: "有反馈意见？",

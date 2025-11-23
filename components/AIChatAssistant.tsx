@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Send, Sparkles, Check, AlertCircle, Trash2, User } from 'lucide-react';
+import { X, Send, Sparkles, Check, AlertCircle, Trash2, User, Keyboard, AudioLines } from 'lucide-react';
 import { usePortfolio } from '../context/PortfolioContext';
 import { AgentService } from '../services/agentService';
 import { ChatMessage, PendingAction, TransactionType, AssetType } from '../types';
@@ -19,6 +19,7 @@ export const AIChatAssistant: React.FC<AIChatAssistantProps> = ({ isOpen, onClos
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [isVoiceMode, setIsVoiceMode] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Load History on Mount
@@ -53,20 +54,21 @@ export const AIChatAssistant: React.FC<AIChatAssistantProps> = ({ isOpen, onClos
   // Auto Scroll
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, isOpen, isTyping]);
+  }, [messages, isOpen, isTyping, isVoiceMode]);
 
-  const handleSend = async () => {
-    if (!input.trim()) return;
+  const handleSend = async (textOverride?: string) => {
+    const textToSend = typeof textOverride === 'string' ? textOverride : input;
+    if (!textToSend?.trim()) return;
 
     const userMsg: ChatMessage = {
       id: crypto.randomUUID(),
       role: 'user',
-      content: input.trim(),
+      content: textToSend.trim(),
       timestamp: Date.now()
     };
 
     setMessages(prev => [...prev, userMsg]);
-    setInput('');
+    if (typeof textOverride !== 'string') setInput('');
     setIsTyping(true);
 
     const agent = new AgentService(settings.geminiApiKey);
@@ -261,27 +263,46 @@ export const AIChatAssistant: React.FC<AIChatAssistantProps> = ({ isOpen, onClos
         <div ref={messagesEndRef} />
       </div>
 
-      <div className="p-3 bg-white border-t border-slate-200 flex items-center gap-2 shrink-0 pb-6 md:pb-3">
-        <VoiceInput 
-            mode="CHAT" 
-            onTextResult={(text) => setInput(prev => prev ? prev + " " + text : text)} 
-        />
-        <input
-          type="text"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && !isTyping && handleSend()}
-          placeholder={settings.language === 'zh' ? "输入消息..." : "Type a message..."}
-          disabled={isTyping} 
-          className="flex-1 bg-slate-50 border border-slate-200 text-slate-800 text-sm rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50 transition-all"
-        />
+      <div className="p-3 bg-white border-t border-slate-200 flex items-center gap-2 shrink-0 pb-6 md:pb-3 transition-all duration-300">
+        
+        {/* Toggle Mode */}
         <button 
-            onClick={handleSend}
-            disabled={!input.trim() || isTyping}
-            className="p-3 bg-indigo-600 text-white rounded-xl shadow-md hover:bg-indigo-700 disabled:bg-slate-200 disabled:text-slate-400 transition-all active:scale-95 flex items-center justify-center"
+            onClick={() => setIsVoiceMode(!isVoiceMode)}
+            className="p-2.5 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-full transition-colors shrink-0"
+            title={isVoiceMode ? t('switchToKeyboard') : t('switchToVoice')}
         >
-            <Send size={20} />
+            {isVoiceMode ? <Keyboard size={24} /> : <AudioLines size={24} />}
         </button>
+
+        {isVoiceMode ? (
+            <div className="flex-1 animate-in fade-in duration-200">
+                <VoiceInput 
+                    mode="CHAT" 
+                    variant="bar"
+                    onTextResult={(text) => handleSend(text)} 
+                />
+            </div>
+        ) : (
+            <>
+                <input
+                  type="text"
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && !isTyping && handleSend()}
+                  placeholder={settings.language === 'zh' ? "输入消息..." : "Type a message..."}
+                  disabled={isTyping} 
+                  autoFocus
+                  className="flex-1 bg-slate-50 border border-slate-200 text-slate-800 text-sm rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50 transition-all animate-in fade-in duration-200"
+                />
+                <button 
+                    onClick={() => handleSend()}
+                    disabled={!input.trim() || isTyping}
+                    className="p-3 bg-indigo-600 text-white rounded-xl shadow-md hover:bg-indigo-700 disabled:bg-slate-200 disabled:text-slate-400 transition-all active:scale-95 flex items-center justify-center shrink-0"
+                >
+                    <Send size={20} />
+                </button>
+            </>
+        )}
       </div>
     </div>
   );

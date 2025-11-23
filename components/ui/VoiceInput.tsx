@@ -9,9 +9,10 @@ interface VoiceInputProps {
   onTextResult?: (text: string) => void;
   mode: 'ASSET' | 'TRANSACTION' | 'CHAT';
   className?: string;
+  variant?: 'icon' | 'bar';
 }
 
-export const VoiceInput: React.FC<VoiceInputProps> = ({ onResult, onTextResult, mode, className = "" }) => {
+export const VoiceInput: React.FC<VoiceInputProps> = ({ onResult, onTextResult, mode, className = "", variant = 'icon' }) => {
   const { settings, assets, t } = usePortfolio();
   const [isListening, setIsListening] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -150,6 +151,59 @@ export const VoiceInput: React.FC<VoiceInputProps> = ({ onResult, onTextResult, 
       e.stopPropagation();
   };
 
+  if (variant === 'bar') {
+      return (
+        <div className={`relative w-full ${className} select-none touch-none`}>
+            {error && (
+                <div className="absolute -top-12 left-1/2 -translate-x-1/2 bg-red-50 text-red-600 text-xs px-3 py-1.5 rounded-lg border border-red-100 shadow-sm whitespace-nowrap z-10 animate-fade-in pointer-events-none">
+                    {error}
+                </div>
+            )}
+            
+            {isProcessing ? (
+                 <div className="flex items-center justify-center gap-2 w-full py-3 bg-slate-100 text-slate-500 rounded-xl font-medium border border-slate-200 cursor-wait">
+                    <Loader2 size={16} className="animate-spin"/>
+                    {t('processing')}
+                 </div>
+            ) : (
+                <button 
+                    type="button"
+                    onMouseDown={handleStart}
+                    onMouseUp={handleStop}
+                    onMouseLeave={handleStop}
+                    onTouchStart={handleStart}
+                    onTouchEnd={handleStop}
+                    onTouchCancel={handleStop}
+                    onContextMenu={handleContextMenu}
+                    className={`
+                        w-full py-3 rounded-xl font-bold transition-all flex items-center justify-center gap-2
+                        ${isListening 
+                            ? 'bg-emerald-500 text-white shadow-inner scale-[0.99]' 
+                            : 'bg-white border border-slate-300 text-slate-800 shadow-sm active:bg-slate-100'
+                        }
+                    `}
+                    style={{ WebkitTouchCallout: 'none', WebkitUserSelect: 'none', userSelect: 'none' }}
+                >
+                    {isListening ? (
+                         <>
+                             <div className="relative flex h-3 w-3 mr-1">
+                                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
+                                  <span className="relative inline-flex rounded-full h-3 w-3 bg-white"></span>
+                             </div>
+                             <span>{t('releaseToSend')}</span>
+                         </>
+                    ) : (
+                        <>
+                            <Mic size={18} className="opacity-50" />
+                            <span>{t('holdToTalk')}</span>
+                        </>
+                    )}
+                </button>
+            )}
+        </div>
+      );
+  }
+
   return (
     <div 
         className={`relative flex items-center ${className} select-none`}
@@ -207,7 +261,7 @@ export const VoiceInput: React.FC<VoiceInputProps> = ({ onResult, onTextResult, 
                     <>
                         <Mic size={20} />
                          <span className="sr-only">
-                             {settings.language === 'zh' ? "按住说话" : "Hold to Talk"}
+                             {t('holdToTalk')}
                          </span>
                     </>
                 )}
