@@ -50,6 +50,7 @@ export interface Asset {
   currentPrice: number; // Mocked live price OR Manual Valuation
   currency: Currency;
   lastUpdated?: number; // Timestamp of last price update
+  dateAcquired?: string; // Start date of holding (for simple mode)
   // Computed fields for UI convenience
   currentValue?: number;
   totalCost?: number;

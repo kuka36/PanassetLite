@@ -1,4 +1,5 @@
 
+
 import React, { createContext, useContext, useState, useEffect, ReactNode, useRef } from 'react';
 import { Asset, AssetType, Currency, Transaction, TransactionType, Language, AIProvider } from '../types';
 import { fetchExchangeRates, fetchCryptoPrices, fetchStockPrices, ExchangeRates } from '../services/marketData';
@@ -35,12 +36,12 @@ interface PortfolioContextType {
 
 const PortfolioContext = createContext<PortfolioContextType | undefined>(undefined);
 
-// Mock Initial Data
+// Mock Initial Data with some dates for chart history demo
 const INITIAL_ASSETS: Asset[] = [
-  { id: '1', symbol: 'AAPL', name: 'Apple Inc.', type: AssetType.STOCK, quantity: 10, avgCost: 150, currentPrice: 175.5, currency: Currency.USD, lastUpdated: Date.now() },
-  { id: '2', symbol: 'BTC', name: 'Bitcoin', type: AssetType.CRYPTO, quantity: 0.1, avgCost: 42000, currentPrice: 64000, currency: Currency.USD, lastUpdated: Date.now() },
-  { id: '3', symbol: '0700.HK', name: 'Tencent', type: AssetType.STOCK, quantity: 100, avgCost: 300, currentPrice: 380, currency: Currency.HKD, lastUpdated: Date.now() },
-  { id: '4', symbol: 'USD', name: 'Cash Reserve', type: AssetType.CASH, quantity: 5000, avgCost: 1, currentPrice: 1, currency: Currency.USD, lastUpdated: Date.now() },
+  { id: '1', symbol: 'AAPL', name: 'Apple Inc.', type: AssetType.STOCK, quantity: 10, avgCost: 150, currentPrice: 175.5, currency: Currency.USD, lastUpdated: Date.now(), dateAcquired: '2023-06-15' },
+  { id: '2', symbol: 'BTC', name: 'Bitcoin', type: AssetType.CRYPTO, quantity: 0.1, avgCost: 42000, currentPrice: 64000, currency: Currency.USD, lastUpdated: Date.now(), dateAcquired: '2024-01-10' },
+  { id: '3', symbol: '0700.HK', name: 'Tencent', type: AssetType.STOCK, quantity: 100, avgCost: 300, currentPrice: 380, currency: Currency.HKD, lastUpdated: Date.now(), dateAcquired: '2023-09-01' },
+  { id: '4', symbol: 'USD', name: 'Cash Reserve', type: AssetType.CASH, quantity: 5000, avgCost: 1, currentPrice: 1, currency: Currency.USD, lastUpdated: Date.now(), dateAcquired: '2023-01-01' },
 ];
 
 const getBrowserLanguage = (): Language => {

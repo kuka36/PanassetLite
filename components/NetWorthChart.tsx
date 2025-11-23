@@ -1,11 +1,13 @@
 
-import React, { useState, useMemo } from 'react';
+
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Line 
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Line 
 } from 'recharts';
 import { Asset, Transaction, TransactionType, Currency, AssetType } from '../types';
-import { convertValue, ExchangeRates } from '../services/marketData';
-import { Calendar, TrendingUp, TrendingDown, MousePointer2 } from 'lucide-react';
+import { convertValue, ExchangeRates, fetchAssetHistory, HistoricalDataPoint } from '../services/marketData';
+import { Calendar, TrendingUp, TrendingDown, MousePointer2, RefreshCw, AlertTriangle } from 'lucide-react';
+import { usePortfolio } from '../context/PortfolioContext';
 
 interface NetWorthChartProps {
   assets: Asset[];
@@ -18,6 +20,17 @@ interface NetWorthChartProps {
 
 type TimeRange = '1W' | '1M' | '3M' | '6M' | '1Y' | 'ALL';
 
+// Helper to generate array of dates
+const getDatesInRange = (startDate: Date, endDate: Date) => {
+    const dates = [];
+    const theDate = new Date(startDate);
+    while (theDate <= endDate) {
+        dates.push(new Date(theDate).toISOString().split('T')[0]);
+        theDate.setDate(theDate.getDate() + 1);
+    }
+    return dates;
+};
+
 export const NetWorthChart: React.FC<NetWorthChartProps> = ({ 
   assets, 
   transactions, 
@@ -26,9 +39,43 @@ export const NetWorthChart: React.FC<NetWorthChartProps> = ({
   isPrivacyMode,
   t
 }) => {
+  const { settings } = usePortfolio();
   const [range, setRange] = useState<TimeRange>('1M');
+  const [historyMap, setHistoryMap] = useState<Record<string, HistoricalDataPoint[]>>({});
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  
+  // 1. Fetch History
+  useEffect(() => {
+    const loadData = async () => {
+      if (assets.length === 0) return;
+      
+      setLoadingHistory(true);
+      const map: Record<string, HistoricalDataPoint[]> = {};
+      const apiKey = settings.alphaVantageApiKey;
 
-  // Helper: Currency Formatter
+      // Process in chunks
+      const promises = assets.map(async (asset) => {
+        if (!historyMap[asset.id] || historyMap[asset.id].length === 0) {
+            try {
+                return { id: asset.id, data: await fetchAssetHistory(asset, apiKey) };
+            } catch (e) {
+                return { id: asset.id, data: [] };
+            }
+        }
+        return { id: asset.id, data: historyMap[asset.id] };
+      });
+
+      const results = await Promise.all(promises);
+      results.forEach(r => map[r.id] = r.data);
+      
+      setHistoryMap(map);
+      setLoadingHistory(false);
+    };
+
+    loadData();
+  }, [assets.length, settings.alphaVantageApiKey]); 
+
+  // 2. Format Helpers
   const formatCurrency = (val: number) => {
     if (isPrivacyMode) return '****';
     return new Intl.NumberFormat('en-US', { 
@@ -39,159 +86,185 @@ export const NetWorthChart: React.FC<NetWorthChartProps> = ({
     }).format(val);
   };
 
-  // Helper: Percentage Formatter
-  const formatPercent = (val: number) => `${val > 0 ? '+' : ''}${val.toFixed(2)}%`;
+  // 3. Build Lookup Map for Price (Optimized for O(1) access)
+  const priceLookupMap = useMemo(() => {
+      const lookup: Record<string, Map<string, number>> = {};
+      
+      Object.keys(historyMap).forEach(assetId => {
+          const points = historyMap[assetId];
+          const assetMap = new Map<string, number>();
+          const sortedPoints = [...points].sort((a, b) => a.date.localeCompare(b.date));
+          
+          sortedPoints.forEach(p => {
+              assetMap.set(p.date, p.price);
+          });
+          lookup[assetId] = assetMap;
+      });
+      return lookup;
+  }, [historyMap]);
 
-  // Core Logic: Reconstruct History
+  // 4. Core Calculation: Forward Replay with Synthetic Transactions
   const chartData = useMemo(() => {
     if (assets.length === 0) return [];
+    if (Object.keys(historyMap).length === 0 && loadingHistory) return [];
 
-    // 1. Calculate Current State (End Point)
-    let currentNetWorth = 0;
-    let currentCostBasis = 0;
-
-    assets.forEach(asset => {
-      const val = convertValue(asset.quantity * asset.currentPrice, asset.currency, baseCurrency, exchangeRates);
-      // For liabilities, value is negative net worth, cost is usually principal amount (negative)
-      if (asset.type === AssetType.LIABILITY) {
-         currentNetWorth -= val;
-         currentCostBasis -= convertValue(asset.quantity * asset.avgCost, asset.currency, baseCurrency, exchangeRates);
-      } else {
-         currentNetWorth += val;
-         currentCostBasis += convertValue(asset.quantity * asset.avgCost, asset.currency, baseCurrency, exchangeRates);
-      }
+    // A. Generate Synthetic Transactions for "Simple Mode" assets
+    // If an asset has no transactions, we create a virtual BUY on its acquired date.
+    const assetIdsWithTx = new Set(transactions.map(t => t.assetId));
+    const syntheticTransactions: any[] = [];
+    
+    assets.forEach(a => {
+        if (!assetIdsWithTx.has(a.id)) {
+            // It's a simple mode asset. Create a synthetic transaction.
+            // If dateAcquired is not set, default to a past date (e.g. 1 year ago or 2000).
+            // For accuracy, if no date is set, we might assume it's held 'forever' or just map to start of chart.
+            // But to keep logic simple, we default to a static old date if missing, or 'today' if just added.
+            // Ideally, we use a.dateAcquired.
+            const date = a.dateAcquired || '2023-01-01'; 
+            
+            syntheticTransactions.push({
+                id: `synthetic-${a.id}`,
+                assetId: a.id,
+                type: TransactionType.BUY,
+                date: date,
+                quantity: a.quantity,
+                total: a.quantity * a.avgCost,
+                price: a.avgCost,
+                fee: 0
+            });
+        }
     });
 
-    // 2. Determine Start Date based on Range
+    const allTransactions = [...transactions, ...syntheticTransactions].sort((a, b) => 
+        new Date(a.date).getTime() - new Date(b.date).getTime()
+    );
+
+    // B. Determine Timeline
     const now = new Date();
     const startDate = new Date();
+    
+    // Find first ever transaction time (real or synthetic)
+    const firstTxTime = allTransactions.length > 0 
+        ? Math.min(...allTransactions.map(t => new Date(t.date).getTime())) 
+        : now.getTime();
+    const firstTxDate = new Date(firstTxTime);
+
     switch (range) {
       case '1W': startDate.setDate(now.getDate() - 7); break;
       case '1M': startDate.setDate(now.getDate() - 30); break;
       case '3M': startDate.setDate(now.getDate() - 90); break;
       case '6M': startDate.setDate(now.getDate() - 180); break;
       case '1Y': startDate.setFullYear(now.getFullYear() - 1); break;
-      case 'ALL': startDate.setFullYear(now.getFullYear() - 5); break; // Default max lookback or find first transaction
+      case 'ALL': 
+        startDate.setTime(firstTxTime); 
+        startDate.setDate(startDate.getDate() - 2); // Buffer
+        break;
     }
 
-    // If ALL, find the earliest transaction or default to 1 year ago if no txs
-    if (range === 'ALL' && transactions.length > 0) {
-        const firstTxDate = new Date(Math.min(...transactions.map(t => new Date(t.date).getTime())));
-        // Buffer of 1 week before first tx
-        firstTxDate.setDate(firstTxDate.getDate() - 7);
-        startDate.setTime(firstTxDate.getTime());
-    } else if (range === 'ALL') {
-        startDate.setFullYear(now.getFullYear() - 1);
-    }
+    // Replay start date should be min(viewRangeStart, firstTransaction)
+    // to ensure we capture the initial state accumulation.
+    const replayStartDate = new Date(Math.min(startDate.getTime(), firstTxDate.getTime()));
+    replayStartDate.setHours(0,0,0,0);
+    
+    const dateList = getDatesInRange(replayStartDate, now);
 
-    // 3. Generate Daily Points backwards
-    const daysDiff = Math.ceil((now.getTime() - startDate.getTime()) / (1000 * 3600 * 24));
+    // C. Simulation State
+    const currentHoldings: Record<string, number> = {};
+    const currentCostBasis: Record<string, number> = {}; 
+    
+    // Initialize to 0
+    assets.forEach(a => {
+        currentHoldings[a.id] = 0;
+        currentCostBasis[a.id] = 0;
+    });
+
+    // Last Known Prices Map (for Forward Fill)
+    const lastKnownPrices: Record<string, number> = {};
+    assets.forEach(a => {
+        const history = historyMap[a.id];
+        if (history && history.length > 0) lastKnownPrices[a.id] = history[0].price;
+        else lastKnownPrices[a.id] = a.currentPrice;
+    });
+
     const dataPoints = [];
 
-    // Simulation Variables
-    let simulatedCost = currentCostBasis;
-    let simulatedValue = currentNetWorth;
-    
-    // Sort transactions descending (newest first) for reverse replay
-    const sortedTx = [...transactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-
-    // Volatility factor based on portfolio composition (Crypto makes it jumpier)
-    const hasCrypto = assets.some(a => a.type === AssetType.CRYPTO);
-    const volatility = hasCrypto ? 0.02 : 0.008; 
-
-    for (let i = 0; i <= daysDiff; i++) {
-        const currentDate = new Date(now);
-        currentDate.setDate(now.getDate() - i);
-        const dateStr = currentDate.toISOString().split('T')[0];
-
-        // A. Replay Transactions (Reverse) to adjust "Cost Basis"
-        // If we are going back in time, we need to UNDO transactions to find what the Cost/Invested was previously.
-        // Logic:
-        // Today's Cost = Previous Cost + Buys - Sells
-        // Previous Cost = Today's Cost - Buys + Sells
-        const daysTransactions = sortedTx.filter(t => t.date === dateStr);
+    // D. Iterate
+    for (const dateStr of dateList) {
+        // 1. Apply Transactions
+        const daysTransactions = allTransactions.filter(t => t.date === dateStr);
         
-        daysTransactions.forEach(tx => {
-            // Determine transaction value in Base Currency
-            // Note: This is an approximation using current rates for history, 
-            // which is a limitation of a lite app without historical rates DB.
-            const txAsset = assets.find(a => a.id === tx.assetId);
-            const txCurrency = txAsset ? txAsset.currency : baseCurrency;
-            const txTotal = convertValue(tx.total, txCurrency, baseCurrency, exchangeRates);
+        for (const tx of daysTransactions) {
+            if (currentHoldings[tx.assetId] === undefined) currentHoldings[tx.assetId] = 0;
+            if (currentCostBasis[tx.assetId] === undefined) currentCostBasis[tx.assetId] = 0;
 
             if (tx.type === TransactionType.BUY) {
-                // We Bought today, so yesterday we had LESS invested
-                simulatedCost -= txTotal;
-                // We assume Value dropped similarly (money left the portfolio? No, money converted to asset)
-                // Net Worth usually stays flat on Buy (Cash -> Asset), but if Cash isn't tracked, Net Worth drops.
-                // Assuming "Invested Capital" tracks external deposits.
+                currentHoldings[tx.assetId] += tx.quantity;
+                currentCostBasis[tx.assetId] += tx.total;
             } else if (tx.type === TransactionType.SELL) {
-                // We Sold today, so yesterday we had MORE invested (in the asset)
-                // Or rather, we realized the cost basis.
-                // Simplified: Reverse the cash flow.
-                simulatedCost += convertValue(tx.quantity * tx.price, txCurrency, baseCurrency, exchangeRates); // Using market value approx for simplicity
+                const previousQty = currentHoldings[tx.assetId];
+                if (previousQty > 0) {
+                    const ratio = tx.quantity / previousQty;
+                    currentCostBasis[tx.assetId] -= (currentCostBasis[tx.assetId] * ratio);
+                }
+                currentHoldings[tx.assetId] -= tx.quantity;
+                if (currentHoldings[tx.assetId] < 0) currentHoldings[tx.assetId] = 0;
+            }
+        }
+
+        // 2. Calculate Value
+        let dayNetWorth = 0;
+        let dayTotalCost = 0;
+
+        assets.forEach(asset => {
+            const qty = currentHoldings[asset.id] || 0;
+            
+            // Price Lookup
+            const priceMap = priceLookupMap[asset.id];
+            let price = lastKnownPrices[asset.id];
+
+            if (priceMap && priceMap.has(dateStr)) {
+                price = priceMap.get(dateStr)!;
+                lastKnownPrices[asset.id] = price; 
+            }
+
+            if (qty > 0) {
+                const val = convertValue(qty * price, asset.currency, baseCurrency, exchangeRates);
+                const cost = convertValue(currentCostBasis[asset.id], asset.currency, baseCurrency, exchangeRates);
+
+                if (asset.type === AssetType.LIABILITY) {
+                    dayNetWorth -= val;
+                } else {
+                    dayNetWorth += val;
+                    dayTotalCost += cost;
+                }
             }
         });
 
-        // B. Simulate Market Value Fluctuation
-        // We interpolate the "Unrealized PnL" portion over time.
-        // Current PnL = currentNetWorth - currentCostBasis.
-        // We decay this PnL as we go back in time to mimic market moves.
-        
-        // 1. Apply Transaction Impact to Value (Reverse)
-        // If we bought $1000 today, yesterday's value was $1000 less.
-        daysTransactions.forEach(tx => {
-             const txAsset = assets.find(a => a.id === tx.assetId);
-             const txCurrency = txAsset ? txAsset.currency : baseCurrency;
-             const txVal = convertValue(tx.total, txCurrency, baseCurrency, exchangeRates);
-             
-             if (tx.type === TransactionType.BUY) simulatedValue -= txVal;
-             if (tx.type === TransactionType.SELL) simulatedValue += txVal;
-        });
-
-        // 2. Apply Market Noise (The "Trend")
-        // We add noise to the *PnL component* only, not the cost basis.
-        // If i > 0 (not today), drift the PnL.
-        if (i > 0) {
-             const randomFluctuation = (Math.random() - 0.5) * volatility * simulatedValue;
-             simulatedValue -= randomFluctuation; // Reverse time: subtract fluctuation
+        // 3. Push Data (Only if within requested range)
+        if (dateStr >= startDate.toISOString().split('T')[0]) {
+            dataPoints.push({
+                date: dateStr,
+                displayDate: new Date(dateStr).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+                value: dayNetWorth,
+                cost: dayTotalCost,
+                pnl: dayNetWorth - dayTotalCost,
+                pnlPercent: dayTotalCost !== 0 ? ((dayNetWorth - dayTotalCost) / dayTotalCost) * 100 : 0
+            });
         }
-
-        // Clamp: Net Worth shouldn't be huge if Cost is 0 (unless early crypto adopter)
-        // Soft clamp to ensure simulated line doesn't look broken
-        if (simulatedCost < 0) simulatedCost = 0;
-        
-        dataPoints.push({
-            date: dateStr,
-            timestamp: currentDate.getTime(),
-            displayDate: currentDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
-            value: simulatedValue,
-            cost: simulatedCost,
-            pnl: simulatedValue - simulatedCost,
-            pnlPercent: simulatedCost !== 0 ? ((simulatedValue - simulatedCost) / simulatedCost) * 100 : 0
-        });
     }
 
-    // If "ALL" and we have scant data, assume start is 0
-    if (range === 'ALL' && dataPoints.length > 0 && transactions.length > 0) {
-        const lastPoint = dataPoints[dataPoints.length - 1];
-        // Fade to zero/initial if needed for visual completeness
-    }
+    return dataPoints;
+  }, [assets, transactions, range, baseCurrency, exchangeRates, historyMap, priceLookupMap, loadingHistory]);
 
-    return dataPoints.reverse();
-  }, [assets, transactions, range, baseCurrency, exchangeRates]);
-
-
-  // Chart Colors based on overall trend
   const isProfitable = chartData.length > 0 && (chartData[chartData.length-1].pnl >= 0);
-  const colorMain = isProfitable ? '#10b981' : '#ef4444'; // Green or Red
-  const colorCost = '#94a3b8'; // Slate 400
+  const colorMain = isProfitable ? '#10b981' : '#ef4444';
+  const colorCost = '#94a3b8';
 
-  const CustomTooltip = ({ active, payload, label }: any) => {
+  const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload;
       return (
-        <div className="bg-white p-4 rounded-xl shadow-xl border border-slate-100 text-sm">
+        <div className="bg-white p-4 rounded-xl shadow-xl border border-slate-100 text-sm animate-in fade-in zoom-in-95 duration-150">
           <p className="text-slate-500 font-medium mb-2 border-b border-slate-50 pb-2">{data.displayDate}</p>
           
           <div className="flex items-center justify-between gap-6 mb-1">
@@ -211,7 +284,7 @@ export const NetWorthChart: React.FC<NetWorthChartProps> = ({
           </div>
 
           <div className={`flex items-center justify-between gap-4 pt-2 border-t border-slate-50 font-medium ${data.pnl >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-            <span>{data.pnl >= 0 ? t('dayPnL') /* Reusing label for PnL */ : 'Loss'}</span>
+            <span>{data.pnl >= 0 ? t('label_net_pnl') : 'Loss'}</span>
             <div className="flex items-center gap-1">
                 {data.pnl >= 0 ? <TrendingUp size={14}/> : <TrendingDown size={14}/>}
                 <span>{formatCurrency(Math.abs(data.pnl))} ({Math.abs(data.pnlPercent).toFixed(2)}%)</span>
@@ -223,9 +296,12 @@ export const NetWorthChart: React.FC<NetWorthChartProps> = ({
     return null;
   };
 
+  const hasStocks = assets.some(a => a.type === AssetType.STOCK || a.type === AssetType.FUND);
+  const missingKey = hasStocks && !settings.alphaVantageApiKey;
+
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden h-full flex flex-col">
-      {/* Header & Controls */}
+      {/* Header */}
       <div className="px-6 py-4 border-b border-slate-50 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
             <h3 className="font-semibold text-slate-800 text-lg flex items-center gap-2">
@@ -233,10 +309,10 @@ export const NetWorthChart: React.FC<NetWorthChartProps> = ({
             </h3>
             <p className="text-xs text-slate-400 flex items-center gap-1 mt-0.5">
                 <MousePointer2 size={12} /> {t('costVsValue')}
+                {loadingHistory && <span className="flex items-center gap-1 text-blue-500 ml-2"><RefreshCw size={10} className="animate-spin"/> Syncing...</span>}
             </p>
         </div>
 
-        {/* Range Selectors */}
         <div className="flex bg-slate-50 p-1 rounded-lg self-start sm:self-auto">
             {(['1W', '1M', '3M', '6M', '1Y', 'ALL'] as TimeRange[]).map((r) => (
                 <button
@@ -254,7 +330,13 @@ export const NetWorthChart: React.FC<NetWorthChartProps> = ({
         </div>
       </div>
 
-      {/* Chart Area */}
+      {missingKey && !loadingHistory && (
+        <div className="bg-amber-50 px-4 py-2 text-[10px] text-amber-700 flex items-center justify-center gap-2 border-b border-amber-100">
+           <AlertTriangle size={12} />
+           <span>For accurate stock history, please add Alpha Vantage API Key in Settings.</span>
+        </div>
+      )}
+
       <div className="p-4 flex-1 min-h-[320px]">
         {isPrivacyMode ? (
              <div className="h-full flex flex-col items-center justify-center text-slate-300 bg-slate-50/30 rounded-xl border border-dashed border-slate-200">
@@ -281,12 +363,11 @@ export const NetWorthChart: React.FC<NetWorthChartProps> = ({
                     minTickGap={30}
                 />
                 <YAxis 
-                    hide={true} // Hide Y Axis for cleaner look, relying on tooltip
+                    hide={true} 
                     domain={['auto', 'auto']}
                 />
                 <Tooltip content={<CustomTooltip />} cursor={{ stroke: '#cbd5e1', strokeWidth: 1, strokeDasharray: '4 4' }} />
                 
-                {/* Invested Cost Line (Dashed) */}
                 <Line 
                     type="stepAfter" 
                     dataKey="cost" 
@@ -298,7 +379,6 @@ export const NetWorthChart: React.FC<NetWorthChartProps> = ({
                     name="Invested"
                 />
                 
-                {/* Net Worth Area (Gradient) */}
                 <Area 
                     type="monotone" 
                     dataKey="value" 
@@ -313,8 +393,12 @@ export const NetWorthChart: React.FC<NetWorthChartProps> = ({
             </ResponsiveContainer>
         ) : (
             <div className="h-full flex flex-col items-center justify-center text-slate-400">
-                <Calendar size={32} className="mb-2 opacity-50"/>
-                <span className="text-sm">Insufficient data for this range</span>
+                {loadingHistory ? (
+                   <RefreshCw size={32} className="mb-2 animate-spin text-blue-400"/>
+                ) : (
+                   <Calendar size={32} className="mb-2 opacity-50"/>
+                )}
+                <span className="text-sm">{loadingHistory ? 'Syncing market data...' : t('noTransactions')}</span>
             </div>
         )}
       </div>

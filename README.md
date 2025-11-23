@@ -25,7 +25,7 @@
 
 ## 📸 系统截图 (Screenshots)
 
-![Dashboard](_image/panassetlite.png)
+![Dashboard](panassetlite.png)
 
 > *仪表盘概览 - 实时掌握净值动态与资产分布*
 

@@ -3,10 +3,11 @@ import React, { useMemo } from 'react';
 import { usePortfolio } from '../context/PortfolioContext';
 import { Card } from './ui/Card';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, AreaChart, Area, XAxis, YAxis, CartesianGrid } from 'recharts';
-import { TrendingUp, TrendingDown, DollarSign, Activity, EyeOff, Wallet, CreditCard } from 'lucide-react';
+import { TrendingUp, TrendingDown, DollarSign, Activity, EyeOff, Wallet, CreditCard, JapaneseYen } from 'lucide-react';
 import { convertValue } from '../services/marketData';
 import { AssetType, Currency } from '../types';
 import { NetWorthChart } from './NetWorthChart';
+import { Link } from 'react-router-dom';
 
 const COLORS = ['#0ea5e9', '#6366f1', '#8b5cf6', '#ec4899', '#10b981', '#f59e0b', '#f97316'];
 
@@ -84,6 +85,9 @@ export const Dashboard: React.FC = () => {
       return `${val.toFixed(2)}%`;
   };
 
+  // Determine which icon to show based on currency
+  const CurrencyIcon = settings.baseCurrency === Currency.CNY ? JapaneseYen : DollarSign;
+
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Top Metrics Cards */}
@@ -93,7 +97,13 @@ export const Dashboard: React.FC = () => {
             {settings.isPrivacyMode && <EyeOff className="absolute top-6 right-6 text-blue-400 opacity-50" size={24} />}
             <div className="flex items-center justify-between mb-4">
                 <span className="text-blue-100 font-medium">{t('netWorth')}</span>
-                <div className="p-2 bg-white/20 rounded-lg"><DollarSign size={20} /></div>
+                <Link 
+                  to="/settings" 
+                  className="p-2 bg-white/20 rounded-lg hover:bg-white/30 transition-colors cursor-pointer flex items-center justify-center"
+                  title={t('changeCurrency')}
+                >
+                  <CurrencyIcon size={20} />
+                </Link>
             </div>
             <div className="text-3xl font-bold mb-1">{formatCurrency(summary.totalNetWorth)}</div>
             <div className="text-sm text-blue-100 flex items-center gap-2">
@@ -157,8 +167,8 @@ export const Dashboard: React.FC = () => {
         </div>
 
         {/* Pie Chart */}
-        <Card title={`${t('assetAllocation')} (${settings.baseCurrency})`} className="min-w-0 h-[400px] flex flex-col">
-          <div className="flex-1 w-full relative min-w-0">
+      <Card title={`${t('assetAllocation')} (${settings.baseCurrency})`} className="min-w-0">
+          <div className="h-[300px] w-full relative min-w-0">
             {settings.isPrivacyMode ? (
                  <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-300">
                     <EyeOff size={48} className="mb-2"/>
@@ -196,7 +206,7 @@ export const Dashboard: React.FC = () => {
             )}
           </div>
           {!settings.isPrivacyMode && (
-            <div className="flex flex-wrap gap-2 justify-center pb-4 mt-2">
+            <div className="flex flex-wrap gap-2 justify-center pb-2 mt-2">
                 {allocationData.slice(0, 4).map((entry, idx) => (
                     <div key={entry.name} className="flex items-center gap-1 text-xs text-slate-500">
                         <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[idx % COLORS.length] }}></div>

@@ -3,19 +3,19 @@ import { Asset, AssetType, Currency } from '../types';
 
 const EXCHANGE_RATE_API = 'https://api.exchangerate-api.com/v4/latest/USD';
 const COINGECKO_API = 'https://api.coingecko.com/api/v3/simple/price';
+const COINGECKO_HISTORY_API = 'https://api.coingecko.com/api/v3/coins';
 
 // Cache Keys
 const CACHE_RATES_KEY = 'investflow_rates';
 const CACHE_CRYPTO_KEY = 'investflow_crypto_prices';
 const CACHE_STOCKS_KEY = 'investflow_stock_prices';
+const CACHE_HISTORY_KEY = 'investflow_asset_history';
 
 // Cache Duration (ms)
-// Rates: 24 hours
 const RATES_TTL = 24 * 3600 * 1000; 
-// Crypto: 10 minutes
 const CRYPTO_TTL = 10 * 60 * 1000; 
-// Stocks: 4 hours (Increased to save API calls and use "manual/stale" data longer)
 const STOCK_TTL = 4 * 60 * 60 * 1000;
+const HISTORY_TTL = 12 * 3600 * 1000; // 12 Hours for history
 
 // Simple Crypto Mapping
 const CRYPTO_MAP: Record<string, string> = {
@@ -40,6 +40,11 @@ export interface StockPriceResult {
   price: number;
   currency: Currency;
   lastUpdated?: number;
+}
+
+export interface HistoricalDataPoint {
+  date: string; // YYYY-MM-DD
+  price: number;
 }
 
 export const detectCurrencyFromSymbol = (symbol: string): Currency => {
@@ -74,7 +79,6 @@ export const fetchExchangeRates = async (): Promise<ExchangeRates> => {
   const { data: cachedRates, timestamp } = getFromCache<ExchangeRates>(CACHE_RATES_KEY);
   const isStale = (Date.now() - timestamp) > RATES_TTL;
   
-  // If fresh, use cache
   if (cachedRates && !isStale) return cachedRates;
 
   try {
@@ -85,7 +89,6 @@ export const fetchExchangeRates = async (): Promise<ExchangeRates> => {
     return data.rates;
   } catch (error) {
     console.warn("Exchange Rate API failed, using fallback cache", error);
-    // Fallback: Return stale cache if exists, else default
     return cachedRates || { USD: 1, CNY: 7.2, HKD: 7.8 };
   }
 };
@@ -98,7 +101,6 @@ export const fetchCryptoPrices = async (assets: Asset[]): Promise<Record<string,
   const { data: cachedPrices, timestamp } = getFromCache<Record<string, number>>(CACHE_CRYPTO_KEY);
   const isStale = (Date.now() - timestamp) > CRYPTO_TTL;
 
-  // Use cache if fresh and complete
   if (cachedPrices && !isStale) {
     const allCovered = cryptoAssets.every(a => cachedPrices[a.id] !== undefined);
     if (allCovered) return cachedPrices;
@@ -138,14 +140,12 @@ export const fetchStockPrices = async (assets: Asset[], apiKey?: string): Promis
   const stockAssets = assets.filter(a => a.type === AssetType.STOCK || a.type === AssetType.FUND);
   if (stockAssets.length === 0) return {};
 
-  // 1. Load existing cache (we will update this object)
   const { data: cachedMap } = getFromCache<Record<string, StockPriceResult>>(CACHE_STOCKS_KEY);
   const priceMap: Record<string, StockPriceResult> = { ...(cachedMap || {}) };
   
   const now = Date.now();
   const assetsToFetch: Asset[] = [];
 
-  // 2. Identify assets that strictly NEED update (Older than TTL)
   for (const asset of stockAssets) {
     const cachedItem = priceMap[asset.id];
     if (!cachedItem || !cachedItem.lastUpdated || (now - cachedItem.lastUpdated > STOCK_TTL)) {
@@ -153,14 +153,11 @@ export const fetchStockPrices = async (assets: Asset[], apiKey?: string): Promis
     }
   }
 
-  // 3. Batch processing (Max 3 to save limits)
   const limitedQueue = assetsToFetch.slice(0, 3);
   let dataUpdated = false;
 
-  // Check if API Key is present only if we have items to fetch
   if (limitedQueue.length > 0 && !apiKey) {
     console.warn("Alpha Vantage API Key is missing. Skipping stock price fetch.");
-    // We just return what we have in cache
     return priceMap;
   }
 
@@ -170,17 +167,14 @@ export const fetchStockPrices = async (assets: Asset[], apiKey?: string): Promis
       if (asset.currency === Currency.HKD && !querySymbol.includes('.')) {
           querySymbol = `${querySymbol}.HK`;
       } else if (asset.currency === Currency.CNY && !querySymbol.includes('.')) {
-          // Heuristic for Shanghai/Shenzhen
           querySymbol = querySymbol.startsWith('6') ? `${querySymbol}.SS` : `${querySymbol}.SZ`;
       }
 
       const res = await fetch(`https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${querySymbol}&apikey=${apiKey}`);
       const data = await res.json();
 
-      // Check for Rate Limit Note
       if (data['Note'] || data['Information']) {
-          console.warn("Alpha Vantage Rate Limit hit:", data['Note'] || data['Information']);
-          break; // Stop processing, keep existing cache
+          break; 
       }
 
       if (data['Global Quote'] && data['Global Quote']['05. price']) {
@@ -193,26 +187,88 @@ export const fetchStockPrices = async (assets: Asset[], apiKey?: string): Promis
           lastUpdated: Date.now()
         };
         dataUpdated = true;
-      } else {
-        console.warn(`No price data found for ${querySymbol}`);
       }
       
-      // Only delay if we actually made a call and plan to make another
       if (limitedQueue.length > 1) await delay(12000); 
 
     } catch (e) {
-      console.error(`Failed to fetch stock ${asset.symbol}`, e);
-      // Continue to next asset, keep existing value in map
+      // console.error(`Failed to fetch stock ${asset.symbol}`, e);
     }
   }
 
-  // 4. Always save if we updated anything
   if (dataUpdated) {
     saveToCache(CACHE_STOCKS_KEY, priceMap);
   }
 
-  // 5. Return the map (which contains a mix of fresh and stale data)
   return priceMap;
+};
+
+// --- 4. Historical Data ---
+
+export const fetchAssetHistory = async (asset: Asset, apiKey?: string): Promise<HistoricalDataPoint[]> => {
+  // 1. Check Cache
+  const cacheKey = `${CACHE_HISTORY_KEY}_${asset.id}`;
+  const { data: cachedHistory, timestamp } = getFromCache<HistoricalDataPoint[]>(cacheKey);
+  const isStale = (Date.now() - timestamp) > HISTORY_TTL;
+
+  if (cachedHistory && cachedHistory.length > 0 && !isStale) {
+    return cachedHistory;
+  }
+
+  try {
+    let history: HistoricalDataPoint[] = [];
+
+    if (asset.type === AssetType.CRYPTO) {
+      // CoinGecko Market Chart (Last 365 Days)
+      const id = CRYPTO_MAP[asset.symbol.toUpperCase()] || asset.name.toLowerCase().replace(/\s+/g, '-');
+      const res = await fetch(`${COINGECKO_HISTORY_API}/${id}/market_chart?vs_currency=usd&days=365&interval=daily`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.prices) {
+           history = data.prices.map((item: any) => ({
+             date: new Date(item[0]).toISOString().split('T')[0],
+             price: item[1]
+           }));
+        }
+      }
+    } else if ((asset.type === AssetType.STOCK || asset.type === AssetType.FUND) && apiKey) {
+       // Alpha Vantage Time Series Daily
+       let querySymbol = asset.symbol;
+       if (asset.currency === Currency.HKD && !querySymbol.includes('.')) querySymbol = `${querySymbol}.HK`;
+       else if (asset.currency === Currency.CNY && !querySymbol.includes('.')) querySymbol = querySymbol.startsWith('6') ? `${querySymbol}.SS` : `${querySymbol}.SZ`;
+
+       const res = await fetch(`https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=${querySymbol}&apikey=${apiKey}`);
+       const data = await res.json();
+       
+       if (data['Time Series (Daily)']) {
+         const series = data['Time Series (Daily)'];
+         history = Object.keys(series).map(date => ({
+           date: date,
+           price: parseFloat(series[date]['4. close'])
+         })).sort((a, b) => a.date.localeCompare(b.date)); // Sort ascending
+       }
+    }
+
+    // Fill gaps or fallback
+    if (history.length > 0) {
+      saveToCache(cacheKey, history);
+      return history;
+    } else {
+       // If fetch fails or not supported (Cash/Manual), return a single point (Today) + Maybe one year ago same price
+       // This ensures the chart has *some* line for manual assets
+       const today = new Date().toISOString().split('T')[0];
+       const lastYear = new Date();
+       lastYear.setFullYear(lastYear.getFullYear() - 1);
+       return [
+         { date: lastYear.toISOString().split('T')[0], price: asset.currentPrice },
+         { date: today, price: asset.currentPrice }
+       ];
+    }
+
+  } catch (e) {
+    console.warn(`Failed to fetch history for ${asset.symbol}`, e);
+    return cachedHistory || [];
+  }
 };
 
 export const convertValue = (

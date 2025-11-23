@@ -1,8 +1,9 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { Asset, AssetType, Currency } from '../types';
 import { usePortfolio } from '../context/PortfolioContext';
-import { X, Save, TrendingUp, Bitcoin, PieChart, Building, Banknote, CreditCard, Box } from 'lucide-react';
+import { X, Save, TrendingUp, Bitcoin, PieChart, Building, Banknote, CreditCard, Box, Calendar } from 'lucide-react';
 
 interface Props {
   isOpen: boolean;
@@ -23,6 +24,7 @@ export const AddAssetModal: React.FC<Props> = ({ isOpen, onClose, initialAsset }
   const [cost, setCost] = useState(''); // Avg Cost
   const [currentVal, setCurrentVal] = useState(''); // For manual assets
   const [currency, setCurrency] = useState<Currency>(Currency.USD);
+  const [dateAcquired, setDateAcquired] = useState(new Date().toISOString().split('T')[0]);
 
   const ASSET_TYPES = [
     { id: AssetType.STOCK, label: t('type_stock'), icon: TrendingUp, desc: 'US, HK, CN Stocks', color: 'bg-blue-50 text-blue-600 border-blue-200' },
@@ -45,6 +47,7 @@ export const AddAssetModal: React.FC<Props> = ({ isOpen, onClose, initialAsset }
         setCost(initialAsset.avgCost.toString());
         setCurrentVal(initialAsset.currentPrice.toString());
         setCurrency(initialAsset.currency);
+        setDateAcquired(initialAsset.dateAcquired || new Date().toISOString().split('T')[0]);
         setStep(2); // Skip type selection when editing
       } else {
         // Add Mode - Reset
@@ -56,6 +59,7 @@ export const AddAssetModal: React.FC<Props> = ({ isOpen, onClose, initialAsset }
         setCost('');
         setCurrentVal('');
         setCurrency(Currency.USD);
+        setDateAcquired(new Date().toISOString().split('T')[0]);
       }
     }
   }, [isOpen, initialAsset]);
@@ -97,7 +101,8 @@ export const AddAssetModal: React.FC<Props> = ({ isOpen, onClose, initialAsset }
       currentPrice: currentPriceNum || 0,
       // Manual assets use selected currency. Market assets (Stock/Crypto/Cash) default to USD logic until API updates them
       currency: isStrictManualAsset(type) ? currency : Currency.USD, 
-      lastUpdated: Date.now()
+      lastUpdated: Date.now(),
+      dateAcquired
     };
 
     if (initialAsset) {
@@ -217,6 +222,20 @@ export const AddAssetModal: React.FC<Props> = ({ isOpen, onClose, initialAsset }
                         <h3 className="text-sm font-semibold text-slate-700">{t('valuationHoldings')}</h3>
                         
                         <div className="grid grid-cols-2 gap-4">
+                             {/* Date Acquired */}
+                             <div className="col-span-2">
+                                <label className="block text-xs font-medium text-slate-500 uppercase mb-1">{t('dateAcquired')}</label>
+                                <div className="relative">
+                                    <Calendar className="absolute left-3 top-2.5 text-slate-400" size={16}/>
+                                    <input 
+                                        type="date"
+                                        value={dateAcquired}
+                                        onChange={(e) => setDateAcquired(e.target.value)}
+                                        className="w-full pl-9 p-2.5 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                    />
+                                </div>
+                            </div>
+
                             <div>
                                 <label className="block text-xs font-medium text-slate-500 uppercase mb-1">
                                     {type === AssetType.CASH ? t('balance') : (type === AssetType.LIABILITY ? t('principalRemaining') : t('quantity'))}

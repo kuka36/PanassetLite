@@ -1,4 +1,5 @@
 
+
 import { Language } from '../types';
 
 export const translations: Record<Language, Record<string, string>> = {
@@ -25,6 +26,7 @@ export const translations: Record<Language, Record<string, string>> = {
     topAsset: "Top Asset",
     hidden: "Hidden",
     chartHidden: "Chart Hidden in Privacy Mode",
+    changeCurrency: "Change Base Currency",
 
     // Assets
     assetsManagement: "Assets Management",
@@ -60,6 +62,7 @@ export const translations: Record<Language, Record<string, string>> = {
     unitPrice: "Current Unit Price",
     costBasis: "Avg Cost (USD Basis)",
     avgCostUnit: "Average Cost / Unit",
+    dateAcquired: "Date Acquired / Start Date",
     autoFetch: "* Live prices will be fetched automatically based on ticker symbol.",
     autoFetchCash: "* Live exchange rates (USD) will be fetched automatically.",
     saveChanges: "Save Changes",
@@ -191,6 +194,7 @@ export const translations: Record<Language, Record<string, string>> = {
     topAsset: "最大持仓",
     hidden: "已隐藏",
     chartHidden: "隐私模式下图表已隐藏",
+    changeCurrency: "切换基准货币",
 
     assetsManagement: "资产管理",
     assetsSubtitle: "管理您的持仓并记录交易。",
@@ -224,6 +228,7 @@ export const translations: Record<Language, Record<string, string>> = {
     unitPrice: "当前单价",
     costBasis: "单位成本 (USD计价)",
     avgCostUnit: "平均成本 / 单位",
+    dateAcquired: "持仓起始日期",
     autoFetch: "* 将根据代码自动获取实时价格。",
     autoFetchCash: "* 将自动获取实时汇率 (USD)。",
     saveChanges: "保存更改",
@@ -318,8 +323,8 @@ export const translations: Record<Language, Record<string, string>> = {
     analyzeNow: "立即分析",
     upToDate: "已是最新",
     apiKeyMissing: "缺少 API Key。请在设置中配置。",
-    setKey: "去设置",
-    unableToGenerate: "无法生成风险分析。",
+    setKey: "Set Key",
+    unableToGenerate: "Unable to generate risk analysis.",
     aiUnavailable: "AI 功能不可用，请检查 API Key。",
     
     feedback: "反馈建议",
