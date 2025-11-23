@@ -24,7 +24,9 @@ export const VoiceInput: React.FC<VoiceInputProps> = ({ onResult, onTextResult, 
   useEffect(() => {
     return () => {
       if (recognitionRef.current) {
-        recognitionRef.current.stop();
+        try {
+            recognitionRef.current.stop();
+        } catch(e) {}
       }
     };
   }, []);
@@ -55,12 +57,14 @@ export const VoiceInput: React.FC<VoiceInputProps> = ({ onResult, onTextResult, 
   };
 
   const stopRecognition = () => {
+    // Check ref directly
     if (recognitionRef.current) {
         try {
             recognitionRef.current.stop();
         } catch (e) {
-            // Ignore error if already stopped
+            // Ignore error if already stopped or not started fully
         }
+        recognitionRef.current = null; // Clear ref immediately
         setIsListening(false);
         
         // Short delay to ensure final results are captured from the recognition buffer
@@ -77,6 +81,8 @@ export const VoiceInput: React.FC<VoiceInputProps> = ({ onResult, onTextResult, 
       // Critical: Stop propagation to prevent interference with underlying page
       e.preventDefault();
       e.stopPropagation();
+
+      if (recognitionRef.current) return; // Prevent multiple starts
 
       // Reset
       transcriptBuffer.current = ''; 
@@ -99,7 +105,7 @@ export const VoiceInput: React.FC<VoiceInputProps> = ({ onResult, onTextResult, 
 
       const SpeechRecognition = (window as any).webkitSpeechRecognition;
       const recognition = new SpeechRecognition();
-      recognitionRef.current = recognition;
+      recognitionRef.current = recognition; // Set ref synchronously
       recognition.continuous = true;
       recognition.interimResults = true;
       recognition.lang = settings.language === 'zh' ? 'zh-CN' : 'en-US';
@@ -116,9 +122,10 @@ export const VoiceInput: React.FC<VoiceInputProps> = ({ onResult, onTextResult, 
               console.error("Speech error", event.error);
               setError(t('voiceError'));
           }
-          // Only stop UI state on critical errors, ignore 'no-speech' during hold as it might just mean silence
+          // Only stop UI state on critical errors
           if (event.error !== 'no-speech') {
              setIsListening(false);
+             recognitionRef.current = null;
           }
       };
 
@@ -127,6 +134,7 @@ export const VoiceInput: React.FC<VoiceInputProps> = ({ onResult, onTextResult, 
       } catch (err) {
         console.error("Failed to start recognition", err);
         setIsListening(false);
+        recognitionRef.current = null;
       }
   };
 
@@ -134,7 +142,8 @@ export const VoiceInput: React.FC<VoiceInputProps> = ({ onResult, onTextResult, 
       e.preventDefault();
       e.stopPropagation();
       
-      if (isListening) {
+      // FIX: Use ref instead of state to avoid stale closure issues during fast taps
+      if (recognitionRef.current) {
           stopRecognition();
       }
   };
@@ -142,7 +151,7 @@ export const VoiceInput: React.FC<VoiceInputProps> = ({ onResult, onTextResult, 
   const handleContextMenu = (e: React.SyntheticEvent) => {
       e.preventDefault();
       e.stopPropagation();
-      if (isListening) stopRecognition();
+      if (recognitionRef.current) stopRecognition();
   };
 
   // Block clicks to ensure no ghost clicks propagate
