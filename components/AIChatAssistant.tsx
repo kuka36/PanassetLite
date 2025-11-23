@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Send, Sparkles, Check, AlertCircle, Trash2, User } from 'lucide-react';
 import { usePortfolio } from '../context/PortfolioContext';
@@ -167,7 +166,7 @@ export const AIChatAssistant: React.FC<AIChatAssistantProps> = ({ isOpen, onClos
   if (!settings.isAiAssistantEnabled) return null;
 
   // Calculate dynamic left position for desktop to sit next to sidebar
-  // Mobile: fixed layout. Desktop: left based on sidebar width + margin
+  // Mobile: Full screen (inset-0). Desktop: Floating next to sidebar.
   const desktopLeftClass = isSidebarCollapsed ? 'md:left-24' : 'md:left-72';
 
   // Styled Markdown Wrapper
@@ -180,39 +179,46 @@ export const AIChatAssistant: React.FC<AIChatAssistantProps> = ({ isOpen, onClos
   if (!isOpen) return null;
 
   return (
-    <div className={`fixed bottom-4 left-4 right-4 md:right-auto md:w-[400px] h-[600px] max-h-[80vh] ${desktopLeftClass} bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden z-50 animate-slide-up origin-bottom-left transition-all duration-300`}>
+    <div className={`
+        fixed z-50 flex flex-col overflow-hidden bg-white/95 backdrop-blur-md shadow-2xl transition-all duration-300
+        inset-0 rounded-none 
+        md:inset-auto md:bottom-4 md:right-auto md:w-[400px] md:h-[600px] md:max-h-[80vh] md:rounded-2xl md:border md:border-slate-200 ${desktopLeftClass}
+        animate-slide-up origin-bottom-left
+    `}>
       
       {/* Header */}
-      <div className="p-4 bg-gradient-to-r from-indigo-600 to-blue-600 flex justify-between items-center shrink-0 text-white">
+      <div className="p-4 bg-gradient-to-r from-indigo-600 to-blue-600 flex justify-between items-center shrink-0 text-white shadow-sm">
         <div className="flex items-center gap-3">
           <div className="p-1.5 bg-white/20 rounded-lg">
             <Sparkles size={18} className="text-white" />
           </div>
           <div>
-            <h3 className="font-bold text-sm">Panasset Assistant</h3>
+            <h3 className="font-bold text-sm">
+                {settings.language === 'zh' ? "Panasset 智能助手" : "Panasset Assistant"}
+            </h3>
             <p className="text-[10px] text-indigo-100 flex items-center gap-1 opacity-90">
-               <span className="w-1.5 h-1.5 bg-green-400 rounded-full"></span>
+               <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse"></span>
                {settings.language === 'zh' ? "在线" : "Online"}
             </p>
           </div>
         </div>
         <div className="flex items-center gap-1">
-            <button onClick={handleClearHistory} className="text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-colors p-1.5" title={settings.language==='zh'?"清除历史":"Clear History"}>
-                <Trash2 size={16} />
+            <button onClick={handleClearHistory} className="text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-colors p-2" title={settings.language==='zh'?"清除历史":"Clear History"}>
+                <Trash2 size={18} />
             </button>
-            <button onClick={onClose} className="text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-colors p-1.5">
-                <X size={20} />
+            <button onClick={onClose} className="text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-colors p-2">
+                <X size={22} />
             </button>
         </div>
       </div>
 
       {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-6 bg-slate-50">
+      <div className="flex-1 overflow-y-auto p-4 space-y-6 bg-slate-50 scroll-smooth">
         {messages.map((msg) => (
           <div key={msg.id} className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
             
             {/* Avatar */}
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 shadow-sm ${
                 msg.role === 'user' ? 'bg-slate-200 text-slate-500' : 'bg-indigo-100 text-indigo-600'
             }`}>
                 {msg.role === 'user' ? <User size={16} /> : <Sparkles size={16} />}
@@ -241,7 +247,7 @@ export const AIChatAssistant: React.FC<AIChatAssistantProps> = ({ isOpen, onClos
                     <div className="flex gap-2 pl-6">
                         <button 
                             onClick={() => handleConfirmAction(msg.id, msg.pendingAction!)}
-                            className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold py-2 rounded-lg flex items-center justify-center gap-1 transition-colors"
+                            className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold py-2 rounded-lg flex items-center justify-center gap-1 transition-colors shadow-sm"
                         >
                             <Check size={14} /> {settings.language === 'zh' ? "确认" : "Confirm"}
                         </button>
@@ -269,10 +275,10 @@ export const AIChatAssistant: React.FC<AIChatAssistantProps> = ({ isOpen, onClos
       </div>
 
       {/* Input Area */}
-      <div className="p-3 bg-white border-t border-slate-200 flex items-center gap-2 shrink-0">
+      <div className="p-3 bg-white border-t border-slate-200 flex items-center gap-2 shrink-0 pb-6 md:pb-3">
         <VoiceInput 
             mode="CHAT" 
-            onTextResult={(text) => setInput(text)} 
+            onTextResult={(text) => setInput(prev => prev ? prev + " " + text : text)} 
         />
         <input
           type="text"
