@@ -1,13 +1,15 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, PieChart, Wallet, Settings, Menu, X, History, MessageSquarePlus, ChevronLeft, ChevronRight, BookOpen } from 'lucide-react';
+import { LayoutDashboard, PieChart, Wallet, Settings, Menu, X, History, MessageSquarePlus, ChevronLeft, ChevronRight, BookOpen, Sparkles } from 'lucide-react';
 import { usePortfolio } from '../context/PortfolioContext';
 import { AIChatAssistant } from './AIChatAssistant';
 
 export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { t } = usePortfolio();
+  const { t, settings } = usePortfolio();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
+  const [isChatOpen, setIsChatOpen] = useState(false);
 
   // Initialize from localStorage or default to expanded (false)
   const [isCollapsed, setIsCollapsed] = useState(() => {
@@ -66,6 +68,23 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
 
         {/* Footer / Toggle */}
         <div className="p-4 border-t border-slate-100 flex flex-col gap-4">
+            
+            {/* AI Assistant Trigger (Desktop) */}
+            {settings.isAiAssistantEnabled && (
+                <button
+                    onClick={() => setIsChatOpen(prev => !prev)}
+                    className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all border border-transparent ${
+                        isChatOpen 
+                        ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200' 
+                        : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100 hover:border-indigo-200'
+                    } ${isCollapsed ? 'justify-center px-2' : ''}`}
+                    title={t('aiAssistant')}
+                >
+                    <Sparkles size={20} className={isChatOpen ? "text-white" : "text-indigo-600"} />
+                    {!isCollapsed && <span className="font-semibold">{t('aiAssistant')}</span>}
+                </button>
+            )}
+
             {/* Toggle Button */}
             <button 
               onClick={() => setIsCollapsed(!isCollapsed)}
@@ -125,7 +144,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
         </div>
       </aside>
 
-      {/* Mobile Header (Unchanged) */}
+      {/* Mobile Header */}
       <div className="md:hidden fixed top-0 left-0 right-0 bg-white z-30 px-4 py-3 border-b border-slate-100 flex justify-between items-center shadow-sm">
         <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
@@ -133,15 +152,25 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
             </div>
             <span className="text-lg font-bold text-slate-800">PanassetLite</span>
         </div>
-        <button 
-            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} 
-            className="p-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
-        >
-            {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
-        </button>
+        <div className="flex items-center gap-2">
+            {settings.isAiAssistantEnabled && (
+                <button 
+                    onClick={() => setIsChatOpen(!isChatOpen)}
+                    className={`p-2 rounded-lg transition-colors ${isChatOpen ? 'bg-indigo-600 text-white' : 'text-indigo-600 bg-indigo-50 hover:bg-indigo-100'}`}
+                >
+                    <Sparkles size={20} />
+                </button>
+            )}
+            <button 
+                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} 
+                className="p-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+            >
+                {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+            </button>
+        </div>
       </div>
 
-      {/* Mobile Menu Overlay (Unchanged) */}
+      {/* Mobile Menu Overlay */}
       {isMobileMenuOpen && (
         <div className="fixed inset-0 z-20 bg-slate-900/20 backdrop-blur-sm md:hidden pt-16" onClick={() => setIsMobileMenuOpen(false)}>
            <div className="bg-white border-b border-slate-100 shadow-xl p-4 animate-in slide-in-from-top-5 duration-200" onClick={e => e.stopPropagation()}>
@@ -184,8 +213,12 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
         {children}
       </main>
       
-      {/* Global AI Chat Assistant - Always rendered */}
-      <AIChatAssistant />
+      {/* Global AI Chat Assistant */}
+      <AIChatAssistant 
+         isOpen={isChatOpen} 
+         onClose={() => setIsChatOpen(false)}
+         isSidebarCollapsed={isCollapsed}
+      />
     </div>
   );
 };

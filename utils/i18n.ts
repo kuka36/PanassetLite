@@ -139,6 +139,7 @@ export const translations: Record<Language, Record<string, string>> = {
     // Settings
     managePreferences: "Manage your preferences and data.",
     apiConfiguration: "API Configuration",
+    enableAiAssistant: "Enable AI Chat Assistant",
     aiProvider: "AI Model Provider",
     aiProviderDesc: "Select which AI service to use for Portfolio Insights.",
     geminiKey: "Gemini API Key",
@@ -169,6 +170,7 @@ export const translations: Record<Language, Record<string, string>> = {
     localDataSecurity: "Data is stored locally on your device. Safe and secure.",
 
     // AI Advisor
+    aiAssistant: "AI Assistant",
     aiInsights: "AI Portfolio Insights",
     wealthManagement: "Wealth Management & Optimization",
     analyzeNow: "Analyze Now",
@@ -322,6 +324,7 @@ export const translations: Record<Language, Record<string, string>> = {
 
     managePreferences: "管理您的偏好与数据。",
     apiConfiguration: "API 配置",
+    enableAiAssistant: "开启 AI 助手浮窗",
     aiProvider: "AI 模型服务商",
     aiProviderDesc: "选择用于投资组合智能分析的 AI 服务。",
     geminiKey: "Gemini API Key",
@@ -351,6 +354,7 @@ export const translations: Record<Language, Record<string, string>> = {
     resetSuccess: "所有数据已重置。",
     localDataSecurity: "本地保存数据，放心安全存储。",
 
+    aiAssistant: "AI 智能助手",
     aiInsights: "AI 投资组合洞察",
     wealthManagement: "财富管理与优化建议",
     analyzeNow: "立即分析",

@@ -1,4 +1,5 @@
 
+
 import React, { createContext, useContext, useState, useEffect, ReactNode, useRef } from 'react';
 import { Asset, AssetType, Currency, Transaction, TransactionType, Language, AIProvider } from '../types';
 import { 
@@ -19,6 +20,7 @@ interface AppSettings {
   aiProvider: AIProvider;
   alphaVantageApiKey: string;
   language: Language;
+  isAiAssistantEnabled: boolean;
 }
 
 interface PortfolioContextType {
@@ -64,6 +66,7 @@ const INITIAL_SETTINGS: AppSettings = {
   aiProvider: 'gemini',
   alphaVantageApiKey: '',
   language: getBrowserLanguage(),
+  isAiAssistantEnabled: true,
 };
 
 export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
@@ -89,7 +92,8 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
         deepSeekApiKey: parsed.deepSeekApiKey || '',
         aiProvider: parsed.aiProvider || 'gemini',
         alphaVantageApiKey: parsed.alphaVantageApiKey || '',
-        language: parsed.language || INITIAL_SETTINGS.language
+        language: parsed.language || INITIAL_SETTINGS.language,
+        isAiAssistantEnabled: parsed.isAiAssistantEnabled ?? INITIAL_SETTINGS.isAiAssistantEnabled,
       };
     }
     return INITIAL_SETTINGS;

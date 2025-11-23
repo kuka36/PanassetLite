@@ -1,19 +1,23 @@
 
 
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Send, Bot, Sparkles, Check, AlertCircle, Trash2 } from 'lucide-react';
+import { X, Send, Sparkles, Check, AlertCircle, Trash2, User } from 'lucide-react';
 import { usePortfolio } from '../context/PortfolioContext';
 import { AgentService } from '../services/agentService';
 import { ChatMessage, PendingAction, TransactionType, AssetType } from '../types';
-import { Link } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import { VoiceInput } from './ui/VoiceInput';
 
 const HISTORY_KEY = 'panasset_chat_history';
 
-export const AIChatAssistant: React.FC = () => {
+interface AIChatAssistantProps {
+  isOpen: boolean;
+  onClose: () => void;
+  isSidebarCollapsed?: boolean;
+}
+
+export const AIChatAssistant: React.FC<AIChatAssistantProps> = ({ isOpen, onClose, isSidebarCollapsed = false }) => {
   const { settings, assets, addTransaction, addAsset, t } = usePortfolio();
-  const [isOpen, setIsOpen] = useState(false);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -159,127 +163,134 @@ export const AIChatAssistant: React.FC = () => {
       localStorage.removeItem(HISTORY_KEY);
   };
 
-  // Only render if Gemini API Key is present
-  if (!settings.geminiApiKey) return null;
+  // Only render if enabled
+  if (!settings.isAiAssistantEnabled) return null;
 
-  // Styled Markdown Wrapper to fix styling issues
+  // Calculate dynamic left position for desktop to sit next to sidebar
+  // Mobile: fixed layout. Desktop: left based on sidebar width + margin
+  const desktopLeftClass = isSidebarCollapsed ? 'md:left-24' : 'md:left-72';
+
+  // Styled Markdown Wrapper
   const MarkdownContent = ({ content }: { content: string }) => (
      <div className="prose prose-sm max-w-none prose-p:leading-relaxed prose-pre:bg-slate-800 prose-pre:text-white prose-p:my-1 prose-ul:my-1 prose-li:my-0">
         <ReactMarkdown>{content}</ReactMarkdown>
      </div>
   );
 
+  if (!isOpen) return null;
+
   return (
-    <>
-      {/* Floating Action Button (FAB) */}
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className={`fixed bottom-6 right-6 z-50 p-4 rounded-full shadow-2xl transition-all duration-300 flex items-center justify-center hover:scale-110 ${
-          isOpen ? 'bg-slate-800 rotate-90' : 'bg-gradient-to-r from-blue-600 to-indigo-600'
-        }`}
-        title="AI Assistant"
-      >
-        {isOpen ? <X className="text-white" size={28} /> : <Bot className="text-white" size={28} />}
-      </button>
-
-      {/* Chat Window */}
-      {isOpen && (
-        <div className="fixed bottom-24 right-4 sm:right-6 w-[90vw] sm:w-[400px] h-[550px] max-h-[75vh] bg-white/95 backdrop-blur-md rounded-3xl shadow-2xl border border-slate-100 flex flex-col overflow-hidden z-50 animate-slide-up origin-bottom-right">
-          
-          {/* Header */}
-          <div className="p-4 bg-gradient-to-r from-slate-50 to-white border-b border-slate-100 flex justify-between items-center shrink-0">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-indigo-100 text-indigo-600 rounded-lg">
-                <Sparkles size={18} />
-              </div>
-              <div>
-                <h3 className="font-bold text-slate-800">Panasset Assistant</h3>
-                <p className="text-xs text-slate-500 flex items-center gap-1">
-                   <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span>
-                   {settings.language === 'zh' ? "在线" : "Online"}
-                </p>
-              </div>
-            </div>
-            <button onClick={handleClearHistory} className="text-slate-400 hover:text-red-500 transition-colors p-1" title={settings.language==='zh'?"清除历史":"Clear History"}>
-                <Trash2 size={16} />
-            </button>
+    <div className={`fixed bottom-4 left-4 right-4 md:right-auto md:w-[400px] h-[600px] max-h-[80vh] ${desktopLeftClass} bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden z-50 animate-slide-up origin-bottom-left transition-all duration-300`}>
+      
+      {/* Header */}
+      <div className="p-4 bg-gradient-to-r from-indigo-600 to-blue-600 flex justify-between items-center shrink-0 text-white">
+        <div className="flex items-center gap-3">
+          <div className="p-1.5 bg-white/20 rounded-lg">
+            <Sparkles size={18} className="text-white" />
           </div>
-
-          {/* Messages Area */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50/50">
-            {messages.map((msg) => (
-              <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                <div className={`max-w-[85%] rounded-2xl p-3 text-sm shadow-sm ${
-                  msg.role === 'user' 
-                    ? 'bg-blue-600 text-white rounded-tr-none' 
-                    : 'bg-white text-slate-700 border border-slate-100 rounded-tl-none'
-                }`}>
-                  <MarkdownContent content={msg.content} />
-
-                  {/* Pending Action Card */}
-                  {msg.pendingAction && (
-                    <div className="mt-3 p-3 bg-indigo-50 border border-indigo-100 rounded-xl">
-                        <div className="flex items-start gap-2 mb-2">
-                            <AlertCircle size={16} className="text-indigo-600 mt-0.5 shrink-0"/>
-                            <div className="text-xs text-indigo-800 font-medium">
-                                {settings.language === 'zh' ? "需确认操作" : "Action Required"}
-                            </div>
-                        </div>
-                        <div className="text-sm font-bold text-slate-800 mb-3 pl-6">
-                            {msg.pendingAction.summary}
-                        </div>
-                        <div className="flex gap-2 pl-6">
-                            <button 
-                                onClick={() => handleConfirmAction(msg.id, msg.pendingAction!)}
-                                className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold py-2 rounded-lg flex items-center justify-center gap-1 transition-colors"
-                            >
-                                <Check size={14} /> {settings.language === 'zh' ? "确认" : "Confirm"}
-                            </button>
-                        </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))}
-            
-            {isTyping && (
-                <div className="flex justify-start">
-                    <div className="bg-white border border-slate-100 rounded-2xl rounded-tl-none p-3 shadow-sm flex items-center gap-1">
-                        <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce"></span>
-                        <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce delay-100"></span>
-                        <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce delay-200"></span>
-                    </div>
-                </div>
-            )}
-            
-            <div ref={messagesEndRef} />
-          </div>
-
-          {/* Input Area */}
-          <div className="p-3 bg-white border-t border-slate-100 flex items-center gap-2 shrink-0">
-            <VoiceInput 
-                mode="CHAT" 
-                onTextResult={(text) => setInput(text)} 
-            />
-            <input
-              type="text"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && !isTyping && handleSend()}
-              placeholder={settings.language === 'zh' ? "输入消息..." : "Type a message..."}
-              disabled={isTyping} 
-              className="flex-1 bg-slate-50 border border-slate-200 text-slate-800 text-sm rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
-            />
-            <button 
-                onClick={handleSend}
-                disabled={!input.trim() || isTyping}
-                className="p-3 bg-blue-600 text-white rounded-xl shadow-md hover:bg-blue-700 disabled:bg-slate-200 disabled:text-slate-400 transition-all active:scale-95 flex items-center justify-center"
-            >
-                <Send size={20} />
-            </button>
+          <div>
+            <h3 className="font-bold text-sm">Panasset Assistant</h3>
+            <p className="text-[10px] text-indigo-100 flex items-center gap-1 opacity-90">
+               <span className="w-1.5 h-1.5 bg-green-400 rounded-full"></span>
+               {settings.language === 'zh' ? "在线" : "Online"}
+            </p>
           </div>
         </div>
-      )}
-    </>
+        <div className="flex items-center gap-1">
+            <button onClick={handleClearHistory} className="text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-colors p-1.5" title={settings.language==='zh'?"清除历史":"Clear History"}>
+                <Trash2 size={16} />
+            </button>
+            <button onClick={onClose} className="text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-colors p-1.5">
+                <X size={20} />
+            </button>
+        </div>
+      </div>
+
+      {/* Messages Area */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-6 bg-slate-50">
+        {messages.map((msg) => (
+          <div key={msg.id} className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
+            
+            {/* Avatar */}
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
+                msg.role === 'user' ? 'bg-slate-200 text-slate-500' : 'bg-indigo-100 text-indigo-600'
+            }`}>
+                {msg.role === 'user' ? <User size={16} /> : <Sparkles size={16} />}
+            </div>
+
+            {/* Bubble */}
+            <div className={`max-w-[85%] rounded-2xl p-3.5 text-sm shadow-sm ${
+              msg.role === 'user' 
+                ? 'bg-slate-200 text-slate-800 rounded-tr-none' 
+                : 'bg-white text-slate-700 border border-slate-200 rounded-tl-none'
+            }`}>
+              <MarkdownContent content={msg.content} />
+
+              {/* Pending Action Card */}
+              {msg.pendingAction && (
+                <div className="mt-3 p-3 bg-indigo-50 border border-indigo-100 rounded-xl">
+                    <div className="flex items-start gap-2 mb-2">
+                        <AlertCircle size={16} className="text-indigo-600 mt-0.5 shrink-0"/>
+                        <div className="text-xs text-indigo-800 font-medium">
+                            {settings.language === 'zh' ? "需确认操作" : "Action Required"}
+                        </div>
+                    </div>
+                    <div className="text-sm font-bold text-slate-800 mb-3 pl-6">
+                        {msg.pendingAction.summary}
+                    </div>
+                    <div className="flex gap-2 pl-6">
+                        <button 
+                            onClick={() => handleConfirmAction(msg.id, msg.pendingAction!)}
+                            className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold py-2 rounded-lg flex items-center justify-center gap-1 transition-colors"
+                        >
+                            <Check size={14} /> {settings.language === 'zh' ? "确认" : "Confirm"}
+                        </button>
+                    </div>
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
+        
+        {isTyping && (
+            <div className="flex gap-3">
+                <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center shrink-0">
+                    <Sparkles size={16} />
+                </div>
+                <div className="bg-white border border-slate-200 rounded-2xl rounded-tl-none p-4 shadow-sm flex items-center gap-1.5 h-10">
+                    <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce"></span>
+                    <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce delay-100"></span>
+                    <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce delay-200"></span>
+                </div>
+            </div>
+        )}
+        
+        <div ref={messagesEndRef} />
+      </div>
+
+      {/* Input Area */}
+      <div className="p-3 bg-white border-t border-slate-200 flex items-center gap-2 shrink-0">
+        <VoiceInput 
+            mode="CHAT" 
+            onTextResult={(text) => setInput(text)} 
+        />
+        <input
+          type="text"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && !isTyping && handleSend()}
+          placeholder={settings.language === 'zh' ? "输入消息..." : "Type a message..."}
+          disabled={isTyping} 
+          className="flex-1 bg-slate-50 border border-slate-200 text-slate-800 text-sm rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50 transition-all"
+        />
+        <button 
+            onClick={handleSend}
+            disabled={!input.trim() || isTyping}
+            className="p-3 bg-indigo-600 text-white rounded-xl shadow-md hover:bg-indigo-700 disabled:bg-slate-200 disabled:text-slate-400 transition-all active:scale-95 flex items-center justify-center"
+        >
+            <Send size={20} />
+        </button>
+      </div>
+    </div>
   );
 };
