@@ -2,7 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { usePortfolio } from '../context/PortfolioContext';
 import { Card } from './ui/Card';
-import { ArrowUpRight, ArrowDownRight, Pencil, Trash2, History, ArrowUp, ArrowDown, ArrowRightLeft } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight, Pencil, Trash2, History, ArrowUp, ArrowDown, ArrowRightLeft, Wifi, PenTool } from 'lucide-react';
 import { Asset, AssetType, Currency } from '../types';
 import { convertValue } from '../services/marketData';
 
@@ -104,6 +104,10 @@ export const AssetList: React.FC<AssetListProps> = ({ onEdit, onTransaction }) =
   const isManualValuation = (type: AssetType) => 
     type === AssetType.REAL_ESTATE || type === AssetType.LIABILITY || type === AssetType.OTHER || type === AssetType.CASH;
 
+  // Strict manual check for icon display (Cash is technically market data for rates, but often treated as manual)
+  const isLiveMarketData = (type: AssetType) => 
+    type === AssetType.STOCK || type === AssetType.CRYPTO || type === AssetType.FUND;
+
   const getCurrencySymbol = (curr: Currency) => {
       switch(curr) {
           case Currency.USD: return '$';
@@ -182,6 +186,7 @@ export const AssetList: React.FC<AssetListProps> = ({ onEdit, onTransaction }) =
               const isLiability = asset.type === AssetType.LIABILITY;
               const isManual = isManualValuation(asset.type);
               const isUpdating = updatingId === asset.id;
+              const isLive = isLiveMarketData(asset.type);
 
               return (
                 <tr key={asset.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors group">
@@ -217,17 +222,30 @@ export const AssetList: React.FC<AssetListProps> = ({ onEdit, onTransaction }) =
                             />
                          </div>
                     ) : (
-                        <div className="font-medium text-slate-700 flex items-center gap-2">
-                            {symbol}{asset.currentPrice.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 6})}
-                            {onEdit && (
-                                <button 
-                                    onClick={() => handleUpdateClick(asset)}
-                                    className="opacity-0 group-hover:opacity-100 transition-opacity text-slate-300 hover:text-blue-600"
-                                    title="Update Price"
-                                >
-                                    <History size={14} />
-                                </button>
-                            )}
+                        <div className="flex flex-col">
+                            <div className="font-medium text-slate-700 flex items-center gap-2">
+                                {symbol}{asset.currentPrice.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 6})}
+                                {onEdit && (
+                                    <button 
+                                        onClick={() => handleUpdateClick(asset)}
+                                        className="opacity-0 group-hover:opacity-100 transition-opacity text-slate-300 hover:text-blue-600"
+                                        title={t('updatePrice')}
+                                    >
+                                        <History size={14} />
+                                    </button>
+                                )}
+                            </div>
+                            <div className="flex items-center gap-1 mt-1">
+                                {isLive ? (
+                                    <span className="text-[10px] text-green-600 flex items-center gap-1 bg-green-50 px-1.5 py-0.5 rounded" title={t('liveData')}>
+                                        <Wifi size={10} /> {t('live')}
+                                    </span>
+                                ) : (
+                                    <span className="text-[10px] text-slate-400 flex items-center gap-1 bg-slate-100 px-1.5 py-0.5 rounded" title={t('manualValuation')}>
+                                        <PenTool size={10} /> {t('manual')}
+                                    </span>
+                                )}
+                            </div>
                         </div>
                     )}
                   </td>
@@ -247,7 +265,7 @@ export const AssetList: React.FC<AssetListProps> = ({ onEdit, onTransaction }) =
                     {isManual && !pnl ? (
                         <div className="text-right">
                              <div className="text-xs font-medium text-slate-500 bg-slate-100 inline-block px-2 py-0.5 rounded-md">
-                                Last val: {formatLastUpdated(asset.lastUpdated)}
+                                {t('lastUpdated')}: {formatLastUpdated(asset.lastUpdated)}
                              </div>
                         </div>
                     ) : (
@@ -269,7 +287,7 @@ export const AssetList: React.FC<AssetListProps> = ({ onEdit, onTransaction }) =
                                 <button 
                                     onClick={() => onTransaction(asset)}
                                     className="p-1.5 text-slate-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-                                    title="Record Trade/Transaction"
+                                    title={t('recordTransaction')}
                                 >
                                     <ArrowRightLeft size={16} />
                                 </button>
@@ -278,7 +296,7 @@ export const AssetList: React.FC<AssetListProps> = ({ onEdit, onTransaction }) =
                                 <button 
                                     onClick={() => onEdit(asset)}
                                     className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                                    title="Edit Details"
+                                    title={t('editDetails')}
                                 >
                                     <Pencil size={16} />
                                 </button>
@@ -287,7 +305,7 @@ export const AssetList: React.FC<AssetListProps> = ({ onEdit, onTransaction }) =
                                 <button 
                                     onClick={() => handleDelete(asset.id, asset.symbol)}
                                     className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                    title="Delete"
+                                    title={t('delete')}
                                 >
                                     <Trash2 size={16} />
                                 </button>
@@ -301,7 +319,7 @@ export const AssetList: React.FC<AssetListProps> = ({ onEdit, onTransaction }) =
             {sortedAssets.length === 0 && (
                 <tr>
                     <td colSpan={onEdit ? 7 : 6} className="text-center py-8 text-slate-400 italic">
-                        No assets found. Click "Add New Asset" to start.
+                        {t('noAssets')}
                     </td>
                 </tr>
             )}

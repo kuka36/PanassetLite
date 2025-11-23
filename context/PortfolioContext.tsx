@@ -1,8 +1,14 @@
 
-
 import React, { createContext, useContext, useState, useEffect, ReactNode, useRef } from 'react';
 import { Asset, AssetType, Currency, Transaction, TransactionType, Language, AIProvider } from '../types';
-import { fetchExchangeRates, fetchCryptoPrices, fetchStockPrices, ExchangeRates } from '../services/marketData';
+import { 
+  fetchExchangeRates, 
+  fetchCryptoPrices, 
+  fetchStockPrices, 
+  ExchangeRates, 
+  clearAssetHistoryCache, 
+  clearAllHistoryCache 
+} from '../services/marketData';
 import { translations } from '../utils/i18n';
 
 interface AppSettings {
@@ -140,6 +146,7 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
   const deleteAsset = (id: string) => {
     setAssets(prev => prev.filter(asset => asset.id !== id));
     setTransactions(prev => prev.filter(t => t.assetId !== id));
+    clearAssetHistoryCache(id); // Clean up persistent storage for this asset history
   };
 
   const addTransaction = (tx: Omit<Transaction, 'id'>) => {
@@ -273,6 +280,7 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
     setTransactions([]);
     localStorage.removeItem('investflow_assets');
     localStorage.removeItem('investflow_transactions');
+    clearAllHistoryCache(); // Wipe all historical data caches
   };
 
   // Translation Helper

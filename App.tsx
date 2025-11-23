@@ -11,17 +11,26 @@ import { AddTransactionModal } from './components/AddTransactionModal';
 import { Analytics } from './components/Analytics';
 import { Settings } from './components/Settings';
 import { GeminiAdvisor } from './components/GeminiAdvisor';
-import { Plus } from 'lucide-react';
+import { Plus, RefreshCw } from 'lucide-react';
 import { Asset } from './types';
 
 const DashboardView: React.FC = () => {
-  const { t } = usePortfolio();
+  const { t, refreshPrices, isRefreshing } = usePortfolio();
+  
   return (
     <div className="space-y-8">
       <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold text-slate-800">{t('overview')}</h1>
         </div>
+        <button 
+          onClick={() => refreshPrices()}
+          disabled={isRefreshing}
+          className="px-4 py-2 bg-white hover:bg-slate-50 text-slate-600 border border-slate-200 font-medium rounded-xl shadow-sm transition-all flex items-center gap-2 self-start xl:self-auto"
+        >
+           <RefreshCw size={18} className={isRefreshing ? "animate-spin text-blue-600" : "text-slate-400"} />
+           {isRefreshing ? t('refreshing') : t('refreshPrices')}
+        </button>
       </div>
 
       <GeminiAdvisor />

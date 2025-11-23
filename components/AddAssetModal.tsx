@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect } from 'react';
 import { Asset, AssetType, Currency } from '../types';
 import { usePortfolio } from '../context/PortfolioContext';
@@ -181,7 +180,8 @@ export const AddAssetModal: React.FC<Props> = ({ isOpen, onClose, initialAsset }
                                 <input 
                                     type="text" 
                                     placeholder={type === AssetType.STOCK ? "AAPL" : (type === AssetType.CASH ? "CNY" : "BTC")}
-                                    value={symbol} onChange={e => setSymbol(e.target.value)}
+                                    value={symbol} 
+                                    onChange={e => setSymbol(e.target.value.toUpperCase())}
                                     className="w-full p-2.5 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none font-medium"
                                     autoFocus
                                     required

@@ -27,6 +27,8 @@ export const translations: Record<Language, Record<string, string>> = {
     hidden: "Hidden",
     chartHidden: "Chart Hidden in Privacy Mode",
     changeCurrency: "Change Base Currency",
+    refreshPrices: "Refresh Prices",
+    refreshing: "Refreshing...",
 
     // Assets
     assetsManagement: "Assets Management",
@@ -42,6 +44,14 @@ export const translations: Record<Language, Record<string, string>> = {
     value: "Value",
     statusPnL: "Status / P&L",
     confirmDelete: "Are you sure you want to delete {symbol}? This action cannot be undone.",
+    updatePrice: "Quick Update Price",
+    delete: "Delete",
+    editDetails: "Edit Details",
+    live: "Live",
+    manual: "Manual",
+    liveData: "Data fetched automatically from API",
+    manualValuation: "Valuation set manually",
+    lastUpdated: "Last Updated",
     
     // Add/Edit Asset
     selectAssetType: "Select Asset Type",
@@ -195,6 +205,8 @@ export const translations: Record<Language, Record<string, string>> = {
     hidden: "已隐藏",
     chartHidden: "隐私模式下图表已隐藏",
     changeCurrency: "切换基准货币",
+    refreshPrices: "刷新价格",
+    refreshing: "刷新中...",
 
     assetsManagement: "资产管理",
     assetsSubtitle: "管理您的持仓并记录交易。",
@@ -209,6 +221,14 @@ export const translations: Record<Language, Record<string, string>> = {
     value: "市值",
     statusPnL: "状态 / 盈亏",
     confirmDelete: "您确定要删除 {symbol} 吗？此操作无法撤销。",
+    updatePrice: "更新价格",
+    delete: "删除",
+    editDetails: "编辑详情",
+    live: "联网",
+    manual: "手动",
+    liveData: "价格通过 API 自动获取",
+    manualValuation: "手动设置的估值",
+    lastUpdated: "最后更新",
 
     selectAssetType: "选择资产类型",
     whatKind: "您想追踪哪类资产？",

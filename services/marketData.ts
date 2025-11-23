@@ -271,6 +271,32 @@ export const fetchAssetHistory = async (asset: Asset, apiKey?: string): Promise<
   }
 };
 
+// --- Cache Cleanup Helpers ---
+
+export const clearAssetHistoryCache = (assetId: string) => {
+  try {
+    const cacheKey = `${CACHE_HISTORY_KEY}_${assetId}`;
+    localStorage.removeItem(cacheKey);
+  } catch (e) {
+    console.warn("Failed to clear asset history cache", e);
+  }
+};
+
+export const clearAllHistoryCache = () => {
+  try {
+     const keysToRemove: string[] = [];
+     for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith(CACHE_HISTORY_KEY)) {
+           keysToRemove.push(key);
+        }
+     }
+     keysToRemove.forEach(key => localStorage.removeItem(key));
+  } catch (e) {
+     console.warn("Failed to clear all history cache", e);
+  }
+};
+
 export const convertValue = (
   value: number, 
   fromCurrency: Currency, 

@@ -93,7 +93,7 @@ export const Dashboard: React.FC = () => {
       {/* Top Metrics Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* 1. Net Worth */}
-        <div className="bg-gradient-to-br from-blue-600 to-blue-700 rounded-2xl p-6 text-white shadow-lg relative overflow-hidden">
+        <div className="bg-gradient-to-br from-blue-600 to-blue-700 rounded-2xl p-6 text-white shadow-lg relative overflow-hidden group">
             {settings.isPrivacyMode && <EyeOff className="absolute top-6 right-6 text-blue-400 opacity-50" size={24} />}
             <div className="flex items-center justify-between mb-4">
                 <span className="text-blue-100 font-medium">{t('netWorth')}</span>
@@ -105,7 +105,9 @@ export const Dashboard: React.FC = () => {
                   <CurrencyIcon size={20} />
                 </Link>
             </div>
-            <div className="text-3xl font-bold mb-1">{formatCurrency(summary.totalNetWorth)}</div>
+            <Link to="/assets" className="block cursor-pointer hover:opacity-90 transition-opacity">
+                <div className="text-3xl font-bold mb-1">{formatCurrency(summary.totalNetWorth)}</div>
+            </Link>
             <div className="text-sm text-blue-100 flex items-center gap-2">
                 <span className={summary.totalPnL >= 0 ? "text-green-300" : "text-red-300"}>
                     {summary.totalPnL >= 0 ? '+' : ''}{formatPercent(summary.totalPnLPercent)}
@@ -119,7 +121,9 @@ export const Dashboard: React.FC = () => {
             <span className="text-slate-500 font-medium mb-2 flex items-center gap-2">
                 <Wallet size={16} className="text-blue-500"/> {t('totalAssets')}
             </span>
-            <div className="text-2xl font-bold text-slate-800 mb-1">{formatCurrency(summary.totalAssetsValue)}</div>
+            <Link to="/assets" className="block cursor-pointer hover:opacity-75 transition-opacity">
+                <div className="text-2xl font-bold text-slate-800 mb-1">{formatCurrency(summary.totalAssetsValue)}</div>
+            </Link>
             <div className="text-xs text-slate-400">
                 {t('grossValue')}
             </div>
