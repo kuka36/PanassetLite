@@ -1,11 +1,15 @@
 
 
 
+
+
+
+
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Send, Sparkles, Check, AlertCircle, Trash2, User, Keyboard, AudioLines, Image as ImageIcon } from 'lucide-react';
 import { usePortfolio } from '../context/PortfolioContext';
 import { AgentService } from '../services/agentService';
-import { ChatMessage, PendingAction, TransactionType, AssetType } from '../types';
+import { ChatMessage, PendingAction, TransactionType, AssetType, Currency } from '../types';
 import ReactMarkdown from 'react-markdown';
 import { VoiceInput } from './ui/VoiceInput';
 
@@ -135,7 +139,8 @@ export const AIChatAssistant: React.FC<AIChatAssistantProps> = ({ isOpen, onClos
             name: data.name || data.symbol || 'Unknown',
             type: data.type as AssetType || AssetType.STOCK,
             currentPrice: data.price || 0,
-            currency: settings.baseCurrency,
+            // Priority: Agent provided currency > Base Currency
+            currency: (data.currency as Currency) || settings.baseCurrency,
             lastUpdated: Date.now(),
             dateAcquired: new Date().toISOString().split('T')[0]
           };
@@ -144,12 +149,38 @@ export const AIChatAssistant: React.FC<AIChatAssistantProps> = ({ isOpen, onClos
       else if (type === 'UPDATE_ASSET' && targetId) {
           const existing = assets.find(a => a.id === targetId);
           if (existing) {
+              // 1. Update Metadata (Name, Symbol, Type, Current Price)
               editAsset({
                   ...existing,
                   name: data.name ?? existing.name,
                   symbol: data.symbol ?? existing.symbol,
-                  type: (data.type as AssetType) ?? existing.type
+                  type: (data.type as AssetType) ?? existing.type,
+                  currentPrice: data.price !== undefined ? data.price : existing.currentPrice,
+                  currency: (data.currency as Currency) ?? existing.currency
               });
+
+              // 2. Handle Quantity Update via Balance Adjustment
+              // Because we use Event Sourcing, we cannot just set 'quantity'. 
+              // We must create a transaction that bridges the gap.
+              if (data.quantity !== undefined && data.quantity !== null) {
+                  const newQty = Number(data.quantity);
+                  const currentQty = existing.quantity;
+                  const delta = newQty - currentQty;
+                  
+                  // Only add transaction if there is a meaningful difference
+                  if (Math.abs(delta) > 0.000001) {
+                       addTransaction({
+                          assetId: existing.id,
+                          type: TransactionType.BALANCE_ADJUSTMENT,
+                          date: new Date().toISOString(),
+                          quantityChange: delta,
+                          pricePerUnit: existing.currentPrice, // Keep valuation consistent
+                          fee: 0,
+                          total: delta * existing.currentPrice,
+                          note: 'AI Assistant Balance Correction'
+                       });
+                  }
+              }
           }
       }
       else if (type === 'DELETE_ASSET' && targetId) {
@@ -169,7 +200,8 @@ export const AIChatAssistant: React.FC<AIChatAssistantProps> = ({ isOpen, onClos
                 name: data.symbol,
                 type: AssetType.STOCK, 
                 currentPrice: data.price || 0,
-                currency: settings.baseCurrency,
+                // If Agent provides currency for new asset, use it, else default
+                currency: (data.currency as Currency) || settings.baseCurrency,
                 lastUpdated: Date.now(),
                 dateAcquired: new Date().toISOString().split('T')[0]
              };

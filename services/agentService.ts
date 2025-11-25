@@ -1,6 +1,9 @@
 
 
 
+
+
+
 import { Content, FunctionDeclaration, GoogleGenAI, Type, Part } from "@google/genai";
 import { Asset, ChatMessage, Currency, PendingAction, TransactionType, AssetType, Language, Transaction, ActionType } from "../types";
 
@@ -35,7 +38,8 @@ const PROPOSE_ASSET_MUTATION: FunctionDeclaration = {
       initialQuantity: { type: Type.NUMBER, description: "Initial quantity to hold immediately (for ADD only)." },
       price: { type: Type.NUMBER, description: "Price or Cost" },
       assetType: { type: Type.STRING, enum: ["STOCK", "CRYPTO", "CASH", "REAL_ESTATE", "LIABILITY", "FUND"], description: "Asset Type (for ADD)" },
-      name: { type: Type.STRING, description: "Asset Name" }
+      name: { type: Type.STRING, description: "Asset Name" },
+      currency: { type: Type.STRING, enum: ["USD", "CNY", "HKD"], description: "Currency of the asset. INFER based on symbol (e.g. 000217 -> CNY, AAPL -> USD, 00700 -> HKD)." }
     },
     required: ["mutationType"]
   }
@@ -112,6 +116,13 @@ export class AgentService {
            - ALWAYS check \`get_transactions\` before updating/deleting a transaction to get the correct \`transactionId\`.
         2. **WRITE**: You can propose changes using \`propose_asset_mutation\` (for holdings) or \`propose_transaction_mutation\` (for trades).
         
+        **Important Rules for Asset Creation:**
+        - **Currency Inference**: When adding a new asset, you MUST infer the \`currency\` based on the symbol or name.
+          - Example: "600519", "000217", "Moutai" -> **CNY**
+          - Example: "00700", "Tencent" -> **HKD**
+          - Example: "AAPL", "NVDA", "BTC" -> **USD**
+        - If the user provides a raw code like "000217", identify the market (Shenzhen/Shanghai) and use **CNY**.
+
         **Behavior:**
         - Be concise.
         - If the user says "I bought 10 AAPL" and AAPL is NOT in \`get_assets\`, use \`propose_asset_mutation\` with \`initialQuantity=10\`.
@@ -203,7 +214,14 @@ export class AgentService {
                     'DELETE': 'DELETE_ASSET'
                 };
                 const actionType = typeMap[args.mutationType];
-                const summary = `${args.mutationType} Asset: ${args.symbol || args.assetId}`;
+                
+                // Attempt to resolve asset name for better summary
+                let displaySymbol = args.symbol;
+                if (!displaySymbol && args.assetId) {
+                    const existing = assets.find(a => a.id === args.assetId);
+                    if (existing) displaySymbol = existing.symbol;
+                }
+                const summary = `${args.mutationType} Asset: ${displaySymbol || args.assetId || 'Unknown'}`;
 
                 return {
                     text: language === 'zh' ? `建议操作: **${args.mutationType} 资产**。请确认。` : `Proposed Action: **${args.mutationType} Asset**. Please confirm.`,
@@ -215,7 +233,8 @@ export class AgentService {
                             name: args.name,
                             quantity: args.initialQuantity, // Maps initialQuantity to quantity
                             price: args.price,
-                            type: args.assetType as AssetType
+                            type: args.assetType as AssetType,
+                            currency: args.currency
                         },
                         summary
                     }

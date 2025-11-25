@@ -125,6 +125,7 @@ export interface PendingAction {
     type?: AssetType | TransactionType;
     date?: string;
     assetId?: string; // For Transactions
+    currency?: Currency | string; // ADDED: Allow agent to specify currency
   };
   summary: string; // Human readable summary
 }
