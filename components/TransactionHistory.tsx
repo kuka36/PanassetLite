@@ -33,8 +33,8 @@ export const TransactionHistory: React.FC = () => {
         if (endDate && t.date > endDate) return false;
         return true;
       })
-      // Sort by ID descending as requested (deterministic for inserted records)
-      .sort((a, b) => b.id.localeCompare(a.id));
+      // Sort by Date Time Descending (Newest first)
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [transactions, selectedAssetId, filterType, startDate, endDate]);
 
   const getTypeStyle = (type: TransactionType) => {
@@ -92,7 +92,7 @@ export const TransactionHistory: React.FC = () => {
              t.date,
              t.type,
              info.symbol,
-             Math.abs(t.quantityChange || 0),
+             t.quantityChange,
              t.pricePerUnit,
              t.fee,
              t.total
@@ -209,8 +209,19 @@ export const TransactionHistory: React.FC = () => {
                     {filteredTransactions.map(tx => {
                         const assetInfo = getAssetInfo(tx.assetId);
                         const currencySymbol = getCurrencySymbol(assetInfo.currency);
-                        const quantity = Math.abs(tx.quantityChange || 0);
                         
+                        // Quantity Logic
+                        const isAdjustment = tx.type === TransactionType.BALANCE_ADJUSTMENT;
+                        const qtyChange = tx.quantityChange || 0;
+                        const displayQty = isAdjustment 
+                            ? (qtyChange > 0 ? `+${qtyChange.toLocaleString()}` : qtyChange.toLocaleString())
+                            : Math.abs(qtyChange).toLocaleString();
+                        
+                        // Color logic for Adjustment
+                        const qtyColorClass = isAdjustment 
+                            ? (qtyChange >= 0 ? 'text-green-600 font-bold' : 'text-red-600 font-bold') 
+                            : 'text-slate-700';
+
                         return (
                             <tr key={tx.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/50 transition-colors">
                                 <td className="py-4 pl-2 text-slate-600 font-mono text-xs whitespace-nowrap">
@@ -226,8 +237,8 @@ export const TransactionHistory: React.FC = () => {
                                         {t(`tx_${tx.type}`) || tx.type}
                                     </span>
                                 </td>
-                                <td className="py-4 text-right font-medium text-slate-700">
-                                    {quantity > 0 ? quantity.toLocaleString() : '-'}
+                                <td className={`py-4 text-right font-medium ${qtyColorClass}`}>
+                                    {displayQty !== '0' ? displayQty : '-'}
                                 </td>
                                 <td className="py-4 text-right text-slate-600 whitespace-nowrap">
                                     {currencySymbol}{tx.pricePerUnit.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}

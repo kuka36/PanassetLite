@@ -1,4 +1,6 @@
 
+
+
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Send, Sparkles, Check, AlertCircle, Trash2, User, Keyboard, AudioLines, Image as ImageIcon } from 'lucide-react';
 import { usePortfolio } from '../context/PortfolioContext';
@@ -315,6 +317,21 @@ export const AIChatAssistant: React.FC<AIChatAssistantProps> = ({ isOpen, onClos
                     <div className="text-sm font-bold text-slate-800 mb-3 pl-6">
                         {msg.pendingAction.summary}
                     </div>
+
+                    {/* Data Details View */}
+                    <div className="pl-6 mb-3">
+                        <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs bg-white/50 p-2 rounded-lg border border-indigo-100">
+                           {Object.entries(msg.pendingAction.data).map(([k, v]) => (
+                               v !== undefined && v !== null && k !== 'assetId' && k !== 'targetId' ? (
+                                   <React.Fragment key={k}>
+                                       <span className="text-slate-500 font-medium capitalize">{k}:</span>
+                                       <span className="text-slate-800 text-right truncate font-mono">{v.toString()}</span>
+                                   </React.Fragment>
+                               ) : null
+                           ))}
+                        </div>
+                    </div>
+
                     <div className="flex gap-2 pl-6">
                         <button 
                             onClick={() => handleConfirmAction(msg.id, msg.pendingAction!)}

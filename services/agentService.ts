@@ -25,14 +25,14 @@ const GET_TRANSACTIONS_TOOL: FunctionDeclaration = {
 
 const PROPOSE_ASSET_MUTATION: FunctionDeclaration = {
   name: "propose_asset_mutation",
-  description: "Propose to Add, Update, or Delete an Asset Metadata (Holding Info). For quantity changes, propose a TRANSACTION instead.",
+  description: "Propose to Add, Update, or Delete an Asset Metadata (Holding Info). For 'ADD', providing 'initialQuantity' will automatically create the initial buy transaction.",
   parameters: {
     type: Type.OBJECT,
     properties: {
       mutationType: { type: Type.STRING, enum: ["ADD", "UPDATE", "DELETE"], description: "Type of change" },
       symbol: { type: Type.STRING, description: "Asset Symbol (Required for ADD)" },
       assetId: { type: Type.STRING, description: "Asset ID (Required for UPDATE/DELETE). Use get_assets to find ID." },
-      initialQuantity: { type: Type.NUMBER, description: "Initial quantity (for ADD only)" },
+      initialQuantity: { type: Type.NUMBER, description: "Initial quantity to hold immediately (for ADD only)." },
       price: { type: Type.NUMBER, description: "Price or Cost" },
       assetType: { type: Type.STRING, enum: ["STOCK", "CRYPTO", "CASH", "REAL_ESTATE", "LIABILITY", "FUND"], description: "Asset Type (for ADD)" },
       name: { type: Type.STRING, description: "Asset Name" }
@@ -43,7 +43,7 @@ const PROPOSE_ASSET_MUTATION: FunctionDeclaration = {
 
 const PROPOSE_TRANSACTION_MUTATION: FunctionDeclaration = {
   name: "propose_transaction_mutation",
-  description: "Propose to Add (Record), Update, or Delete a Transaction. Use this for BUY, SELL, DEPOSIT, etc.",
+  description: "Propose to Add (Record), Update, or Delete a Transaction. Use this for adding trades to EXISTING assets.",
   parameters: {
     type: Type.OBJECT,
     properties: {
@@ -114,7 +114,8 @@ export class AgentService {
         
         **Behavior:**
         - Be concise.
-        - If the user says "I bought 10 AAPL", first check \`get_assets\` to see if AAPL exists. If yes, use its ID for \`propose_transaction_mutation\`. If no, you might need to Add Asset first.
+        - If the user says "I bought 10 AAPL" and AAPL is NOT in \`get_assets\`, use \`propose_asset_mutation\` with \`initialQuantity=10\`.
+        - If the user says "I bought 10 AAPL" and AAPL IS in \`get_assets\`, use \`propose_transaction_mutation\` with the existing \`assetId\`.
         - Use full ISO date strings if time is relevant, otherwise YYYY-MM-DD is acceptable (app handles both).
       `;
 
@@ -212,7 +213,7 @@ export class AgentService {
                         data: {
                             symbol: args.symbol,
                             name: args.name,
-                            quantity: args.initialQuantity, // Note mapped from initialQuantity
+                            quantity: args.initialQuantity, // Maps initialQuantity to quantity
                             price: args.price,
                             type: args.assetType as AssetType
                         },
