@@ -12,10 +12,11 @@ const CACHE_STOCKS_KEY = 'investflow_stock_prices';
 const CACHE_HISTORY_KEY = 'investflow_asset_history';
 
 // Cache Duration (ms)
+// OPTIMIZATION: Increased TTL to reduce API calls
 const RATES_TTL = 24 * 3600 * 1000; 
 const CRYPTO_TTL = 10 * 60 * 1000; 
-const STOCK_TTL = 4 * 60 * 60 * 1000;
-const HISTORY_TTL = 12 * 3600 * 1000; // 12 Hours for history
+const STOCK_TTL = 45 * 60 * 1000; // 45 Minutes (Strict caching for Alpha Vantage)
+const HISTORY_TTL = 24 * 3600 * 1000; // 24 Hours (Daily history doesn't change often)
 
 // Simple Crypto Mapping
 const CRYPTO_MAP: Record<string, string> = {
@@ -148,15 +149,22 @@ export const fetchStockPrices = async (assets: Asset[], apiKey?: string): Promis
 
   for (const asset of stockAssets) {
     const cachedItem = priceMap[asset.id];
+    // Strict Cache Check: If data exists and is younger than TTL, skip fetch.
     if (!cachedItem || !cachedItem.lastUpdated || (now - cachedItem.lastUpdated > STOCK_TTL)) {
       assetsToFetch.push(asset);
     }
   }
 
-  const limitedQueue = assetsToFetch.slice(0, 3);
+  // If we have nothing to fetch, return cache immediately
+  if (assetsToFetch.length === 0) {
+      return priceMap;
+  }
+
+  // Cap queue to avoid endless fetching if user has 50 stocks
+  const limitedQueue = assetsToFetch.slice(0, 5); 
   let dataUpdated = false;
 
-  if (limitedQueue.length > 0 && !apiKey) {
+  if (!apiKey) {
     console.warn("Alpha Vantage API Key is missing. Skipping stock price fetch.");
     return priceMap;
   }
@@ -173,7 +181,9 @@ export const fetchStockPrices = async (assets: Asset[], apiKey?: string): Promis
       const res = await fetch(`https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${querySymbol}&apikey=${apiKey}`);
       const data = await res.json();
 
+      // Circuit Breaker: If API Limit reached, stop immediately to save quota
       if (data['Note'] || data['Information']) {
+          console.warn("Alpha Vantage Rate Limit Reached. Stopping fetch queue.");
           break; 
       }
 
@@ -189,7 +199,8 @@ export const fetchStockPrices = async (assets: Asset[], apiKey?: string): Promis
         dataUpdated = true;
       }
       
-      if (limitedQueue.length > 1) await delay(12000); 
+      // OPTIMIZATION: Increased delay to 15s (4 calls/min) to be super safe for Free Tier
+      if (limitedQueue.length > 1) await delay(15000); 
 
     } catch (e) {
       // console.error(`Failed to fetch stock ${asset.symbol}`, e);
@@ -209,6 +220,8 @@ export const fetchAssetHistory = async (asset: Asset, apiKey?: string): Promise<
   // 1. Check Cache
   const cacheKey = `${CACHE_HISTORY_KEY}_${asset.id}`;
   const { data: cachedHistory, timestamp } = getFromCache<HistoricalDataPoint[]>(cacheKey);
+  
+  // Strict 24 Hour TTL for History
   const isStale = (Date.now() - timestamp) > HISTORY_TTL;
 
   if (cachedHistory && cachedHistory.length > 0 && !isStale) {
@@ -240,6 +253,12 @@ export const fetchAssetHistory = async (asset: Asset, apiKey?: string): Promise<
        const res = await fetch(`https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=${querySymbol}&apikey=${apiKey}`);
        const data = await res.json();
        
+       // Circuit Breaker for History
+       if (data['Note'] || data['Information']) {
+          console.warn("Alpha Vantage Rate Limit Reached (History). Using Cache/Fallback.");
+          return cachedHistory || [];
+       }
+
        if (data['Time Series (Daily)']) {
          const series = data['Time Series (Daily)'];
          history = Object.keys(series).map(date => ({
@@ -254,8 +273,10 @@ export const fetchAssetHistory = async (asset: Asset, apiKey?: string): Promise<
       saveToCache(cacheKey, history);
       return history;
     } else {
-       // If fetch fails or not supported (Cash/Manual), return a single point (Today) + Maybe one year ago same price
-       // This ensures the chart has *some* line for manual assets
+       // Return existing cache even if stale if fetch failed
+       if (cachedHistory) return cachedHistory;
+
+       // Fallback for Manual Assets
        const today = new Date().toISOString().split('T')[0];
        const lastYear = new Date();
        lastYear.setFullYear(lastYear.getFullYear() - 1);

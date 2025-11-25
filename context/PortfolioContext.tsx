@@ -1,5 +1,4 @@
 
-
 import React, { createContext, useContext, useState, useEffect, ReactNode, useRef } from 'react';
 import { Asset, AssetType, Currency, Transaction, TransactionType, Language, AIProvider } from '../types';
 import { 
@@ -116,13 +115,36 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
     localStorage.setItem('investflow_settings', JSON.stringify(settings));
   }, [settings]);
 
-  // Initial Data Fetch
+  // Initial Data Fetch Logic (Optimized)
   useEffect(() => {
-    refreshPrices();
-    // Auto-refresh every 10 minutes
+    const initFetch = async () => {
+       // 1. Always fetch rates as they are cheap (1 call)
+       try {
+         const rates = await fetchExchangeRates();
+         setExchangeRates(rates);
+       } catch(e) {}
+
+       // 2. SMART REFRESH: Only refresh prices if we have assets AND they seem stale (or no prices yet)
+       // This prevents "Refresh on Load" killing the API quota
+       const needsRefresh = assets.length > 0 && assets.some(a => {
+           // If asset is Market type but lastUpdated is old (> 60 mins) or 0
+           const isMarket = a.type === AssetType.STOCK || a.type === AssetType.CRYPTO || a.type === AssetType.FUND;
+           if (!isMarket) return false;
+           return !a.lastUpdated || (Date.now() - a.lastUpdated > 60 * 60 * 1000);
+       });
+
+       if (needsRefresh) {
+           refreshPrices();
+       }
+    };
+    
+    initFetch();
+
+    // OPTIMIZATION: Increased auto-refresh interval from 10 mins to 60 mins
     const intervalId = setInterval(() => {
       refreshPrices();
-    }, 600000);
+    }, 3600000); // 1 Hour
+
     return () => clearInterval(intervalId);
   }, []);
 
@@ -135,6 +157,7 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
     setAssets(updatedList);
 
     // 2. Trigger immediate price fetch for the new list to ensure fresh data
+    // The service layer handles caching, so this is safe to call, but we focus on the new asset
     refreshPrices(updatedList);
   };
 
@@ -218,11 +241,11 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
     const targetAssets = assetsOverride || assets;
 
     try {
-      // 1. Fetch Rates
+      // 1. Fetch Rates (Cheap)
       const rates = await fetchExchangeRates();
       setExchangeRates(rates);
 
-      // 2. Fetch Asset Prices (Parallel)
+      // 2. Fetch Asset Prices (Service handles strict caching/throttling)
       const [cryptoPrices, stockData] = await Promise.all([
         fetchCryptoPrices(targetAssets),
         fetchStockPrices(targetAssets, settingsRef.current.alphaVantageApiKey)
@@ -232,8 +255,10 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
       setAssets(prev => prev.map(asset => {
         let newPrice = asset.currentPrice;
         let newCurrency = asset.currency;
-        let timestamp = asset.lastUpdated || Date.now();
+        let timestamp = asset.lastUpdated; // Keep existing timestamp by default
 
+        // Note: We only update timestamp if we actually got a *new* value or confirmed from cache
+        
         if (asset.type === AssetType.CRYPTO && cryptoPrices[asset.id]) {
           newPrice = cryptoPrices[asset.id];
           newCurrency = Currency.USD; 
@@ -241,7 +266,7 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
         } else if ((asset.type === AssetType.STOCK || asset.type === AssetType.FUND) && stockData[asset.id]) {
           newPrice = stockData[asset.id].price;
           newCurrency = stockData[asset.id].currency;
-          timestamp = Date.now();
+          timestamp = stockData[asset.id].lastUpdated || Date.now();
         } else if (asset.type === AssetType.CASH) {
             // Smart Cash: Fetch exchange rate against USD automatically
             const rate = rates[asset.symbol];

@@ -94,6 +94,14 @@ export const Settings: React.FC = () => {
       <Card title={t('apiConfiguration')}>
         <div className="space-y-6">
             
+            {/* Global Security Note */}
+            <div className="bg-green-50/50 border border-green-100 rounded-lg p-3 flex items-start gap-3">
+                <Shield size={16} className="text-green-600 mt-0.5 shrink-0" />
+                <span className="text-sm text-green-800 leading-relaxed">
+                    {t('apiKeysSecurity')}
+                </span>
+            </div>
+
             {/* AI Assistant Toggle */}
             <div className={`flex items-center justify-between p-4 rounded-xl border transition-colors ${!settings.geminiApiKey ? 'bg-slate-50 border-slate-200' : 'bg-indigo-50/50 border-indigo-100'}`}>
                 <div className="flex items-center gap-3">
@@ -425,7 +433,7 @@ export const Settings: React.FC = () => {
       </Card>
 
       <div className="text-center text-slate-400 text-sm pt-4">
-          PanassetLite (盘资产·轻) v1.1.0 • Local Data Storage
+          {settings.language === 'zh' ? "盘资产·轻 v1.1.0 • 本地数据存储" : "PanassetLite v1.1.0 • Local Data Storage"}
       </div>
     </div>
   );

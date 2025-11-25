@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { Mic, MicOff, Loader2 } from 'lucide-react';
 import { usePortfolio } from '../../context/PortfolioContext';
@@ -88,7 +89,10 @@ export const VoiceInput: React.FC<VoiceInputProps> = ({ onResult, onTextResult, 
       transcriptBuffer.current = ''; 
       setError(null);
       
-      if (!('webkitSpeechRecognition' in window)) {
+      // Better compatibility check for different browsers (Standard vs WebKit)
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      
+      if (!SpeechRecognition) {
         setError(t('voiceNoSupport'));
         return;
       }
@@ -103,7 +107,6 @@ export const VoiceInput: React.FC<VoiceInputProps> = ({ onResult, onTextResult, 
 
       setIsListening(true);
 
-      const SpeechRecognition = (window as any).webkitSpeechRecognition;
       const recognition = new SpeechRecognition();
       recognitionRef.current = recognition; // Set ref synchronously
       recognition.continuous = true;
@@ -118,6 +121,14 @@ export const VoiceInput: React.FC<VoiceInputProps> = ({ onResult, onTextResult, 
       };
 
       recognition.onerror = (event: any) => {
+          if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+              console.error("Speech permission denied", event.error);
+              setError(t('voicePermissionDenied'));
+              setIsListening(false);
+              recognitionRef.current = null;
+              return;
+          }
+
           if (event.error !== 'no-speech') {
               console.error("Speech error", event.error);
               setError(t('voiceError'));

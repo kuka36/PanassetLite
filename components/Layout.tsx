@@ -1,9 +1,10 @@
 
 import React, { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, PieChart, Wallet, Settings, Menu, X, History, MessageSquarePlus, ChevronLeft, ChevronRight, BookOpen, Sparkles } from 'lucide-react';
+import { LayoutDashboard, PieChart, Wallet, Settings, Menu, X, History, ChevronLeft, ChevronRight, BookOpen, Sparkles } from 'lucide-react';
 import { usePortfolio } from '../context/PortfolioContext';
 import { AIChatAssistant } from './AIChatAssistant';
+import { Logo } from './ui/Logo';
 
 export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { t, settings } = usePortfolio();
@@ -23,6 +24,9 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
 
   // Logic: AI Assistant is only enabled if the toggle is ON AND the Gemini Key is present.
   const isAiEnabled = settings.isAiAssistantEnabled && !!settings.geminiApiKey;
+
+  // Subtitle Name (Localized)
+  const subName = settings.language === 'zh' ? "盘资产·轻" : "Personal Asset Manager";
 
   const NavItem = ({ to, icon, label, onClick }: { to: string, icon: React.ReactNode, label: string, onClick?: () => void }) => (
     <NavLink 
@@ -47,20 +51,22 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
         className={`hidden md:flex flex-col bg-white border-r border-slate-100 h-screen fixed left-0 top-0 z-20 transition-all duration-300 ease-in-out ${isCollapsed ? 'w-20' : 'w-64'}`}
       >
         {/* Header / Logo */}
-        <div className={`p-6 flex items-center gap-2 ${isCollapsed ? 'justify-center px-4' : ''}`}>
-            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center shrink-0 transition-transform hover:scale-105">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+        <div className={`p-6 flex flex-col justify-center ${isCollapsed ? 'items-center px-0' : ''}`}>
+            {/* Logo Component */}
+            <div className={`transition-all duration-300 ${isCollapsed ? 'scale-90' : ''}`}>
+                <Logo collapsed={isCollapsed} />
             </div>
+            
+            {/* Subtitle (Only when expanded) */}
             {!isCollapsed && (
-              <div className="flex flex-col overflow-hidden whitespace-nowrap animate-fade-in">
-                  <span className="text-lg font-bold text-slate-800 tracking-tight leading-tight">PanassetLite</span>
-                  <span className="text-[10px] text-slate-400 font-medium">盘资产·轻</span>
+              <div className="mt-2 pl-1 animate-fade-in">
+                  <span className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">{subName}</span>
               </div>
             )}
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 px-3 space-y-2 mt-4 overflow-y-auto overflow-x-hidden">
+        <nav className="flex-1 px-3 space-y-2 mt-2 overflow-y-auto overflow-x-hidden">
           <NavItem to="/" icon={<LayoutDashboard size={20}/>} label={t('dashboard')} />
           <NavItem to="/assets" icon={<Wallet size={20}/>} label={t('assets')} />
           <NavItem to="/history" icon={<History size={20}/>} label={t('history')} />
@@ -105,18 +111,9 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                     className="flex items-center gap-3 text-sm font-medium text-slate-600 hover:text-green-600 transition-colors mb-2 group px-2"
                 >
                     <BookOpen size={18} className="text-slate-400 group-hover:text-green-500 shrink-0"/>
-                    <span className="whitespace-nowrap">{t('userGuide')}</span>
+                    <span className="whitespace-nowrap">{t('about')}</span>
                 </a>
 
-                <a 
-                    href="https://github.com/kuka36/PanassetLite/issues"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex items-center gap-3 text-sm font-medium text-slate-600 hover:text-blue-600 transition-colors mb-2 group px-2"
-                >
-                    <MessageSquarePlus size={18} className="text-slate-400 group-hover:text-blue-500 shrink-0"/>
-                    <span className="whitespace-nowrap">{t('haveFeedback')}</span>
-                </a>
                 <div className="text-xs text-slate-400 px-2 leading-tight">
                     {t('disclaimer')}
                 </div>
@@ -128,18 +125,9 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                     target="_blank"
                     rel="noreferrer"
                     className="flex justify-center text-slate-400 hover:text-green-600 transition-colors"
-                    title={t('userGuide')}
+                    title={t('about')}
                 >
                     <BookOpen size={20} />
-                </a>
-                 <a 
-                    href="https://github.com/kuka36/PanassetLite/issues"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex justify-center text-slate-400 hover:text-blue-600 transition-colors"
-                    title={t('haveFeedback')}
-                >
-                    <MessageSquarePlus size={20} />
                 </a>
                </div>
             )}
@@ -148,11 +136,8 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
 
       {/* Mobile Header */}
       <div className="md:hidden fixed top-0 left-0 right-0 bg-white z-30 px-4 py-3 border-b border-slate-100 flex justify-between items-center shadow-sm">
-        <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold">PL</span>
-            </div>
-            <span className="text-lg font-bold text-slate-800">PanassetLite</span>
+        <div className="flex items-center">
+             <Logo collapsed={false} className="h-8 w-auto" />
         </div>
         <div className="flex items-center gap-2">
             {isAiEnabled && (
@@ -191,16 +176,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                         className="flex items-center gap-3 px-4 py-3 text-slate-500 hover:bg-slate-50 rounded-xl transition-colors"
                     >
                         <BookOpen size={20}/>
-                        <span className="font-medium">{t('userGuide')}</span>
-                    </a>
-                    <a 
-                        href="https://github.com/kuka36/PanassetLite/issues"
-                        target="_blank"
-                        rel="noreferrer"
-                        className="flex items-center gap-3 px-4 py-3 text-slate-500 hover:bg-slate-50 rounded-xl transition-colors"
-                    >
-                        <MessageSquarePlus size={20}/>
-                        <span className="font-medium">{t('haveFeedback')}</span>
+                        <span className="font-medium">{t('about')}</span>
                     </a>
                  </div>
               </nav>

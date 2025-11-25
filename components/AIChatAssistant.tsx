@@ -1,3 +1,5 @@
+
+
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Send, Sparkles, Check, AlertCircle, Trash2, User, Keyboard, AudioLines } from 'lucide-react';
 import { usePortfolio } from '../context/PortfolioContext';
@@ -187,7 +189,7 @@ export const AIChatAssistant: React.FC<AIChatAssistantProps> = ({ isOpen, onClos
           </div>
           <div>
             <h3 className="font-bold text-sm">
-                {settings.language === 'zh' ? "Panasset 智能助手" : "Panasset Assistant"}
+                {settings.language === 'zh' ? "盘资产·轻 智能助手" : "PanassetLite Assistant"}
             </h3>
             <p className="text-[10px] text-indigo-100 flex items-center gap-1 opacity-90">
                <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse"></span>

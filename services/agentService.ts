@@ -1,4 +1,5 @@
 
+
 import { Content, FunctionDeclaration, GoogleGenAI, Type, Part } from "@google/genai";
 import { Asset, ChatMessage, Currency, PendingAction, TransactionType, AssetType, Language } from "../types";
 
@@ -6,7 +7,7 @@ import { Asset, ChatMessage, Currency, PendingAction, TransactionType, AssetType
 
 const GET_PORTFOLIO_TOOL: FunctionDeclaration = {
   name: "get_portfolio_summary",
-  description: "Get a summary of the current portfolio holdings, including symbols, quantities, and current values.",
+  description: "Get a detailed summary of the current portfolio holdings. Returns symbols, names, quantities, current prices, average costs, total values, and acquisition dates.",
 };
 
 const STAGE_TRANSACTION_TOOL: FunctionDeclaration = {
@@ -57,7 +58,8 @@ export class AgentService {
     try {
       // 2. Prepare Context
       const today = new Date().toISOString().split('T')[0];
-      const assetSummary = assets.map(a => `${a.symbol} (${a.name}): ${a.quantity} units`).join(', ');
+      // Basic context for quick lookup without tool usage, kept concise
+      const assetSummary = assets.map(a => `${a.symbol} (${a.name})`).join(', ');
       
       const langInstruction = language === 'zh' 
         ? "You MUST reply in Chinese (Simplified)." 
@@ -70,8 +72,8 @@ export class AgentService {
         **Language Rule:**
         ${langInstruction}
         
-        **Current Portfolio Context:**
-        ${assetSummary || "Portfolio is empty."}
+        **Current Portfolio Context (Brief):**
+        Assets owned: ${assetSummary || "None yet"}.
 
         **Role & Personality:**
         You are a highly capable, friendly, and knowledgeable AI assistant.
@@ -80,8 +82,8 @@ export class AgentService {
         Always be polite, concise, and helpful.
 
         **Portfolio Capabilities:**
-        1. Answer questions about current holdings (use 'get_portfolio_summary' if needed, or rely on context).
-        2. Help user record transactions. You CANNOT write to the database directly. You MUST use the 'stage_transaction' tool to propose an action.
+        1. **Deep Analysis**: If the user asks about performance, costs, specific prices, or timing (e.g., "What is my avg cost for AAPL?", "When did I buy BTC?"), you MUST use the 'get_portfolio_summary' tool to get the detailed data.
+        2. **Transactions**: Help user record transactions. You CANNOT write to the database directly. You MUST use the 'stage_transaction' tool to propose an action.
         
         **Transaction Rules:**
         - If the user wants to buy/sell, infer the symbol, quantity, and price. If price is missing, estimate or ask.
@@ -121,7 +123,18 @@ export class AgentService {
            const functionResponseParts: Part[] = [{
              functionResponse: {
                 name: call.name,
-                response: { assets: assets.map(a => ({ s: a.symbol, q: a.quantity, v: a.currentPrice })) }
+                response: { 
+                  assets: assets.map(a => ({ 
+                    symbol: a.symbol, 
+                    name: a.name,
+                    quantity: a.quantity, 
+                    currentPrice: a.currentPrice,
+                    averageCost: a.avgCost,
+                    totalValue: (a.quantity * a.currentPrice),
+                    currency: a.currency,
+                    dateAcquired: a.dateAcquired || 'Unknown'
+                  })) 
+                }
              }
            }];
            const finalResponse = await chat.sendMessage({ message: functionResponseParts });
