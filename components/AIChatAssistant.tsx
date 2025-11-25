@@ -127,25 +127,23 @@ export const AIChatAssistant: React.FC<AIChatAssistantProps> = ({ isOpen, onClos
 
       // --- ASSET CRUD ---
       if (type === 'ADD_ASSET') {
-          addAsset({
-              id: crypto.randomUUID(),
-              symbol: data.symbol || 'UNKNOWN',
-              name: data.name || data.symbol || 'Unknown',
-              type: data.type as AssetType || AssetType.STOCK,
-              quantity: data.quantity || 0,
-              avgCost: data.price || 0,
-              currentPrice: data.price || 0,
-              currency: settings.baseCurrency,
-              lastUpdated: Date.now()
-          });
+          const meta = {
+            id: crypto.randomUUID(),
+            symbol: data.symbol || 'UNKNOWN',
+            name: data.name || data.symbol || 'Unknown',
+            type: data.type as AssetType || AssetType.STOCK,
+            currentPrice: data.price || 0,
+            currency: settings.baseCurrency,
+            lastUpdated: Date.now(),
+            dateAcquired: new Date().toISOString().split('T')[0]
+          };
+          addAsset(meta, data.quantity || 0, data.price || 0, meta.dateAcquired);
       }
       else if (type === 'UPDATE_ASSET' && targetId) {
           const existing = assets.find(a => a.id === targetId);
           if (existing) {
               editAsset({
                   ...existing,
-                  quantity: data.quantity ?? existing.quantity,
-                  avgCost: data.price ?? existing.avgCost,
                   name: data.name ?? existing.name,
                   symbol: data.symbol ?? existing.symbol,
                   type: (data.type as AssetType) ?? existing.type
@@ -163,43 +161,52 @@ export const AIChatAssistant: React.FC<AIChatAssistantProps> = ({ isOpen, onClos
         // Auto-create asset if missing (and logic provided symbol, unlikely from strict Agent but good fallback)
         if (!assetId && data.symbol) {
              assetId = crypto.randomUUID();
-             addAsset({
-                 id: assetId,
-                 symbol: data.symbol,
-                 name: data.symbol,
-                 type: AssetType.STOCK, 
-                 quantity: 0,
-                 avgCost: 0,
-                 currentPrice: data.price || 0,
-                 currency: settings.baseCurrency,
-                 lastUpdated: Date.now()
-             });
+             const meta = {
+                id: assetId,
+                symbol: data.symbol,
+                name: data.symbol,
+                type: AssetType.STOCK, 
+                currentPrice: data.price || 0,
+                currency: settings.baseCurrency,
+                lastUpdated: Date.now(),
+                dateAcquired: new Date().toISOString().split('T')[0]
+             };
+             addAsset(meta, 0, 0, meta.dateAcquired);
         }
 
         if (assetId) {
+            const qty = data.quantity || 0;
+            const isNegative = (data.type === TransactionType.SELL || data.type === TransactionType.WITHDRAWAL || data.type === TransactionType.REPAY);
+            
             addTransaction({
               assetId: assetId,
               type: data.type as TransactionType || TransactionType.BUY,
               date: data.date || new Date().toISOString().split('T')[0],
-              quantity: data.quantity || 0,
-              price: data.price || 0,
+              quantityChange: isNegative ? -Math.abs(qty) : Math.abs(qty),
+              pricePerUnit: data.price || 0,
               fee: data.fee || 0,
-              total: (data.quantity || 0) * (data.price || 0) + (data.fee || 0)
+              total: (qty * (data.price || 0)) + (data.fee || 0)
             });
         }
       }
       else if (type === 'UPDATE_TRANSACTION' && targetId) {
           const existing = transactions.find(t => t.id === targetId);
           if (existing) {
+              const newQty = data.quantity !== undefined ? data.quantity : Math.abs(existing.quantityChange);
+              const newPrice = data.price ?? existing.pricePerUnit;
+              const newFee = data.fee ?? existing.fee;
+              const newType = (data.type as TransactionType) ?? existing.type;
+              
+              const isNegative = (newType === TransactionType.SELL || newType === TransactionType.WITHDRAWAL || newType === TransactionType.REPAY);
+              
               editTransaction({
                   ...existing,
-                  quantity: data.quantity ?? existing.quantity,
-                  price: data.price ?? existing.price,
+                  quantityChange: isNegative ? -Math.abs(newQty) : Math.abs(newQty),
+                  pricePerUnit: newPrice,
                   date: data.date ?? existing.date,
-                  type: (data.type as TransactionType) ?? existing.type,
-                  fee: data.fee ?? existing.fee,
-                  // Recalculate total if qty or price changed, otherwise keep or re-calc
-                  total: ((data.quantity ?? existing.quantity) * (data.price ?? existing.price)) + (data.fee ?? existing.fee)
+                  type: newType,
+                  fee: newFee,
+                  total: (newQty * newPrice) + newFee
               });
           }
       }

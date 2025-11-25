@@ -1,8 +1,7 @@
 
-
 import React, { useState, useEffect } from 'react';
 import { usePortfolio } from '../context/PortfolioContext';
-import { TransactionType, VoiceParseResult } from '../types';
+import { TransactionType, VoiceParseResult, AssetType } from '../types';
 import { VoiceInput } from './ui/VoiceInput';
 import { X, Save, Calendar, DollarSign, Hash, ArrowRightLeft } from 'lucide-react';
 
@@ -22,35 +21,52 @@ export const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, preselec
   const [price, setPrice] = useState('');
   const [fee, setFee] = useState('0');
 
-  // Reset form when opening
+  // Helper to determine available actions based on asset type
+  const getAvailableActions = (assetType?: AssetType) => {
+      const common = [TransactionType.BUY, TransactionType.SELL];
+      if (!assetType) return common;
+      
+      switch(assetType) {
+          case AssetType.STOCK:
+          case AssetType.FUND:
+              return [...common, TransactionType.DIVIDEND];
+          case AssetType.LIABILITY:
+              return [TransactionType.BORROW, TransactionType.REPAY];
+          case AssetType.CASH:
+              return [TransactionType.DEPOSIT, TransactionType.WITHDRAWAL];
+          default:
+              return [...common, TransactionType.DIVIDEND];
+      }
+  };
+
   useEffect(() => {
     if (isOpen) {
         setAssetId(preselectedAssetId || '');
-        setType(TransactionType.BUY);
+        const asset = assets.find(a => a.id === preselectedAssetId);
+        // Set default type based on asset
+        if (asset?.type === AssetType.LIABILITY) setType(TransactionType.BORROW);
+        else if (asset?.type === AssetType.CASH) setType(TransactionType.DEPOSIT);
+        else setType(TransactionType.BUY);
+        
         setDate(new Date().toISOString().split('T')[0]);
         setQuantity('');
         setPrice('');
         setFee('0');
     }
-  }, [isOpen, preselectedAssetId]);
+  }, [isOpen, preselectedAssetId, assets]);
 
   if (!isOpen) return null;
 
   const availableAssets = assets.sort((a, b) => a.symbol.localeCompare(b.symbol));
+  const selectedAsset = assets.find(a => a.id === assetId);
+  const actions = getAvailableActions(selectedAsset?.type);
 
   const handleVoiceData = (data: VoiceParseResult) => {
-      // 1. Try to match asset by Symbol
       if (data.symbol) {
           const match = availableAssets.find(a => a.symbol === data.symbol);
-          if (match) {
-              setAssetId(match.id);
-          }
+          if (match) setAssetId(match.id);
       }
-      
-      // 2. Set Transaction Type
       if (data.txType) setType(data.txType);
-      
-      // 3. Set Values
       if (data.quantity) setQuantity(data.quantity.toString());
       if (data.price) setPrice(data.price.toString());
       if (data.date) setDate(data.date);
@@ -65,17 +81,20 @@ export const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, preselec
 
     if (!assetId || isNaN(qtyNum) || isNaN(priceNum)) return;
 
-    const selectedAsset = assets.find(a => a.id === assetId);
-    if (!selectedAsset) return;
+    // Sign Logic for QuantityChange based on Type
+    let qtyChange = qtyNum;
+    if (type === TransactionType.SELL || type === TransactionType.WITHDRAWAL || type === TransactionType.REPAY) {
+        qtyChange = -qtyNum;
+    }
 
     addTransaction({
       assetId,
       type,
       date,
-      quantity: qtyNum,
-      price: priceNum,
+      quantityChange: qtyChange,
+      pricePerUnit: priceNum,
       fee: feeNum,
-      total: (qtyNum * priceNum) + feeNum // Simple total calc
+      total: (qtyNum * priceNum) + feeNum // Cash flow estimate
     });
 
     onClose();
@@ -120,15 +139,15 @@ export const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, preselec
           {/* Transaction Type */}
           <div>
              <label className="block text-xs font-medium text-slate-500 uppercase mb-1">{t('action')}</label>
-             <div className="flex p-1 bg-slate-100 rounded-lg">
-                {(['BUY', 'SELL', 'DIVIDEND'] as TransactionType[]).map((tKey) => (
+             <div className="flex flex-wrap gap-1 p-1 bg-slate-100 rounded-lg">
+                {actions.map((tKey) => (
                     <button
                         key={tKey}
                         type="button"
                         onClick={() => setType(tKey)}
-                        className={`flex-1 py-2 text-xs font-bold rounded-md transition-all ${type === tKey ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                        className={`flex-1 min-w-[60px] py-2 text-[10px] sm:text-xs font-bold rounded-md transition-all ${type === tKey ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                     >
-                        {t(`tx_${tKey}`)}
+                        {tKey}
                     </button>
                 ))}
              </div>

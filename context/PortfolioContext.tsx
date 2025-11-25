@@ -1,6 +1,6 @@
 
-import React, { createContext, useContext, useState, useEffect, ReactNode, useRef } from 'react';
-import { Asset, AssetType, Currency, Transaction, TransactionType, Language, AIProvider } from '../types';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useRef, useMemo } from 'react';
+import { Asset, AssetMetadata, AssetType, Currency, Transaction, TransactionType, Language, AIProvider } from '../types';
 import { 
   fetchExchangeRates, 
   fetchCryptoPrices, 
@@ -23,13 +23,13 @@ interface AppSettings {
 }
 
 interface PortfolioContextType {
-  assets: Asset[];
+  assets: Asset[]; // Computed Assets
   transactions: Transaction[];
   settings: AppSettings;
   exchangeRates: ExchangeRates;
   isRefreshing: boolean;
-  addAsset: (asset: Asset) => void;
-  editAsset: (asset: Asset) => void;
+  addAsset: (meta: AssetMetadata, initialQty: number, initialCost: number, date: string) => void;
+  editAsset: (meta: AssetMetadata) => void;
   deleteAsset: (id: string) => void;
   addTransaction: (transaction: Omit<Transaction, 'id'>) => void;
   editTransaction: (transaction: Transaction) => void;
@@ -43,9 +43,6 @@ interface PortfolioContextType {
 }
 
 const PortfolioContext = createContext<PortfolioContextType | undefined>(undefined);
-
-// Initial Data cleared as requested
-const INITIAL_ASSETS: Asset[] = [];
 
 const getBrowserLanguage = (): Language => {
   const lang = navigator.language.toLowerCase();
@@ -65,246 +62,294 @@ const INITIAL_SETTINGS: AppSettings = {
 };
 
 export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [assets, setAssets] = useState<Asset[]>(() => {
-    const saved = localStorage.getItem('investflow_assets');
-    return saved ? JSON.parse(saved) : INITIAL_ASSETS;
-  });
-
-  const [transactions, setTransactions] = useState<Transaction[]>(() => {
-    const saved = localStorage.getItem('investflow_transactions');
-    return saved ? JSON.parse(saved) : [];
-  });
-
+  // --- Raw State (Storage) ---
+  const [assetMetas, setAssetMetas] = useState<AssetMetadata[]>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  
   const [settings, setSettings] = useState<AppSettings>(() => {
     const saved = localStorage.getItem('investflow_settings');
     if (saved) {
       const parsed = JSON.parse(saved);
-      return {
-        ...INITIAL_SETTINGS,
-        ...parsed,
-        // Ensure default values if missing in saved data
-        geminiApiKey: parsed.geminiApiKey || '',
-        deepSeekApiKey: parsed.deepSeekApiKey || '',
-        aiProvider: parsed.aiProvider || 'gemini',
-        alphaVantageApiKey: parsed.alphaVantageApiKey || '',
-        language: parsed.language || INITIAL_SETTINGS.language,
-        isAiAssistantEnabled: parsed.isAiAssistantEnabled ?? INITIAL_SETTINGS.isAiAssistantEnabled,
-      };
+      return { ...INITIAL_SETTINGS, ...parsed };
     }
     return INITIAL_SETTINGS;
   });
 
-  // Use ref to access latest settings in async functions without triggering re-runs
-  const settingsRef = useRef(settings);
-  useEffect(() => {
-      settingsRef.current = settings;
-  }, [settings]);
-
-  // Default rates (will be updated by API)
   const [exchangeRates, setExchangeRates] = useState<ExchangeRates>({ USD: 1, CNY: 7.2, HKD: 7.8 });
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const settingsRef = useRef(settings);
 
-  useEffect(() => {
-    localStorage.setItem('investflow_assets', JSON.stringify(assets));
-  }, [assets]);
+  useEffect(() => { settingsRef.current = settings; }, [settings]);
 
+  // --- Migration Logic ---
   useEffect(() => {
-    localStorage.setItem('investflow_transactions', JSON.stringify(transactions));
-  }, [transactions]);
+    const legacyAssetsJson = localStorage.getItem('investflow_assets');
+    const legacyTxJson = localStorage.getItem('investflow_transactions');
+    const v2MetaJson = localStorage.getItem('investflow_metadata');
+
+    // If we have legacy data but NO new metadata, perform migration
+    if (legacyAssetsJson && !v2MetaJson) {
+      console.log("Migrating to Event Sourcing Architecture...");
+      try {
+        const oldAssets: any[] = JSON.parse(legacyAssetsJson);
+        const oldTxs: Transaction[] = legacyTxJson ? JSON.parse(legacyTxJson) : [];
+
+        const newMetas: AssetMetadata[] = [];
+        const newTxs: Transaction[] = [...oldTxs];
+
+        oldAssets.forEach(a => {
+           // 1. Create Metadata
+           newMetas.push({
+             id: a.id,
+             symbol: a.symbol,
+             name: a.name,
+             type: a.type,
+             currency: a.currency,
+             currentPrice: a.currentPrice,
+             lastUpdated: a.lastUpdated,
+             dateAcquired: a.dateAcquired
+           });
+
+           // 2. Check if this asset has existing transactions
+           const hasTx = oldTxs.some(t => t.assetId === a.id);
+           
+           // 3. If NO transactions, create an Initial Balance transaction from the current state
+           // This ensures the calculated balance matches what the user sees
+           if (!hasTx && a.quantity > 0) {
+              newTxs.push({
+                id: crypto.randomUUID(),
+                assetId: a.id,
+                type: TransactionType.BUY, // Treat as initial buy
+                date: a.dateAcquired || new Date().toISOString().split('T')[0],
+                quantityChange: a.quantity,
+                pricePerUnit: a.avgCost,
+                fee: 0,
+                total: a.quantity * a.avgCost,
+                note: 'Migration: Initial Balance'
+              });
+           }
+        });
+
+        setAssetMetas(newMetas);
+        setTransactions(newTxs);
+        
+        // Save immediately
+        localStorage.setItem('investflow_metadata', JSON.stringify(newMetas));
+        localStorage.setItem('investflow_transactions_v2', JSON.stringify(newTxs));
+        
+        // Cleanup old keys
+        localStorage.removeItem('investflow_assets');
+        localStorage.removeItem('investflow_transactions'); 
+
+      } catch (e) {
+        console.error("Migration Failed", e);
+      }
+    } else {
+      // Normal Load
+      if (v2MetaJson) setAssetMetas(JSON.parse(v2MetaJson));
+      const v2TxJson = localStorage.getItem('investflow_transactions_v2');
+      if (v2TxJson) setTransactions(JSON.parse(v2TxJson));
+    }
+  }, []);
+
+  // --- Persistence ---
+  useEffect(() => {
+    if (assetMetas.length > 0 || transactions.length > 0) {
+        localStorage.setItem('investflow_metadata', JSON.stringify(assetMetas));
+        localStorage.setItem('investflow_transactions_v2', JSON.stringify(transactions));
+    }
+  }, [assetMetas, transactions]);
 
   useEffect(() => {
     localStorage.setItem('investflow_settings', JSON.stringify(settings));
   }, [settings]);
 
-  // Initial Data Fetch Logic (Optimized)
-  useEffect(() => {
-    const initFetch = async () => {
-       // 1. Always fetch rates as they are cheap (1 call)
-       try {
-         const rates = await fetchExchangeRates();
-         setExchangeRates(rates);
-       } catch(e) {}
+  // --- Core Calculation Engine (Event Sourcing Projection) ---
+  const derivedAssets: Asset[] = useMemo(() => {
+    const assetMap = new Map<string, Asset>();
 
-       // 2. SMART REFRESH: Only refresh prices if we have assets AND they seem stale (or no prices yet)
-       // This prevents "Refresh on Load" killing the API quota
-       const needsRefresh = assets.length > 0 && assets.some(a => {
-           // If asset is Market type but lastUpdated is old (> 60 mins) or 0
-           const isMarket = a.type === AssetType.STOCK || a.type === AssetType.CRYPTO || a.type === AssetType.FUND;
-           if (!isMarket) return false;
-           return !a.lastUpdated || (Date.now() - a.lastUpdated > 60 * 60 * 1000);
-       });
+    // 1. Initialize from Metadata
+    assetMetas.forEach(meta => {
+      assetMap.set(meta.id, {
+        ...meta,
+        quantity: 0,
+        avgCost: 0,
+        totalCost: 0,
+        currentValue: 0,
+        pnl: 0,
+        pnlPercent: 0,
+        realizedPnL: 0
+      });
+    });
 
-       if (needsRefresh) {
-           refreshPrices();
-       }
-    };
+    // 2. Sort Transactions by Date
+    const sortedTxs = [...transactions].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+    // 3. Replay Transactions
+    sortedTxs.forEach(tx => {
+      const asset = assetMap.get(tx.assetId);
+      if (!asset) return;
+
+      if (tx.type === TransactionType.BUY || tx.type === TransactionType.DEPOSIT || tx.type === TransactionType.BORROW) {
+         // Increase Position
+         const txCost = tx.total; // usually qty * price + fee
+         const newTotalCost = asset.totalCost + txCost;
+         const newQty = asset.quantity + tx.quantityChange;
+         
+         asset.quantity = newQty;
+         asset.totalCost = newTotalCost;
+         // Recalculate Avg Cost
+         if (newQty > 0) {
+           asset.avgCost = newTotalCost / newQty;
+         }
+      } 
+      else if (tx.type === TransactionType.SELL || tx.type === TransactionType.WITHDRAWAL || tx.type === TransactionType.REPAY) {
+         // Decrease Position
+         const qtySold = Math.abs(tx.quantityChange);
+         // Cost Basis of sold items
+         const costBasisSold = qtySold * asset.avgCost;
+         
+         // Realized PnL = Proceeds - Cost Basis - Fee (already in total?) 
+         // Note: tx.total for SELL is usually positive proceeds. 
+         // Let's assume tx.total = (price * qty) - fee.
+         const proceeds = tx.total; 
+         const realized = proceeds - costBasisSold;
+         
+         asset.quantity -= qtySold;
+         asset.totalCost -= costBasisSold;
+         asset.realizedPnL += realized;
+
+         if (asset.quantity <= 0.000001) {
+           asset.quantity = 0;
+           asset.totalCost = 0;
+           asset.avgCost = 0; // Reset avg cost if fully closed
+         }
+      }
+      else if (tx.type === TransactionType.BALANCE_ADJUSTMENT) {
+         // Special case: Cost basis adjustments could be complex.
+         // Simple approach: Adjust quantity, assume pricePerUnit matches current avgCost (no PnL impact) OR explicit price provided.
+         // For now, treat like a BUY/SELL without PnL impact logic unless derived differently.
+         if (tx.quantityChange > 0) {
+             // Treat like receiving free shares or buying at specific price
+             asset.quantity += tx.quantityChange;
+             asset.totalCost += tx.total; // qty * price
+             if (asset.quantity > 0) asset.avgCost = asset.totalCost / asset.quantity;
+         } else {
+             // Treat like losing shares
+             const qtyLost = Math.abs(tx.quantityChange);
+             const ratio = qtyLost / asset.quantity;
+             asset.totalCost -= (asset.totalCost * ratio);
+             asset.quantity -= qtyLost;
+         }
+      }
+      else if (tx.type === TransactionType.DIVIDEND) {
+        // Pure profit/cashflow
+        asset.realizedPnL += tx.total;
+      }
+    });
+
+    // 4. Final Calculations (Current Value, Unrealized PnL)
+    return Array.from(assetMap.values()).map(asset => {
+      const currentValue = asset.quantity * asset.currentPrice;
+      // For Liabilities, 'Value' is debt amount (negative equity), but we track magnitude here.
+      // logic handles liability display in Dashboard.
+      
+      const unrealizedPnL = currentValue - asset.totalCost;
+      const pnl = unrealizedPnL; 
+      const pnlPercent = asset.totalCost !== 0 ? (pnl / asset.totalCost) * 100 : 0;
+
+      return {
+        ...asset,
+        currentValue,
+        pnl,
+        pnlPercent
+      };
+    });
+
+  }, [assetMetas, transactions]);
+
+
+  // --- Actions ---
+
+  const addAsset = (meta: AssetMetadata, initialQty: number, initialCost: number, date: string) => {
+    setAssetMetas(prev => [...prev, meta]);
     
-    initFetch();
-
-    // OPTIMIZATION: Increased auto-refresh interval from 10 mins to 60 mins
-    const intervalId = setInterval(() => {
-      refreshPrices();
-    }, 3600000); // 1 Hour
-
-    return () => clearInterval(intervalId);
-  }, []);
-
-  const addAsset = (newAsset: Asset) => {
-    // Ensure lastUpdated is set
-    const assetWithMeta = { ...newAsset, lastUpdated: newAsset.lastUpdated || Date.now() };
+    // Also create the initial transaction
+    if (initialQty > 0) {
+      const initialTx: Transaction = {
+        id: crypto.randomUUID(),
+        assetId: meta.id,
+        type: meta.type === AssetType.LIABILITY ? TransactionType.BORROW : TransactionType.BUY,
+        date: date,
+        quantityChange: initialQty,
+        pricePerUnit: initialCost,
+        fee: 0,
+        total: initialQty * initialCost,
+        note: 'Initial Holding'
+      };
+      setTransactions(prev => [...prev, initialTx]);
+    }
     
-    // 1. Update State immediately
-    const updatedList = [...assets, assetWithMeta];
-    setAssets(updatedList);
-
-    // 2. Trigger immediate price fetch for the new list to ensure fresh data
-    // The service layer handles caching, so this is safe to call, but we focus on the new asset
-    refreshPrices(updatedList);
+    // Trigger price fetch
+    refreshPrices(); 
   };
 
-  const editAsset = (updatedAsset: Asset) => {
-    setAssets(prev => prev.map(asset => asset.id === updatedAsset.id ? updatedAsset : asset));
+  const editAsset = (updatedMeta: AssetMetadata) => {
+    setAssetMetas(prev => prev.map(m => m.id === updatedMeta.id ? updatedMeta : m));
   };
 
   const deleteAsset = (id: string) => {
-    setAssets(prev => prev.filter(asset => asset.id !== id));
+    setAssetMetas(prev => prev.filter(m => m.id !== id));
     setTransactions(prev => prev.filter(t => t.assetId !== id));
-    clearAssetHistoryCache(id); // Clean up persistent storage for this asset history
+    clearAssetHistoryCache(id);
   };
 
   const addTransaction = (tx: Omit<Transaction, 'id'>) => {
     const newTx = { ...tx, id: crypto.randomUUID() };
     setTransactions(prev => [...prev, newTx]);
-
-    // Update asset holding logic
-    setAssets(prev => prev.map(asset => {
-      if (asset.id !== tx.assetId) return asset;
-
-      let newQty = asset.quantity;
-      let newCost = asset.avgCost;
-
-      if (tx.type === TransactionType.BUY) {
-        const totalValue = (asset.quantity * asset.avgCost) + (tx.quantity * tx.price) + tx.fee;
-        newQty = asset.quantity + tx.quantity;
-        newCost = totalValue / newQty;
-      } else if (tx.type === TransactionType.SELL) {
-        newQty = asset.quantity - tx.quantity;
-      }
-
-      return { ...asset, quantity: newQty, avgCost: newCost };
-    }));
   };
 
-  // Helper logic for transaction reversal
-  const applyTransactionReversal = (asset: Asset, tx: Transaction): { qty: number, cost: number } => {
-    let newQty = asset.quantity;
-    let newAvgCost = asset.avgCost;
-
-    if (tx.type === TransactionType.BUY) {
-        // Reverse BUY: Remove quantity and subtract cost basis
-        const currentTotalCost = asset.quantity * asset.avgCost;
-        const txCostContribution = (tx.quantity * tx.price) + tx.fee;
-        
-        const newTotalCost = currentTotalCost - txCostContribution;
-        newQty = asset.quantity - tx.quantity;
-        
-        if (newQty > 0 && newTotalCost > 0) {
-            newAvgCost = newTotalCost / newQty;
-        } else {
-            newAvgCost = newQty <= 0 ? 0 : newAvgCost; 
-        }
-    } else if (tx.type === TransactionType.SELL) {
-        // Reverse SELL: Add quantity back.
-        // Note: Reversing a sell is simpler for quantity, but cost basis technically shouldn't change on a sell
-        // unless we track lots. Here we assume avgCost remains consistent on Sell reversal.
-        newQty = asset.quantity + tx.quantity;
-    }
-    return { qty: newQty, cost: newAvgCost };
+  const editTransaction = (updatedTx: Transaction) => {
+    setTransactions(prev => prev.map(t => t.id === updatedTx.id ? updatedTx : t));
   };
 
   const deleteTransaction = (id: string) => {
-    const tx = transactions.find(t => t.id === id);
-    if (!tx) return;
-
-    const asset = assets.find(a => a.id === tx.assetId);
-    if (asset) {
-      const { qty, cost } = applyTransactionReversal(asset, tx);
-      setAssets(prev => prev.map(a => a.id === asset.id ? { ...a, quantity: qty, avgCost: cost } : a));
-    }
-
     setTransactions(prev => prev.filter(t => t.id !== id));
   };
 
-  const editTransaction = (newTx: Transaction) => {
-      const oldTx = transactions.find(t => t.id === newTx.id);
-      if (!oldTx) return;
-
-      // 1. Revert Old Transaction Effect
-      let targetAsset = assets.find(a => a.id === oldTx.assetId);
-      if (!targetAsset) return;
-
-      // Note: If assetId changed, we need to handle two assets. 
-      // For simplicity, we assume assetId change handled by UI via delete+add, 
-      // but here we support robust update on same asset.
-      
-      const reverted = applyTransactionReversal(targetAsset, oldTx);
-      
-      // Temporary asset state after reversal
-      const assetAfterRevert = { ...targetAsset, quantity: reverted.qty, avgCost: reverted.cost };
-
-      // 2. Apply New Transaction Effect
-      let finalQty = assetAfterRevert.quantity;
-      let finalCost = assetAfterRevert.avgCost;
-
-      if (newTx.type === TransactionType.BUY) {
-          const totalValue = (assetAfterRevert.quantity * assetAfterRevert.avgCost) + (newTx.quantity * newTx.price) + newTx.fee;
-          finalQty = assetAfterRevert.quantity + newTx.quantity;
-          finalCost = totalValue / finalQty;
-      } else if (newTx.type === TransactionType.SELL) {
-          finalQty = assetAfterRevert.quantity - newTx.quantity;
-      }
-
-      // 3. Update States
-      setAssets(prev => prev.map(a => a.id === targetAsset!.id ? { ...a, quantity: finalQty, avgCost: finalCost } : a));
-      setTransactions(prev => prev.map(t => t.id === newTx.id ? newTx : t));
-  };
-
   const updateAssetPrice = (id: string, newPrice: number) => {
-    setAssets(prev => prev.map(a => a.id === id ? { ...a, currentPrice: newPrice, lastUpdated: Date.now() } : a));
+    setAssetMetas(prev => prev.map(a => a.id === id ? { ...a, currentPrice: newPrice, lastUpdated: Date.now() } : a));
   };
 
-  // Modified: Accept optional assets list to support immediate fetch after add
   const refreshPrices = async (assetsOverride?: Asset[]) => {
     setIsRefreshing(true);
-    const targetAssets = assetsOverride || assets;
+    // Use derived assets to know what to fetch
+    const targetAssets = assetsOverride || derivedAssets;
 
     try {
-      // 1. Fetch Rates (Cheap)
       const rates = await fetchExchangeRates();
       setExchangeRates(rates);
 
-      // 2. Fetch Asset Prices (Service handles strict caching/throttling)
       const [cryptoPrices, stockData] = await Promise.all([
         fetchCryptoPrices(targetAssets),
         fetchStockPrices(targetAssets, settingsRef.current.alphaVantageApiKey)
       ]);
 
-      // 3. Update State
-      setAssets(prev => prev.map(asset => {
-        let newPrice = asset.currentPrice;
-        let newCurrency = asset.currency;
-        let timestamp = asset.lastUpdated; // Keep existing timestamp by default
+      setAssetMetas(prev => prev.map(meta => {
+        let newPrice = meta.currentPrice;
+        let newCurrency = meta.currency;
+        let timestamp = meta.lastUpdated;
         
-        if (asset.type === AssetType.CRYPTO && cryptoPrices[asset.id]) {
-          newPrice = cryptoPrices[asset.id];
+        if (meta.type === AssetType.CRYPTO && cryptoPrices[meta.id]) {
+          newPrice = cryptoPrices[meta.id];
           newCurrency = Currency.USD; 
           timestamp = Date.now();
-        } else if ((asset.type === AssetType.STOCK || asset.type === AssetType.FUND) && stockData[asset.id]) {
-          newPrice = stockData[asset.id].price;
-          newCurrency = stockData[asset.id].currency;
-          timestamp = stockData[asset.id].lastUpdated || Date.now();
-        } else if (asset.type === AssetType.CASH) {
-            const rate = rates[asset.symbol];
+        } else if ((meta.type === AssetType.STOCK || meta.type === AssetType.FUND) && stockData[meta.id]) {
+          newPrice = stockData[meta.id].price;
+          newCurrency = stockData[meta.id].currency;
+          timestamp = stockData[meta.id].lastUpdated || Date.now();
+        } else if (meta.type === AssetType.CASH) {
+            const rate = rates[meta.symbol];
             if (rate && rate > 0) {
                 newPrice = 1 / rate;
                 newCurrency = Currency.USD; 
@@ -312,7 +357,7 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
             }
         }
 
-        return { ...asset, currentPrice: newPrice, currency: newCurrency, lastUpdated: timestamp };
+        return { ...meta, currentPrice: newPrice, currency: newCurrency, lastUpdated: timestamp };
       }));
 
     } catch (error) {
@@ -327,22 +372,34 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
   };
 
   const importData = (data: { assets: Asset[], transactions: Transaction[] }) => {
+    // Handling import might require mapping 'assets' back to metadata if they are full objects
+    // For simplicity, assuming the backup contains compatible structures or we map fields
     if (Array.isArray(data.assets)) {
-      const assetsWithMeta = data.assets.map(a => ({ ...a, lastUpdated: a.lastUpdated || Date.now() }));
-      setAssets(assetsWithMeta);
+      const metas = data.assets.map((a: any) => ({
+          id: a.id,
+          symbol: a.symbol,
+          name: a.name,
+          type: a.type,
+          currency: a.currency,
+          currentPrice: a.currentPrice,
+          lastUpdated: a.lastUpdated || Date.now(),
+          dateAcquired: a.dateAcquired
+      }));
+      setAssetMetas(metas);
     }
-    if (Array.isArray(data.transactions)) setTransactions(data.transactions);
+    if (Array.isArray(data.transactions)) {
+        setTransactions(data.transactions);
+    }
   };
 
   const clearData = () => {
-    setAssets([]);
+    setAssetMetas([]);
     setTransactions([]);
-    localStorage.removeItem('investflow_assets');
-    localStorage.removeItem('investflow_transactions');
-    clearAllHistoryCache(); // Wipe all historical data caches
+    localStorage.removeItem('investflow_metadata');
+    localStorage.removeItem('investflow_transactions_v2');
+    clearAllHistoryCache();
   };
 
-  // Translation Helper
   const t = (key: string): string => {
     const lang = settings.language || 'en';
     return translations[lang]?.[key] || key;
@@ -350,7 +407,7 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   return (
     <PortfolioContext.Provider value={{ 
-      assets, 
+      assets: derivedAssets, 
       transactions, 
       settings,
       exchangeRates,

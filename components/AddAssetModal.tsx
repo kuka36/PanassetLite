@@ -1,10 +1,9 @@
 
-
 import React, { useState, useEffect } from 'react';
-import { Asset, AssetType, Currency, VoiceParseResult } from '../types';
+import { Asset, AssetType, Currency, VoiceParseResult, TransactionType, AssetMetadata } from '../types';
 import { usePortfolio } from '../context/PortfolioContext';
 import { VoiceInput } from './ui/VoiceInput';
-import { X, Save, TrendingUp, Bitcoin, PieChart, Building, Banknote, CreditCard, Box, Calendar } from 'lucide-react';
+import { X, Save, TrendingUp, Bitcoin, PieChart, Building, Banknote, CreditCard, Box, Calendar, AlertCircle } from 'lucide-react';
 
 interface Props {
   isOpen: boolean;
@@ -13,7 +12,7 @@ interface Props {
 }
 
 export const AddAssetModal: React.FC<Props> = ({ isOpen, onClose, initialAsset }) => {
-  const { addAsset, editAsset, t } = usePortfolio();
+  const { addAsset, editAsset, addTransaction, t } = usePortfolio();
   
   // Form State
   const [step, setStep] = useState<1 | 2>(1);
@@ -22,10 +21,14 @@ export const AddAssetModal: React.FC<Props> = ({ isOpen, onClose, initialAsset }
   const [symbol, setSymbol] = useState('');
   const [name, setName] = useState('');
   const [quantity, setQuantity] = useState('');
-  const [cost, setCost] = useState(''); // Avg Cost
+  const [cost, setCost] = useState(''); // Avg Cost / Initial Price
   const [currentVal, setCurrentVal] = useState(''); // For manual assets
   const [currency, setCurrency] = useState<Currency>(Currency.USD);
   const [dateAcquired, setDateAcquired] = useState(new Date().toISOString().split('T')[0]);
+
+  // Balance Correction State
+  const [showAdjustment, setShowAdjustment] = useState(false);
+  const [actualQuantity, setActualQuantity] = useState('');
 
   const ASSET_TYPES = [
     { id: AssetType.STOCK, label: t('type_stock'), icon: TrendingUp, desc: 'US, HK, CN Stocks', color: 'bg-blue-50 text-blue-600 border-blue-200' },
@@ -49,7 +52,8 @@ export const AddAssetModal: React.FC<Props> = ({ isOpen, onClose, initialAsset }
         setCurrentVal(initialAsset.currentPrice.toString());
         setCurrency(initialAsset.currency);
         setDateAcquired(initialAsset.dateAcquired || new Date().toISOString().split('T')[0]);
-        setStep(2); // Skip type selection when editing
+        setStep(2); 
+        setShowAdjustment(false);
       } else {
         // Add Mode - Reset
         setStep(1);
@@ -61,6 +65,7 @@ export const AddAssetModal: React.FC<Props> = ({ isOpen, onClose, initialAsset }
         setCurrentVal('');
         setCurrency(Currency.USD);
         setDateAcquired(new Date().toISOString().split('T')[0]);
+        setShowAdjustment(false);
       }
     }
   }, [isOpen, initialAsset]);
@@ -70,13 +75,13 @@ export const AddAssetModal: React.FC<Props> = ({ isOpen, onClose, initialAsset }
       if (data.name) setName(data.name);
       if (data.type) {
           setType(data.type);
-          setStep(2); // Auto advance
+          setStep(2); 
       }
       if (data.quantity) setQuantity(data.quantity.toString());
       if (data.price) {
           const valStr = data.price.toString();
-          setCost(valStr); // Set Avg Cost
-          setCurrentVal(valStr); // Also Set Current Value (for Manual Assets like Real Estate)
+          setCost(valStr); 
+          setCurrentVal(valStr); 
       }
       if (data.date) setDateAcquired(data.date);
       if (data.currency) setCurrency(data.currency);
@@ -84,54 +89,76 @@ export const AddAssetModal: React.FC<Props> = ({ isOpen, onClose, initialAsset }
 
   if (!isOpen) return null;
 
-  // Strict manual assets (No API fetch). 
-  // CASH is excluded because we want to treat it as a Market Asset for pricing (fetched from API)
-  // but still allow the user to input their own cost basis.
   const isStrictManualAsset = (t: AssetType) => 
     t === AssetType.REAL_ESTATE || t === AssetType.LIABILITY || t === AssetType.OTHER;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
+    // --- MODE 1: BALANCE ADJUSTMENT ---
+    if (showAdjustment && initialAsset) {
+        const newQty = parseFloat(actualQuantity);
+        if (isNaN(newQty)) return;
+
+        const delta = newQty - initialAsset.quantity;
+        if (delta === 0) {
+            setShowAdjustment(false);
+            return;
+        }
+
+        // Create a correction transaction
+        addTransaction({
+            assetId: initialAsset.id,
+            type: TransactionType.BALANCE_ADJUSTMENT,
+            date: new Date().toISOString().split('T')[0],
+            quantityChange: delta,
+            pricePerUnit: initialAsset.avgCost, // keep cost basis same
+            fee: 0,
+            total: delta * initialAsset.avgCost,
+            note: 'Manual Balance Correction'
+        });
+        
+        // Also allow saving metadata changes below if any
+    }
+
+    // --- MODE 2: CREATE / EDIT METADATA ---
     const qtyNum = parseFloat(quantity);
     let costNum = parseFloat(cost);
     let currentPriceNum = parseFloat(currentVal);
 
+    // Logic for Manual/Market prices
     if (isStrictManualAsset(type)) {
-        // For manual assets, cost is often not relevant or equal to current value if just tracking balance
         if (isNaN(costNum) && !isNaN(currentPriceNum)) costNum = currentPriceNum; 
         if (isNaN(currentPriceNum) && !isNaN(costNum)) currentPriceNum = costNum;
     } else {
-        // For market assets (Stock, Crypto, Cash), we don't set currentPrice manually (it comes from API)
-        // unless it's the very first entry and we want a fallback, we default to cost
         if (isNaN(currentPriceNum)) currentPriceNum = costNum || 0;
     }
 
-    if (!symbol || isNaN(qtyNum)) return;
+    if (!symbol) return;
 
-    const assetData: Asset = {
+    // Construct Metadata
+    const assetMeta: AssetMetadata = {
       id: initialAsset ? initialAsset.id : crypto.randomUUID(),
       symbol: symbol.toUpperCase(),
       name: name || symbol.toUpperCase(),
       type,
-      quantity: qtyNum,
-      avgCost: costNum || 0,
       currentPrice: currentPriceNum || 0,
-      // Manual assets use selected currency. Market assets (Stock/Crypto/Cash) default to USD logic until API updates them
-      currency: isStrictManualAsset(type) ? currency : Currency.USD, 
+      currency: isStrictManualAsset(type) ? currency : Currency.USD,
       lastUpdated: Date.now(),
       dateAcquired
     };
 
     if (initialAsset) {
-      // Preserve current price for market assets if we are editing just meta
+      // Edit: Update Metadata Only
       if (!isStrictManualAsset(type)) {
-          assetData.currentPrice = initialAsset.currentPrice;
-          assetData.currency = initialAsset.currency;
+          assetMeta.currentPrice = initialAsset.currentPrice;
+          assetMeta.currency = initialAsset.currency;
       }
-      editAsset(assetData);
+      editAsset(assetMeta);
     } else {
-      addAsset(assetData);
+      // Create: Metadata + Initial Transaction
+      if (isNaN(qtyNum)) return;
+      addAsset(assetMeta, qtyNum, costNum || 0, dateAcquired);
     }
 
     onClose();
@@ -148,7 +175,7 @@ export const AddAssetModal: React.FC<Props> = ({ isOpen, onClose, initialAsset }
                 {initialAsset ? t('editHolding') : (step === 1 ? t('selectAssetType') : t('assetDetails'))}
             </h2>
             <p className="text-xs text-slate-500">
-                {initialAsset ? t('updateParams') : (step === 1 ? t('whatKind') : `${t('enterDetails')} ${ASSET_TYPES.find(a => a.id === type)?.label}`)}
+                {initialAsset ? "Edit metadata or adjust balance" : (step === 1 ? t('whatKind') : `${t('enterDetails')} ${ASSET_TYPES.find(a => a.id === type)?.label}`)}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -178,9 +205,6 @@ export const AddAssetModal: React.FC<Props> = ({ isOpen, onClose, initialAsset }
                         </button>
                     ))}
                 </div>
-                <div className="mt-4 text-center text-xs text-slate-400 bg-slate-50 p-2 rounded-lg border border-dashed border-slate-200">
-                    <span className="font-semibold text-slate-500">{t('voiceInput')}:</span> {t('voiceHint')}
-                </div>
                 </>
             )}
 
@@ -188,67 +212,88 @@ export const AddAssetModal: React.FC<Props> = ({ isOpen, onClose, initialAsset }
             {(step === 2 || initialAsset) && (
                 <form id="asset-form" onSubmit={handleSubmit} className="space-y-5">
                     
-                    {/* Identity Section */}
+                    {/* Identity Section (Editable) */}
                     <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 space-y-4">
                          <div className="flex justify-between items-center mb-2">
                             <h3 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
                                 {t('identification')}
                             </h3>
-                            {!initialAsset && (
-                                <button type="button" onClick={() => setStep(1)} className="text-xs text-blue-600 hover:underline">{t('changeType')}</button>
-                            )}
                          </div>
                          
                          <div className="grid grid-cols-2 gap-4">
                              <div>
-                                <label className="block text-xs font-medium text-slate-500 uppercase mb-1">
-                                    {t('tickerLabel')}
-                                </label>
+                                <label className="block text-xs font-medium text-slate-500 uppercase mb-1">{t('tickerLabel')}</label>
                                 <input 
                                     type="text" 
-                                    placeholder={type === AssetType.STOCK ? "AAPL" : (type === AssetType.CASH ? "CNY" : "BTC")}
                                     value={symbol} 
                                     onChange={e => setSymbol(e.target.value.toUpperCase())}
                                     className="w-full p-2.5 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none font-medium"
-                                    autoFocus
+                                    autoFocus={!initialAsset}
                                     required
                                 />
-                                {type === AssetType.CASH && (
-                                    <p className="text-[10px] text-slate-400 mt-1">Enter Code (e.g., CNY, HKD, EUR)</p>
-                                )}
                              </div>
                              <div>
                                 <label className="block text-xs font-medium text-slate-500 uppercase mb-1">{t('nameLabel')}</label>
                                 <input 
                                     type="text" 
-                                    placeholder={type === AssetType.CASH ? "Chinese Yuan" : "e.g. Apple Inc."}
                                     value={name} onChange={e => setName(e.target.value)}
                                     className="w-full p-2.5 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
                                 />
                              </div>
                          </div>
-
-                         {isStrictManualAsset(type) && (
-                            <div>
-                                <label className="block text-xs font-medium text-slate-500 uppercase mb-1">{t('currencyLabel')}</label>
-                                <select
-                                    value={currency}
-                                    onChange={(e) => setCurrency(e.target.value as Currency)}
-                                    className="w-full p-2.5 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                                >
-                                    <option value={Currency.USD}>USD - US Dollar</option>
-                                    <option value={Currency.CNY}>CNY - Chinese Yuan</option>
-                                    <option value={Currency.HKD}>HKD - HK Dollar</option>
-                                </select>
-                            </div>
-                         )}
                     </div>
 
                     {/* Financials Section */}
-                    <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 space-y-4">
+                    <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 space-y-4 relative">
                         <h3 className="text-sm font-semibold text-slate-700">{t('valuationHoldings')}</h3>
                         
-                        <div className="grid grid-cols-2 gap-4">
+                        {/* EDIT MODE: Locking Fields Logic */}
+                        {initialAsset && !showAdjustment && (
+                            <div className="absolute inset-0 bg-white/50 backdrop-blur-[1px] z-10 flex flex-col items-center justify-center text-center p-4 rounded-xl border border-slate-200/50">
+                                <div className="bg-white p-4 rounded-xl shadow-lg border border-slate-100 max-w-sm">
+                                    <AlertCircle size={32} className="mx-auto text-blue-500 mb-2" />
+                                    <h4 className="font-bold text-slate-800 text-sm mb-1">Holdings are Managed via Transactions</h4>
+                                    <p className="text-xs text-slate-500 mb-3">
+                                        Quantity and Cost are calculated from your transaction history. To fix errors, you can adjust the balance directly.
+                                    </p>
+                                    <div className="flex gap-2 justify-center">
+                                        <button 
+                                            type="button" 
+                                            onClick={() => setShowAdjustment(true)}
+                                            className="px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700"
+                                        >
+                                            Adjust Balance
+                                        </button>
+                                        <button 
+                                            type="button" 
+                                            onClick={onClose}
+                                            className="px-3 py-1.5 bg-slate-100 text-slate-600 text-xs font-medium rounded-lg hover:bg-slate-200"
+                                        >
+                                            Cancel
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {showAdjustment && (
+                             <div className="bg-blue-50 p-3 rounded-lg border border-blue-100 mb-2 animate-fade-in">
+                                <label className="block text-xs font-bold text-blue-700 uppercase mb-1">New Correct Quantity</label>
+                                <input 
+                                    type="number" step="any"
+                                    placeholder="Enter actual quantity"
+                                    value={actualQuantity}
+                                    onChange={e => setActualQuantity(e.target.value)}
+                                    className="w-full p-2 bg-white border border-blue-300 rounded focus:ring-2 focus:ring-blue-500 outline-none font-bold text-blue-900"
+                                    autoFocus
+                                />
+                                <p className="text-[10px] text-blue-600 mt-1">
+                                    This will create a 'Balance Adjustment' transaction to fix your holdings.
+                                </p>
+                             </div>
+                        )}
+
+                        <div className="grid grid-cols-2 gap-4 opacity-100">
                              {/* Date Acquired */}
                              <div className="col-span-2">
                                 <label className="block text-xs font-medium text-slate-500 uppercase mb-1">{t('dateAcquired')}</label>
@@ -258,7 +303,8 @@ export const AddAssetModal: React.FC<Props> = ({ isOpen, onClose, initialAsset }
                                         type="date"
                                         value={dateAcquired}
                                         onChange={(e) => setDateAcquired(e.target.value)}
-                                        className="w-full pl-9 p-2.5 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                        disabled={!!initialAsset}
+                                        className="w-full pl-9 p-2.5 bg-white border border-slate-200 rounded-lg outline-none disabled:bg-slate-100 disabled:text-slate-400"
                                     />
                                 </div>
                             </div>
@@ -271,12 +317,12 @@ export const AddAssetModal: React.FC<Props> = ({ isOpen, onClose, initialAsset }
                                     type="number" step="any" 
                                     placeholder="0.00"
                                     value={quantity} onChange={e => setQuantity(e.target.value)}
-                                    className="w-full p-2.5 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                                    required
+                                    className="w-full p-2.5 bg-white border border-slate-200 rounded-lg outline-none"
+                                    required={!initialAsset}
                                 />
                             </div>
 
-                            {/* Logic: Strict Manual Assets show "Current Price". Market Assets AND CASH show Average Cost input. */}
+                            {/* Logic: Strict Manual Assets show "Current Price". Market Assets show Avg Cost. */}
                             {isStrictManualAsset(type) ? (
                                 <div>
                                     <label className="block text-xs font-medium text-slate-500 uppercase mb-1">
@@ -286,7 +332,7 @@ export const AddAssetModal: React.FC<Props> = ({ isOpen, onClose, initialAsset }
                                         type="number" step="any" 
                                         placeholder="0.00"
                                         value={currentVal} onChange={e => setCurrentVal(e.target.value)}
-                                        className="w-full p-2.5 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                        className="w-full p-2.5 bg-white border border-slate-200 rounded-lg outline-none"
                                     />
                                 </div>
                             ) : (
@@ -298,22 +344,11 @@ export const AddAssetModal: React.FC<Props> = ({ isOpen, onClose, initialAsset }
                                         type="number" step="any" 
                                         placeholder="0.00"
                                         value={cost} onChange={e => setCost(e.target.value)}
-                                        className="w-full p-2.5 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                        className="w-full p-2.5 bg-white border border-slate-200 rounded-lg outline-none"
                                     />
-                                    {type === AssetType.CASH && (
-                                        <p className="text-[10px] text-slate-400 mt-1">Your cost basis per unit in USD</p>
-                                    )}
                                 </div>
                             )}
                         </div>
-                        
-                        {!isStrictManualAsset(type) && (
-                            <p className="text-xs text-slate-400 italic">
-                                {type === AssetType.CASH 
-                                  ? t('autoFetchCash')
-                                  : t('autoFetch')}
-                            </p>
-                        )}
                     </div>
 
                 </form>
@@ -328,7 +363,7 @@ export const AddAssetModal: React.FC<Props> = ({ isOpen, onClose, initialAsset }
                     className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl shadow-lg shadow-blue-200 transition-all flex items-center justify-center gap-2"
                 >
                     <Save size={18}/>
-                    {initialAsset ? t('saveChanges') : t('addToPortfolio')}
+                    {showAdjustment ? "Confirm Adjustment" : (initialAsset ? t('saveChanges') : t('addToPortfolio'))}
                 </button>
             </div>
         )}

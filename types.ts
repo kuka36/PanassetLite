@@ -23,39 +23,63 @@ export enum EntryMode {
   TRANSACTION = 'TRANSACTION'
 }
 
+// Enhanced Transaction Types
 export enum TransactionType {
-  BUY = 'BUY',
-  SELL = 'SELL',
-  DIVIDEND = 'DIVIDEND'
+  // Market Actions
+  BUY = 'BUY',           
+  SELL = 'SELL',         
+  DIVIDEND = 'DIVIDEND', 
+  
+  // Cash/Flow Actions
+  DEPOSIT = 'DEPOSIT',       
+  WITHDRAWAL = 'WITHDRAWAL', 
+  
+  // Liability Actions
+  BORROW = 'BORROW',    // Increase Liability
+  REPAY = 'REPAY',      // Decrease Liability
+  
+  // Corrections
+  BALANCE_ADJUSTMENT = 'BALANCE_ADJUSTMENT' 
 }
 
+// 1. Static Metadata (Stored in DB/LocalStorage)
+export interface AssetMetadata {
+  id: string;
+  symbol: string; 
+  name: string;
+  type: AssetType;
+  currency: Currency;
+  currentPrice: number; // Latest known market price (API or Manual)
+  lastUpdated?: number; 
+  dateAcquired?: string; // Display purpose only
+  isDeleted?: boolean;
+}
+
+// 2. The Source of Truth (Stored in DB/LocalStorage)
 export interface Transaction {
   id: string;
   assetId: string;
   type: TransactionType;
-  date: string;
-  quantity: number;
-  price: number;
+  date: string;         // YYYY-MM-DD
+  quantityChange: number; // Signed value: Buy (+), Sell (-), Borrow (+), Repay (-)
+  pricePerUnit: number;   // Price at the time of transaction
   fee: number;
-  total: number;
+  total: number;          // Cash flow impact (derived or explicit)
+  note?: string;
 }
 
-export interface Asset {
-  id: string;
-  symbol: string; // e.g., AAPL, BTC, or "Apt 4B"
-  name: string;
-  type: AssetType;
-  quantity: number;
-  avgCost: number; // Weighted average cost
-  currentPrice: number; // Mocked live price OR Manual Valuation
-  currency: Currency;
-  lastUpdated?: number; // Timestamp of last price update
-  dateAcquired?: string; // Start date of holding (for simple mode)
-  // Computed fields for UI convenience
-  currentValue?: number;
-  totalCost?: number;
-  pnl?: number;
-  pnlPercent?: number;
+// 3. Computed View (Used by UI, derived from 1 & 2)
+// This interface matches the old 'Asset' interface to minimize UI refactoring
+export interface Asset extends AssetMetadata {
+  quantity: number;       // Computed: Sum(quantityChange)
+  avgCost: number;        // Computed: Weighted Average Cost
+  totalCost: number;      // Computed: quantity * avgCost
+  
+  // UI Helpers
+  currentValue: number;   // quantity * currentPrice
+  pnl: number;            // Unrealized PnL
+  pnlPercent: number;
+  realizedPnL: number;    // Profit locked in from Sells
 }
 
 export interface PortfolioSummary {
@@ -63,7 +87,7 @@ export interface PortfolioSummary {
   totalCost: number;
   totalPnL: number;
   totalPnLPercent: number;
-  dayPnL: number; // Mocked for demo
+  dayPnL: number; 
   dayPnLPercent: number;
 }
 

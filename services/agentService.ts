@@ -23,15 +23,15 @@ const GET_TRANSACTIONS_TOOL: FunctionDeclaration = {
 
 const PROPOSE_ASSET_MUTATION: FunctionDeclaration = {
   name: "propose_asset_mutation",
-  description: "Propose to Add, Update, or Delete an Asset (Holding). Use this for opening new positions, editing asset details, or removing an asset entirely.",
+  description: "Propose to Add, Update, or Delete an Asset Metadata (Holding Info). For quantity changes, propose a TRANSACTION instead.",
   parameters: {
     type: Type.OBJECT,
     properties: {
       mutationType: { type: Type.STRING, enum: ["ADD", "UPDATE", "DELETE"], description: "Type of change" },
       symbol: { type: Type.STRING, description: "Asset Symbol (Required for ADD)" },
       assetId: { type: Type.STRING, description: "Asset ID (Required for UPDATE/DELETE). Use get_assets to find ID." },
-      quantity: { type: Type.NUMBER, description: "New quantity (for ADD/UPDATE)" },
-      price: { type: Type.NUMBER, description: "Current price or cost basis" },
+      initialQuantity: { type: Type.NUMBER, description: "Initial quantity (for ADD only)" },
+      price: { type: Type.NUMBER, description: "Price or Cost" },
       assetType: { type: Type.STRING, enum: ["STOCK", "CRYPTO", "CASH", "REAL_ESTATE", "LIABILITY", "FUND"], description: "Asset Type (for ADD)" },
       name: { type: Type.STRING, description: "Asset Name" }
     },
@@ -41,14 +41,14 @@ const PROPOSE_ASSET_MUTATION: FunctionDeclaration = {
 
 const PROPOSE_TRANSACTION_MUTATION: FunctionDeclaration = {
   name: "propose_transaction_mutation",
-  description: "Propose to Add (Record), Update, or Delete a Transaction. Use this for recording buys/sells/dividends, or fixing transaction history errors.",
+  description: "Propose to Add (Record), Update, or Delete a Transaction. Use this for BUY, SELL, DEPOSIT, etc.",
   parameters: {
     type: Type.OBJECT,
     properties: {
       mutationType: { type: Type.STRING, enum: ["ADD", "UPDATE", "DELETE"], description: "Type of change" },
       transactionId: { type: Type.STRING, description: "Transaction ID (Required for UPDATE/DELETE). Use get_transactions to find ID." },
       assetId: { type: Type.STRING, description: "Asset ID (Required for ADD). Use get_assets to find ID." },
-      txType: { type: Type.STRING, enum: ["BUY", "SELL", "DIVIDEND"], description: "Transaction Type (for ADD/UPDATE)" },
+      txType: { type: Type.STRING, enum: ["BUY", "SELL", "DIVIDEND", "DEPOSIT", "WITHDRAWAL", "BORROW", "REPAY"], description: "Transaction Type" },
       quantity: { type: Type.NUMBER, description: "Quantity" },
       price: { type: Type.NUMBER, description: "Price per unit" },
       date: { type: Type.STRING, description: "Date YYYY-MM-DD" },
@@ -74,13 +74,12 @@ export class AgentService {
     userMessage: string,
     history: ChatMessage[],
     assets: Asset[],
-    transactions: Transaction[], // Injected Dependency
+    transactions: Transaction[], 
     baseCurrency: Currency,
     language: Language,
     image?: string
   ): Promise<{ text: string, action?: PendingAction }> {
     
-    // 1. Fallback: No API Key
     if (!this.ai) {
       return {
         text: language === 'zh' 
@@ -107,16 +106,12 @@ export class AgentService {
            - ALWAYS check \`get_assets\` before proposing a transaction to get the correct \`assetId\`.
            - ALWAYS check \`get_transactions\` before updating/deleting a transaction to get the correct \`transactionId\`.
         2. **WRITE**: You can propose changes using \`propose_asset_mutation\` (for holdings) or \`propose_transaction_mutation\` (for trades).
-           - Do not hallucinate IDs. Read them first.
-        3. **VISION**: You can see images uploaded by the user. If an image contains financial data (e.g. screenshot of a portfolio or trade), extract the data and suggest relevant actions using the tools.
         
         **Behavior:**
         - Be concise.
-        - If the user says "Delete my last Apple trade", first call \`get_transactions\` to find it, THEN call \`propose_transaction_mutation\` with the ID.
-        - If the user says "I bought 10 AAPL", first check \`get_assets\` to see if AAPL exists. If yes, use its ID for \`propose_transaction_mutation\`. If no, you might need to ask or just Add Asset first.
+        - If the user says "I bought 10 AAPL", first check \`get_assets\` to see if AAPL exists. If yes, use its ID for \`propose_transaction_mutation\`. If no, you might need to Add Asset first.
       `;
 
-      // 3. Map & Sanitize History
       const geminiHistory: Content[] = history
         .filter(m => m.role !== 'system')
         .slice(-10)
@@ -136,7 +131,6 @@ export class AgentService {
           };
         });
 
-      // 4. Create Chat Session
       const chat = this.ai.chats.create({
         model: this.modelName,
         history: geminiHistory,
@@ -146,7 +140,6 @@ export class AgentService {
         }
       });
 
-      // 5. Send Message
       const currentParts: Part[] = [];
       if (image) {
           const base64Data = image.split(',')[1];
@@ -157,13 +150,9 @@ export class AgentService {
       if (safeUserMessage) {
           currentParts.push({ text: safeUserMessage });
       }
-      
-      // If no text and no image, send "." as fallback to keep conversation alive (unlikely case)
       if (currentParts.length === 0) currentParts.push({ text: "." });
 
       let response = await chat.sendMessage({ message: currentParts });
-      
-      // 6. Loop for Tool Calls (Model might need to read, then write)
       
       const functionCalls = response.functionCalls;
       
@@ -173,7 +162,6 @@ export class AgentService {
         // --- READ TOOLS ---
         if (call.name === 'get_assets') {
            const result = { assets: assets.map(a => ({ id: a.id, symbol: a.symbol, name: a.name, qty: a.quantity, price: a.currentPrice })) };
-           // Send result back to model
            response = await chat.sendMessage({ message: [{ functionResponse: { name: call.name, response: result } }] });
         }
         else if (call.name === 'get_transactions') {
@@ -189,13 +177,13 @@ export class AgentService {
            const result = { 
                transactions: filtered.map(t => {
                    const a = assets.find(as => as.id === t.assetId);
-                   return { id: t.id, date: t.date, type: t.type, symbol: a?.symbol, qty: t.quantity, price: t.price };
+                   return { id: t.id, date: t.date, type: t.type, symbol: a?.symbol, qty: t.quantityChange, price: t.pricePerUnit };
                }) 
            };
            response = await chat.sendMessage({ message: [{ functionResponse: { name: call.name, response: result } }] });
         }
         
-        // --- MUTATION TOOLS (Check again if the response after GET is a mutation) ---
+        // --- MUTATION TOOLS ---
         const finalCalls = response.functionCalls;
         if (finalCalls && finalCalls.length > 0) {
             const finalCall = finalCalls[0];
@@ -218,7 +206,7 @@ export class AgentService {
                         data: {
                             symbol: args.symbol,
                             name: args.name,
-                            quantity: args.quantity,
+                            quantity: args.initialQuantity, // Note mapped from initialQuantity
                             price: args.price,
                             type: args.assetType as AssetType
                         },
@@ -235,17 +223,10 @@ export class AgentService {
                 };
                 const actionType = typeMap[args.mutationType];
                 
-                // Try to resolve symbol for summary
                 let symbolStr = "Unknown";
                 if (args.assetId) {
                     const a = assets.find(as => as.id === args.assetId);
                     if (a) symbolStr = a.symbol;
-                } else if (args.transactionId) {
-                    const t = transactions.find(tr => tr.id === args.transactionId);
-                    if (t) {
-                        const a = assets.find(as => as.id === t.assetId);
-                        if (a) symbolStr = a.symbol;
-                    }
                 }
 
                 const summary = `${args.mutationType} Transaction: ${args.txType || ''} ${symbolStr}`;
@@ -270,7 +251,6 @@ export class AgentService {
         }
       }
 
-      // Normal text response
       return { text: response.text || "" };
 
     } catch (error: any) {

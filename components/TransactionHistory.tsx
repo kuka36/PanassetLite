@@ -65,8 +65,8 @@ export const TransactionHistory: React.FC = () => {
              t.date,
              t.type,
              info.symbol,
-             t.quantity,
-             t.price,
+             Math.abs(t.quantityChange),
+             t.pricePerUnit,
              t.fee,
              t.total
          ].join(",");
@@ -204,10 +204,10 @@ export const TransactionHistory: React.FC = () => {
                                     </span>
                                 </td>
                                 <td className="py-4 text-right font-medium text-slate-700">
-                                    {tx.quantity > 0 ? tx.quantity.toLocaleString() : '-'}
+                                    {Math.abs(tx.quantityChange) > 0 ? Math.abs(tx.quantityChange).toLocaleString() : '-'}
                                 </td>
                                 <td className="py-4 text-right text-slate-600 whitespace-nowrap">
-                                    {currencySymbol}{tx.price.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                                    {currencySymbol}{tx.pricePerUnit.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
                                 </td>
                                 <td className="py-4 text-right text-slate-500 whitespace-nowrap">
                                     {tx.fee > 0 ? `${currencySymbol}${tx.fee.toFixed(2)}` : '-'}
