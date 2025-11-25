@@ -3,9 +3,9 @@ import React, { useRef, useState } from 'react';
 import { usePortfolio } from '../context/PortfolioContext';
 import { Card } from './ui/Card';
 import { ConfirmModal } from './ui/ConfirmModal';
-import { Currency, Language, AIProvider } from '../types';
+import { Currency, Language, Asset, Transaction, AssetType, TransactionType } from '../types';
 import { 
-  Download, Upload, Trash2, Shield, Globe, AlertTriangle, CheckCircle, Key, Languages, Activity, Lock, Github, ExternalLink, Bot, Sparkles, Eye, EyeOff
+  Download, Upload, Trash2, Shield, Globe, AlertTriangle, CheckCircle, Key, Languages, Activity, Lock, Github, ExternalLink, Bot, Sparkles, Eye, EyeOff, FileSpreadsheet, FileText
 } from 'lucide-react';
 
 export const Settings: React.FC = () => {
@@ -28,27 +28,82 @@ export const Settings: React.FC = () => {
   const [showDeepSeek, setShowDeepSeek] = useState(false);
   const [showAlpha, setShowAlpha] = useState(false);
 
-  const handleExport = () => {
-    const data = {
-      assets,
-      transactions,
-      exportedAt: new Date().toISOString(),
-      version: '1.0'
-    };
-    
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  // --- CSV Helpers ---
+
+  const escapeCSV = (value: any): string => {
+    if (value === null || value === undefined) return '';
+    const str = String(value);
+    if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+      return `"${str.replace(/"/g, '""')}"`;
+    }
+    return str;
+  };
+
+  const downloadCSV = (content: string, filename: string) => {
+    const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `panassetlite_backup_${new Date().toISOString().split('T')[0]}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', filename);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
     URL.revokeObjectURL(url);
   };
 
-  const handleImportClick = () => {
-    fileInputRef.current?.click();
+  const handleExportAssets = () => {
+    const headers = ['id', 'symbol', 'name', 'type', 'currency', 'currentPrice', 'dateAcquired', 'lastUpdated'];
+    const rows = assets.map(a => [
+      a.id,
+      a.symbol,
+      a.name,
+      a.type,
+      a.currency,
+      a.currentPrice,
+      a.dateAcquired || '',
+      a.lastUpdated || ''
+    ].map(escapeCSV).join(','));
+    
+    const csvContent = [headers.join(','), ...rows].join('\n');
+    downloadCSV(csvContent, `panasset_assets_${new Date().toISOString().split('T')[0]}.csv`);
+  };
+
+  const handleExportTransactions = () => {
+    const headers = ['id', 'assetId', 'type', 'date', 'quantityChange', 'pricePerUnit', 'fee', 'total', 'note'];
+    const rows = transactions.map(tx => [
+      tx.id,
+      tx.assetId,
+      tx.type,
+      tx.date,
+      tx.quantityChange,
+      tx.pricePerUnit,
+      tx.fee,
+      tx.total,
+      tx.note || ''
+    ].map(escapeCSV).join(','));
+
+    const csvContent = [headers.join(','), ...rows].join('\n');
+    downloadCSV(csvContent, `panasset_transactions_${new Date().toISOString().split('T')[0]}.csv`);
+  };
+
+  const parseCSVLine = (line: string): string[] => {
+    const result: string[] = [];
+    let startValueIndex = 0;
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+        if (line[i] === '"') {
+            inQuotes = !inQuotes;
+        } else if (line[i] === ',' && !inQuotes) {
+            let val = line.substring(startValueIndex, i);
+            if (val.startsWith('"') && val.endsWith('"')) val = val.slice(1, -1).replace(/""/g, '"');
+            result.push(val);
+            startValueIndex = i + 1;
+        }
+    }
+    let lastVal = line.substring(startValueIndex);
+    if (lastVal.startsWith('"') && lastVal.endsWith('"')) lastVal = lastVal.slice(1, -1).replace(/""/g, '"');
+    result.push(lastVal);
+    return result;
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -58,19 +113,65 @@ export const Settings: React.FC = () => {
     const reader = new FileReader();
     reader.onload = (event) => {
       try {
-        const json = JSON.parse(event.target?.result as string);
-        if (!json.assets || !Array.isArray(json.assets)) {
-            throw new Error("Invalid backup file format");
+        const text = event.target?.result as string;
+        const lines = text.split(/\r?\n/).filter(line => line.trim() !== '');
+        if (lines.length < 2) throw new Error("File is empty or invalid");
+
+        const headers = parseCSVLine(lines[0]).map(h => h.trim());
+        
+        // Detect Type based on headers
+        if (headers.includes('symbol') && headers.includes('type')) {
+            // Import Assets
+            const newAssets: Asset[] = lines.slice(1).map(line => {
+                const vals = parseCSVLine(line);
+                const getVal = (key: string) => vals[headers.indexOf(key)];
+                
+                return {
+                    id: getVal('id') || crypto.randomUUID(),
+                    symbol: getVal('symbol'),
+                    name: getVal('name'),
+                    type: getVal('type') as AssetType,
+                    currency: getVal('currency') as Currency,
+                    currentPrice: parseFloat(getVal('currentPrice')) || 0,
+                    dateAcquired: getVal('dateAcquired'),
+                    lastUpdated: parseInt(getVal('lastUpdated')) || Date.now(),
+                    // Dummy computed values required by TS type, will be recalculated by context
+                    quantity: 0, avgCost: 0, totalCost: 0, currentValue: 0, pnl: 0, pnlPercent: 0, realizedPnL: 0
+                };
+            });
+            importData({ assets: newAssets, transactions: [] }); // Empty transactions array implies we keep existing or ignore
+            setImportStatus({ msg: `${t('importSuccess')} (${newAssets.length} Assets)`, type: 'success' });
+
+        } else if (headers.includes('assetId') && headers.includes('quantityChange')) {
+            // Import Transactions
+            const newTxs: Transaction[] = lines.slice(1).map(line => {
+                const vals = parseCSVLine(line);
+                const getVal = (key: string) => vals[headers.indexOf(key)];
+                return {
+                    id: getVal('id') || crypto.randomUUID(),
+                    assetId: getVal('assetId'),
+                    type: getVal('type') as TransactionType,
+                    date: getVal('date'),
+                    quantityChange: parseFloat(getVal('quantityChange')),
+                    pricePerUnit: parseFloat(getVal('pricePerUnit')),
+                    fee: parseFloat(getVal('fee')) || 0,
+                    total: parseFloat(getVal('total')) || 0,
+                    note: getVal('note')
+                };
+            });
+            importData({ assets: [], transactions: newTxs });
+            setImportStatus({ msg: `${t('importSuccess')} (${newTxs.length} Txns)`, type: 'success' });
+        } else {
+            throw new Error("Unknown CSV format");
         }
-        importData({ assets: json.assets, transactions: json.transactions || [] });
-        setImportStatus({ msg: t('importSuccess'), type: 'success' });
+        
         setTimeout(() => setImportStatus(null), 3000);
       } catch (err) {
+        console.error(err);
         setImportStatus({ msg: t('importError'), type: 'error' });
       }
     };
     reader.readAsText(file);
-    // Reset input
     e.target.value = '';
   };
 
@@ -78,6 +179,10 @@ export const Settings: React.FC = () => {
       clearData();
       setImportStatus({ msg: t('resetSuccess'), type: 'success' });
       setTimeout(() => setImportStatus(null), 3000);
+  };
+
+  const handleImportClick = () => {
+    fileInputRef.current?.click();
   };
 
   return (
@@ -384,32 +489,44 @@ export const Settings: React.FC = () => {
                 <span className="text-sm text-blue-700">{t('localDataSecurity')}</span>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {/* Export */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Export Assets */}
                 <button 
-                    onClick={handleExport}
-                    className="flex flex-col items-center justify-center p-6 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 hover:border-slate-300 transition-all group"
+                    onClick={handleExportAssets}
+                    className="flex flex-col items-center justify-center p-4 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 hover:border-slate-300 transition-all group"
                 >
-                    <div className="p-3 bg-slate-100 text-slate-600 rounded-full mb-3 group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">
-                        <Download size={24} />
+                    <div className="p-3 bg-slate-100 text-slate-600 rounded-full mb-2 group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">
+                        <FileSpreadsheet size={20} />
                     </div>
-                    <span className="font-medium text-slate-700">{t('exportData')}</span>
-                    <span className="text-xs text-slate-400 mt-1">{t('exportDesc')}</span>
+                    <span className="font-medium text-slate-700 text-sm">{settings.language === 'zh' ? "导出资产 (CSV)" : "Export Assets (CSV)"}</span>
                 </button>
 
+                {/* Export Transactions */}
+                <button 
+                    onClick={handleExportTransactions}
+                    className="flex flex-col items-center justify-center p-4 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 hover:border-slate-300 transition-all group"
+                >
+                    <div className="p-3 bg-slate-100 text-slate-600 rounded-full mb-2 group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">
+                        <FileText size={20} />
+                    </div>
+                    <span className="font-medium text-slate-700 text-sm">{settings.language === 'zh' ? "导出交易 (CSV)" : "Export Txns (CSV)"}</span>
+                </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Import */}
                 <button 
                     onClick={handleImportClick}
-                    className="flex flex-col items-center justify-center p-6 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 hover:border-slate-300 transition-all group"
+                    className="flex flex-col items-center justify-center p-4 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 hover:border-slate-300 transition-all group"
                 >
-                    <div className="p-3 bg-slate-100 text-slate-600 rounded-full mb-3 group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">
-                        <Upload size={24} />
+                    <div className="p-3 bg-slate-100 text-slate-600 rounded-full mb-2 group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">
+                        <Upload size={20} />
                     </div>
-                    <span className="font-medium text-slate-700">{t('importData')}</span>
-                    <span className="text-xs text-slate-400 mt-1">{t('importDesc')}</span>
+                    <span className="font-medium text-slate-700 text-sm">{t('importData')}</span>
+                    <span className="text-xs text-slate-400 mt-0.5">.csv</span>
                     <input 
                         type="file" 
-                        accept=".json" 
+                        accept=".csv" 
                         ref={fileInputRef} 
                         onChange={handleFileChange} 
                         className="hidden" 
@@ -419,13 +536,13 @@ export const Settings: React.FC = () => {
                 {/* Reset */}
                 <button 
                     onClick={() => setIsResetConfirmOpen(true)}
-                    className="flex flex-col items-center justify-center p-6 bg-white border border-slate-200 rounded-xl hover:bg-red-50 hover:border-red-200 transition-all group"
+                    className="flex flex-col items-center justify-center p-4 bg-white border border-slate-200 rounded-xl hover:bg-red-50 hover:border-red-200 transition-all group"
                 >
-                    <div className="p-3 bg-slate-100 text-slate-600 rounded-full mb-3 group-hover:bg-red-100 group-hover:text-red-600 transition-colors">
-                        <Trash2 size={24} />
+                    <div className="p-3 bg-slate-100 text-slate-600 rounded-full mb-2 group-hover:bg-red-100 group-hover:text-red-600 transition-colors">
+                        <Trash2 size={20} />
                     </div>
-                    <span className="font-medium text-slate-700 group-hover:text-red-700">{t('resetData')}</span>
-                    <span className="text-xs text-slate-400 mt-1 group-hover:text-red-400">{t('resetDesc')}</span>
+                    <span className="font-medium text-slate-700 text-sm group-hover:text-red-700">{t('resetData')}</span>
+                    <span className="text-xs text-slate-400 mt-0.5 group-hover:text-red-400">{t('resetDesc')}</span>
                 </button>
             </div>
         </div>
@@ -442,7 +559,7 @@ export const Settings: React.FC = () => {
       />
 
       <div className="text-center text-slate-400 text-sm pt-4">
-          {settings.language === 'zh' ? "盘资产·轻 v1.1.0 • 本地数据存储" : "PanassetLite v1.1.0 • Local Data Storage"}
+          {settings.language === 'zh' ? "盘资产·轻 v1.2.0 • 本地数据存储" : "PanassetLite v1.2.0 • Local Data Storage"}
       </div>
     </div>
   );

@@ -1,11 +1,8 @@
-
-
-
 import React, { useState, useEffect } from 'react';
 import { Asset, AssetType, Currency, VoiceParseResult, TransactionType, AssetMetadata } from '../types';
 import { usePortfolio } from '../context/PortfolioContext';
 import { VoiceInput } from './ui/VoiceInput';
-import { X, Save, TrendingUp, Bitcoin, PieChart, Building, Banknote, CreditCard, Box, Calendar, AlertCircle } from 'lucide-react';
+import { X, Save, TrendingUp, Bitcoin, PieChart, Building, Banknote, CreditCard, Box, Calendar, PenLine } from 'lucide-react';
 
 interface Props {
   isOpen: boolean;
@@ -124,8 +121,6 @@ export const AddAssetModal: React.FC<Props> = ({ isOpen, onClose, initialAsset }
             total: delta * initialAsset.avgCost,
             note: 'Manual Balance Correction'
         });
-        
-        // Also allow saving metadata changes below if any
     }
 
     // --- MODE 2: CREATE / EDIT METADATA ---
@@ -251,37 +246,10 @@ export const AddAssetModal: React.FC<Props> = ({ isOpen, onClose, initialAsset }
                     </div>
 
                     {/* Financials Section */}
-                    <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 space-y-4 relative">
-                        <h3 className="text-sm font-semibold text-slate-700">{t('valuationHoldings')}</h3>
-                        
-                        {/* EDIT MODE: Locking Fields Logic */}
-                        {initialAsset && !showAdjustment && (
-                            <div className="absolute inset-0 bg-white/50 backdrop-blur-[1px] z-10 flex flex-col items-center justify-center text-center p-4 rounded-xl border border-slate-200/50">
-                                <div className="bg-white p-4 rounded-xl shadow-lg border border-slate-100 max-w-sm">
-                                    <AlertCircle size={32} className="mx-auto text-blue-500 mb-2" />
-                                    <h4 className="font-bold text-slate-800 text-sm mb-1">Holdings are Managed via Transactions</h4>
-                                    <p className="text-xs text-slate-500 mb-3">
-                                        Quantity and Cost are calculated from your transaction history. To fix errors, you can adjust the balance directly.
-                                    </p>
-                                    <div className="flex gap-2 justify-center">
-                                        <button 
-                                            type="button" 
-                                            onClick={() => setShowAdjustment(true)}
-                                            className="px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700"
-                                        >
-                                            Adjust Balance
-                                        </button>
-                                        <button 
-                                            type="button" 
-                                            onClick={onClose}
-                                            className="px-3 py-1.5 bg-slate-100 text-slate-600 text-xs font-medium rounded-lg hover:bg-slate-200"
-                                        >
-                                            Cancel
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
+                    <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 space-y-4">
+                        <div className="flex justify-between items-center">
+                            <h3 className="text-sm font-semibold text-slate-700">{t('valuationHoldings')}</h3>
+                        </div>
 
                         {showAdjustment && (
                              <div className="bg-blue-50 p-3 rounded-lg border border-blue-100 mb-2 animate-fade-in">
@@ -300,7 +268,7 @@ export const AddAssetModal: React.FC<Props> = ({ isOpen, onClose, initialAsset }
                              </div>
                         )}
 
-                        <div className="grid grid-cols-2 gap-4 opacity-100">
+                        <div className="grid grid-cols-2 gap-4">
                              {/* Date Acquired */}
                              <div className="col-span-2">
                                 <label className="block text-xs font-medium text-slate-500 uppercase mb-1">{t('dateAcquired')}</label>
@@ -311,21 +279,34 @@ export const AddAssetModal: React.FC<Props> = ({ isOpen, onClose, initialAsset }
                                         step="1"
                                         value={dateAcquired}
                                         onChange={(e) => setDateAcquired(e.target.value)}
-                                        disabled={!!initialAsset}
-                                        className="w-full pl-9 p-2.5 bg-white border border-slate-200 rounded-lg outline-none disabled:bg-slate-100 disabled:text-slate-400"
+                                        // Removed disable constraint to allow fixing dates
+                                        className="w-full pl-9 p-2.5 bg-white border border-slate-200 rounded-lg outline-none"
                                     />
                                 </div>
                             </div>
 
                             <div>
-                                <label className="block text-xs font-medium text-slate-500 uppercase mb-1">
+                                <label className="flex items-center justify-between text-xs font-medium text-slate-500 uppercase mb-1">
                                     {type === AssetType.CASH ? t('balance') : (type === AssetType.LIABILITY ? t('principalRemaining') : t('quantity'))}
+                                    
+                                    {initialAsset && !showAdjustment && (
+                                        <button 
+                                            type="button" 
+                                            onClick={() => setShowAdjustment(true)}
+                                            className="text-[10px] normal-case text-blue-600 hover:bg-blue-50 px-1.5 py-0.5 rounded flex items-center gap-1 transition-colors"
+                                        >
+                                            <PenLine size={10} /> Adjust
+                                        </button>
+                                    )}
                                 </label>
                                 <input 
                                     type="number" step="any" 
                                     placeholder="0.00"
                                     value={quantity} onChange={e => setQuantity(e.target.value)}
-                                    className="w-full p-2.5 bg-white border border-slate-200 rounded-lg outline-none"
+                                    // Disable direct quantity editing in edit mode unless we decide to allow direct overriding without traces
+                                    // For event sourcing, we prefer adjustments. 
+                                    disabled={!!initialAsset} 
+                                    className="w-full p-2.5 bg-white border border-slate-200 rounded-lg outline-none disabled:bg-slate-100 disabled:text-slate-500"
                                     required={!initialAsset}
                                 />
                             </div>
@@ -352,7 +333,8 @@ export const AddAssetModal: React.FC<Props> = ({ isOpen, onClose, initialAsset }
                                         type="number" step="any" 
                                         placeholder="0.00"
                                         value={cost} onChange={e => setCost(e.target.value)}
-                                        className="w-full p-2.5 bg-white border border-slate-200 rounded-lg outline-none"
+                                        disabled={!!initialAsset}
+                                        className="w-full p-2.5 bg-white border border-slate-200 rounded-lg outline-none disabled:bg-slate-100 disabled:text-slate-500"
                                     />
                                 </div>
                             )}

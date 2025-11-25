@@ -1,10 +1,3 @@
-
-
-
-
-
-
-
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Send, Sparkles, Check, AlertCircle, Trash2, User, Keyboard, AudioLines, Image as ImageIcon } from 'lucide-react';
 import { usePortfolio } from '../context/PortfolioContext';
@@ -30,6 +23,7 @@ export const AIChatAssistant: React.FC<AIChatAssistantProps> = ({ isOpen, onClos
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Load History on Mount
   useEffect(() => {
@@ -55,7 +49,7 @@ export const AIChatAssistant: React.FC<AIChatAssistantProps> = ({ isOpen, onClos
   // Save History on Update
   useEffect(() => {
     if (messages.length > 0) {
-      const validMessages = messages.filter(m => (m.content && m.content.trim() !== '') || m.image);
+      const validMessages = messages.filter(m => (m.content && m.content.trim() !== '') || m.image || m.pendingAction);
       localStorage.setItem(HISTORY_KEY, JSON.stringify(validMessages.slice(-50))); 
     }
   }, [messages]);
@@ -64,6 +58,18 @@ export const AIChatAssistant: React.FC<AIChatAssistantProps> = ({ isOpen, onClos
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isOpen, isTyping, isVoiceMode, selectedImage]);
+
+  // Auto resize textarea
+  useEffect(() => {
+    if (textareaRef.current) {
+        // Reset height to auto to get correct scrollHeight
+        textareaRef.current.style.height = 'auto';
+        // Set new height based on scrollHeight, capped at 120px
+        const newHeight = Math.min(textareaRef.current.scrollHeight, 120);
+        // Only increase, don't shrink below base line (e.g. 24px)
+        textareaRef.current.style.height = `${Math.max(24, newHeight)}px`;
+    }
+  }, [input]);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -272,11 +278,14 @@ export const AIChatAssistant: React.FC<AIChatAssistantProps> = ({ isOpen, onClos
 
   const desktopLeftClass = isSidebarCollapsed ? 'md:left-24' : 'md:left-72';
 
-  const MarkdownContent = ({ content }: { content: string }) => (
-     <div className="prose prose-sm max-w-none prose-p:leading-relaxed prose-pre:bg-slate-800 prose-pre:text-white prose-p:my-1 prose-ul:my-1 prose-li:my-0">
-        <ReactMarkdown>{content}</ReactMarkdown>
-     </div>
-  );
+  const MarkdownContent = ({ content }: { content: string }) => {
+     if (!content) return null;
+     return (
+        <div className="prose prose-sm max-w-none prose-p:leading-relaxed prose-pre:bg-slate-800 prose-pre:text-white prose-p:my-1 prose-ul:my-1 prose-li:my-0">
+            <ReactMarkdown>{content}</ReactMarkdown>
+        </div>
+     );
+  };
 
   if (!isOpen) return null;
 
@@ -339,7 +348,7 @@ export const AIChatAssistant: React.FC<AIChatAssistantProps> = ({ isOpen, onClos
               <MarkdownContent content={msg.content} />
 
               {msg.pendingAction && (
-                <div className="mt-3 p-3 bg-indigo-50 border border-indigo-100 rounded-xl animate-fade-in">
+                <div className="mt-2 p-3 bg-indigo-50 border border-indigo-100 rounded-xl animate-fade-in">
                     <div className="flex items-start gap-2 mb-2">
                         <AlertCircle size={16} className="text-indigo-600 mt-0.5 shrink-0"/>
                         <div className="text-xs text-indigo-800 font-medium">
@@ -435,7 +444,7 @@ export const AIChatAssistant: React.FC<AIChatAssistantProps> = ({ isOpen, onClos
                 <div className="flex-1 flex gap-2 items-end bg-slate-50 border border-slate-200 rounded-xl px-2 py-2 focus-within:ring-2 focus-within:ring-indigo-500 focus-within:bg-white transition-all">
                     <button 
                         onClick={() => fileInputRef.current?.click()}
-                        className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors shrink-0"
+                        className="p-1.5 mb-px text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors shrink-0 self-end"
                         title="Upload Image"
                     >
                         <ImageIcon size={20} />
@@ -449,6 +458,7 @@ export const AIChatAssistant: React.FC<AIChatAssistantProps> = ({ isOpen, onClos
                     />
                     
                     <textarea
+                        ref={textareaRef}
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
                         onKeyDown={(e) => {
@@ -460,8 +470,8 @@ export const AIChatAssistant: React.FC<AIChatAssistantProps> = ({ isOpen, onClos
                         placeholder={settings.language === 'zh' ? "输入消息..." : "Type a message..."}
                         disabled={isTyping} 
                         rows={1}
-                        className="flex-1 bg-transparent border-none p-1.5 text-sm focus:ring-0 resize-none max-h-24 outline-none disabled:opacity-50"
-                        style={{ minHeight: '36px' }}
+                        className="flex-1 bg-transparent border-none p-1.5 text-sm focus:ring-0 resize-none max-h-32 outline-none disabled:opacity-50 overflow-y-auto"
+                        style={{ minHeight: '24px', lineHeight: '1.5' }}
                     />
                 </div>
 

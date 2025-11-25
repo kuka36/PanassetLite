@@ -1,6 +1,7 @@
 
 
 
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Line 
@@ -21,14 +22,23 @@ interface NetWorthChartProps {
 
 type TimeRange = '1W' | '1M' | '3M' | '6M' | '1Y' | 'ALL';
 
-// Helper to generate array of dates
+// Helper to formatted YYYY-MM-DD in local time
+// CRITICAL FIX: Use Local Time for Axis to match Transaction Dates
+const toLocalYMD = (date: Date) => {
+    const y = date.getFullYear();
+    const m = (date.getMonth() + 1).toString().padStart(2, '0');
+    const d = date.getDate().toString().padStart(2, '0');
+    return `${y}-${m}-${d}`;
+};
+
+// Helper to generate array of dates (Local Time)
 const getDatesInRange = (startDate: Date, endDate: Date) => {
     const dates = [];
     const theDate = new Date(startDate);
     // Safety break to prevent infinite loops
     let loops = 0;
     while (theDate <= endDate && loops < 5000) {
-        dates.push(new Date(theDate).toISOString().split('T')[0]);
+        dates.push(toLocalYMD(theDate));
         theDate.setDate(theDate.getDate() + 1);
         loops++;
     }
@@ -50,6 +60,7 @@ export const NetWorthChart: React.FC<NetWorthChartProps> = ({
   
   // 1. Fetch History
   useEffect(() => {
+    let isMounted = true;
     const loadData = async () => {
       if (assets.length === 0) return;
       
@@ -75,13 +86,15 @@ export const NetWorthChart: React.FC<NetWorthChartProps> = ({
       });
 
       const results = await Promise.all(promises);
-      results.forEach(r => map[r.id] = r.data);
-      
-      setHistoryMap(map);
-      setLoadingHistory(false);
+      if (isMounted) {
+          results.forEach(r => map[r.id] = r.data);
+          setHistoryMap(map);
+          setLoadingHistory(false);
+      }
     };
 
     loadData();
+    return () => { isMounted = false; };
   }, [assets.length, settings.alphaVantageApiKey]); 
 
   // 2. Format Helpers
@@ -127,7 +140,7 @@ export const NetWorthChart: React.FC<NetWorthChartProps> = ({
     
     assets.forEach(a => {
         if (!assetIdsWithTx.has(a.id)) {
-            const date = a.dateAcquired || new Date().toISOString().split('T')[0]; 
+            const date = a.dateAcquired || toLocalYMD(new Date()); // Fix: Use local date fallback
             // Create a synthetic transaction that matches the Transaction interface
             syntheticTransactions.push({
                 id: `synthetic-${a.id}`,
@@ -190,7 +203,6 @@ export const NetWorthChart: React.FC<NetWorthChartProps> = ({
         const history = historyMap[a.id];
         // Use history start if available, else current price
         if (history && history.length > 0) {
-            // Find closest price to replay start? No, just track forward.
             lastKnownPrices[a.id] = history[0].price;
         } else {
             lastKnownPrices[a.id] = a.currentPrice;
@@ -198,6 +210,7 @@ export const NetWorthChart: React.FC<NetWorthChartProps> = ({
     });
 
     const dataPoints = [];
+    const filterStartDateStr = toLocalYMD(startDate);
 
     // D. Iterate
     for (const dateStr of dateList) {
@@ -210,7 +223,9 @@ export const NetWorthChart: React.FC<NetWorthChartProps> = ({
         });
 
         // 2. Apply Transactions happening ON this date
-        // Fix: Use startsWith to match YYYY-MM-DD even if t.date is full ISO
+        // Note: t.date is usually ISO "YYYY-MM-DDTHH:mm:ss" in Local Time.
+        // dateStr is "YYYY-MM-DD" in Local Time.
+        // startsWith works correctly now.
         const daysTransactions = allTransactions.filter(t => t.date.startsWith(dateStr));
         
         for (const tx of daysTransactions) {
@@ -272,7 +287,7 @@ export const NetWorthChart: React.FC<NetWorthChartProps> = ({
         });
 
         // 4. Push Data (Only if within requested range)
-        if (dateStr >= startDate.toISOString().split('T')[0]) {
+        if (dateStr >= filterStartDateStr) {
             dataPoints.push({
                 date: dateStr,
                 displayDate: new Date(dateStr).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),

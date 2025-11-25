@@ -1,9 +1,3 @@
-
-
-
-
-
-
 import { Content, FunctionDeclaration, GoogleGenAI, Type, Part } from "@google/genai";
 import { Asset, ChatMessage, Currency, PendingAction, TransactionType, AssetType, Language, Transaction, ActionType } from "../types";
 
@@ -224,7 +218,7 @@ export class AgentService {
                 const summary = `${args.mutationType} Asset: ${displaySymbol || args.assetId || 'Unknown'}`;
 
                 return {
-                    text: language === 'zh' ? `建议操作: **${args.mutationType} 资产**。请确认。` : `Proposed Action: **${args.mutationType} Asset**. Please confirm.`,
+                    text: "", // Empty string to avoid redundancy in UI
                     action: {
                         type: actionType,
                         targetId: args.assetId,
@@ -258,7 +252,7 @@ export class AgentService {
                 const summary = `${args.mutationType} Transaction: ${args.txType || ''} ${symbolStr}`;
                 
                 return {
-                    text: language === 'zh' ? `建议操作: **${args.mutationType} 交易记录**。请确认。` : `Proposed Action: **${args.mutationType} Transaction**. Please confirm.`,
+                    text: "", // Empty string to avoid redundancy in UI
                     action: {
                         type: actionType,
                         targetId: args.transactionId,
