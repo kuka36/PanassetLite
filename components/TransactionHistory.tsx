@@ -3,7 +3,7 @@ import React, { useState, useMemo } from 'react';
 import { usePortfolio } from '../context/PortfolioContext';
 import { Card } from './ui/Card';
 import { TransactionType, Currency } from '../types';
-import { Filter, Download, ArrowDownLeft, ArrowUpRight, DollarSign, Trash2 } from 'lucide-react';
+import { Filter, Download, ArrowDownLeft, ArrowUpRight, DollarSign, Trash2, ArrowRightLeft, CreditCard, RefreshCw } from 'lucide-react';
 
 export const TransactionHistory: React.FC = () => {
   const { transactions, assets, deleteTransaction, t } = usePortfolio();
@@ -33,17 +33,29 @@ export const TransactionHistory: React.FC = () => {
   const getTypeStyle = (type: TransactionType) => {
     switch (type) {
       case TransactionType.BUY: return 'bg-blue-100 text-blue-700';
+      case TransactionType.DEPOSIT: return 'bg-blue-50 text-blue-600';
       case TransactionType.SELL: return 'bg-purple-100 text-purple-700';
+      case TransactionType.WITHDRAWAL: return 'bg-purple-50 text-purple-600';
       case TransactionType.DIVIDEND: return 'bg-green-100 text-green-700';
+      case TransactionType.BORROW: return 'bg-amber-100 text-amber-700';
+      case TransactionType.REPAY: return 'bg-indigo-100 text-indigo-700';
+      case TransactionType.BALANCE_ADJUSTMENT: return 'bg-slate-100 text-slate-700 border border-slate-200';
       default: return 'bg-slate-100 text-slate-700';
     }
   };
 
   const getTypeIcon = (type: TransactionType) => {
      switch (type) {
-      case TransactionType.BUY: return <ArrowDownLeft size={16} />;
-      case TransactionType.SELL: return <ArrowUpRight size={16} />;
+      case TransactionType.BUY: 
+      case TransactionType.DEPOSIT:
+          return <ArrowDownLeft size={16} />;
+      case TransactionType.SELL: 
+      case TransactionType.WITHDRAWAL:
+          return <ArrowUpRight size={16} />;
       case TransactionType.DIVIDEND: return <DollarSign size={16} />;
+      case TransactionType.BORROW: return <CreditCard size={16} />;
+      case TransactionType.REPAY: return <ArrowRightLeft size={16} />;
+      case TransactionType.BALANCE_ADJUSTMENT: return <RefreshCw size={14} />;
       default: return null;
     }
   };
@@ -65,7 +77,7 @@ export const TransactionHistory: React.FC = () => {
              t.date,
              t.type,
              info.symbol,
-             Math.abs(t.quantityChange),
+             Math.abs(t.quantityChange || 0),
              t.pricePerUnit,
              t.fee,
              t.total
@@ -139,9 +151,10 @@ export const TransactionHistory: React.FC = () => {
                         className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none appearance-none"
                     >
                         <option value="all">{t('allTypes')}</option>
-                        <option value="BUY">{t('tx_BUY')}</option>
-                        <option value="SELL">{t('tx_SELL')}</option>
-                        <option value="DIVIDEND">{t('tx_DIVIDEND')}</option>
+                        <option value={TransactionType.BUY}>{t('tx_BUY')}</option>
+                        <option value={TransactionType.SELL}>{t('tx_SELL')}</option>
+                        <option value={TransactionType.DIVIDEND}>{t('tx_DIVIDEND')}</option>
+                        <option value={TransactionType.BALANCE_ADJUSTMENT}>Adjustment</option>
                     </select>
                     <Filter className="absolute right-3 top-3 text-slate-400 pointer-events-none" size={16} />
                 </div>
@@ -187,6 +200,7 @@ export const TransactionHistory: React.FC = () => {
                     {filteredTransactions.map(tx => {
                         const assetInfo = getAssetInfo(tx.assetId);
                         const currencySymbol = getCurrencySymbol(assetInfo.currency);
+                        const quantity = Math.abs(tx.quantityChange || 0);
                         
                         return (
                             <tr key={tx.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/50 transition-colors">
@@ -200,11 +214,11 @@ export const TransactionHistory: React.FC = () => {
                                 <td className="py-4">
                                     <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium ${getTypeStyle(tx.type)}`}>
                                         {getTypeIcon(tx.type)}
-                                        {t(`tx_${tx.type}`)}
+                                        {t(`tx_${tx.type}`) || tx.type}
                                     </span>
                                 </td>
                                 <td className="py-4 text-right font-medium text-slate-700">
-                                    {Math.abs(tx.quantityChange) > 0 ? Math.abs(tx.quantityChange).toLocaleString() : '-'}
+                                    {quantity > 0 ? quantity.toLocaleString() : '-'}
                                 </td>
                                 <td className="py-4 text-right text-slate-600 whitespace-nowrap">
                                     {currencySymbol}{tx.pricePerUnit.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
