@@ -1,6 +1,4 @@
 
-
-
 import React, { createContext, useContext, useState, useEffect, ReactNode, useRef, useMemo } from 'react';
 import { Asset, AssetMetadata, AssetType, Currency, Transaction, TransactionType, Language, AIProvider } from '../types';
 import { 
@@ -39,7 +37,8 @@ interface PortfolioContextType {
   updateAssetPrice: (id: string, newPrice: number) => void;
   refreshPrices: (assetsOverride?: Asset[]) => Promise<void>;
   updateSettings: (newSettings: Partial<AppSettings>) => void;
-  importData: (data: { assets: Asset[], transactions: Transaction[] }) => void;
+  importAssetsCSV: (newMetas: AssetMetadata[]) => number;
+  importTransactionsCSV: (newTxs: Transaction[]) => number;
   clearData: () => void;
   t: (key: string) => string;
 }
@@ -374,25 +373,42 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
     setSettings(prev => ({ ...prev, ...newSettings }));
   };
 
-  const importData = (data: { assets: Asset[], transactions: Transaction[] }) => {
-    // Handling import might require mapping 'assets' back to metadata if they are full objects
-    // For simplicity, assuming the backup contains compatible structures or we map fields
-    if (Array.isArray(data.assets)) {
-      const metas = data.assets.map((a: any) => ({
-          id: a.id,
-          symbol: a.symbol,
-          name: a.name,
-          type: a.type,
-          currency: a.currency,
-          currentPrice: a.currentPrice,
-          lastUpdated: a.lastUpdated || Date.now(),
-          dateAcquired: a.dateAcquired
-      }));
-      setAssetMetas(metas);
-    }
-    if (Array.isArray(data.transactions)) {
-        setTransactions(data.transactions);
-    }
+  // --- UPSERT Logic for CSV Import ---
+
+  const importAssetsCSV = (newMetas: AssetMetadata[]): number => {
+    let count = 0;
+    setAssetMetas(prev => {
+        const next = [...prev];
+        newMetas.forEach(newItem => {
+            const idx = next.findIndex(p => p.id === newItem.id);
+            if (idx >= 0) {
+                next[idx] = { ...next[idx], ...newItem }; // Update existing
+            } else {
+                next.push(newItem); // Add new
+            }
+            count++;
+        });
+        return next;
+    });
+    return count;
+  };
+
+  const importTransactionsCSV = (newTxs: Transaction[]): number => {
+    let count = 0;
+    setTransactions(prev => {
+        const next = [...prev];
+        newTxs.forEach(newItem => {
+            const idx = next.findIndex(p => p.id === newItem.id);
+            if (idx >= 0) {
+                next[idx] = { ...next[idx], ...newItem }; // Update existing
+            } else {
+                next.push(newItem); // Add new
+            }
+            count++;
+        });
+        return next;
+    });
+    return count;
   };
 
   const clearData = () => {
@@ -424,7 +440,8 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
       updateAssetPrice, 
       refreshPrices,
       updateSettings,
-      importData,
+      importAssetsCSV,
+      importTransactionsCSV,
       clearData,
       t
     }}>

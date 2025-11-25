@@ -1,6 +1,4 @@
 
-
-
 import { Language } from '../types';
 
 export const translations: Record<Language, Record<string, string>> = {
@@ -158,16 +156,17 @@ export const translations: Record<Language, Record<string, string>> = {
     languageDesc: "Display language for the application",
     privacyMode: "Privacy Mode",
     privacyModeDesc: "Mask financial values on the dashboard",
-    dataManagement: "Data Management",
+    dataManagement: "Data Management (CSV)",
     exportData: "Export Data",
     exportDesc: "Download JSON backup",
-    importData: "Import Data",
-    importDesc: "Restore from JSON",
+    importData: "Import CSV Data",
+    uploadCSV: "Upload CSV File",
+    importHint: "Upload 'Assets' CSV or 'Transactions' CSV. The system will auto-detect the type and update/add records based on ID. Tip: Import Assets first.",
     resetData: "Reset Data",
     resetDesc: "Clear all assets",
     resetConfirm: "Are you sure? This will permanently delete all your assets and transactions. This action cannot be undone.",
-    importSuccess: "Data imported successfully!",
-    importError: "Failed to parse file. Invalid JSON.",
+    importSuccess: "Import successful!",
+    importError: "Failed to parse CSV. Please ensure headers match the export format.",
     resetSuccess: "All data has been reset.",
     localDataSecurity: "Data is stored locally on your device. Safe and secure.",
 
@@ -350,16 +349,17 @@ export const translations: Record<Language, Record<string, string>> = {
     languageDesc: "应用程序显示语言",
     privacyMode: "隐私模式",
     privacyModeDesc: "在仪表盘上隐藏具体金额",
-    dataManagement: "数据管理",
+    dataManagement: "数据管理 (CSV)",
     exportData: "导出数据",
     exportDesc: "下载 JSON 备份",
-    importData: "导入数据",
-    importDesc: "从 JSON 恢复",
+    importData: "导入 CSV 数据",
+    uploadCSV: "上传 CSV 文件",
+    importHint: "上传“资产清单”或“交易记录”的 CSV 文件。系统会自动识别类型，并根据 ID 更新或新增记录。建议先导入资产清单。",
     resetData: "重置数据",
     resetDesc: "清空所有资产",
     resetConfirm: "确定要清空吗？这将永久删除您的所有资产和交易记录，无法撤销。",
-    importSuccess: "数据导入成功！",
-    importError: "文件解析失败。无效的 JSON。",
+    importSuccess: "导入成功！",
+    importError: "文件解析失败，请确保表头格式正确。",
     resetSuccess: "所有数据已重置。",
     localDataSecurity: "本地保存数据，放心安全存储。",
 

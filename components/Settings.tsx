@@ -3,9 +3,9 @@ import React, { useRef, useState } from 'react';
 import { usePortfolio } from '../context/PortfolioContext';
 import { Card } from './ui/Card';
 import { ConfirmModal } from './ui/ConfirmModal';
-import { Currency, Language, Asset, Transaction, AssetType, TransactionType } from '../types';
+import { Currency, Language, AssetType, TransactionType } from '../types';
 import { 
-  Download, Upload, Trash2, Shield, Globe, AlertTriangle, CheckCircle, Key, Languages, Activity, Lock, Github, ExternalLink, Bot, Sparkles, Eye, EyeOff, FileSpreadsheet, FileText
+  Upload, Trash2, Shield, Globe, AlertTriangle, CheckCircle, Key, Languages, Activity, Lock, Github, ExternalLink, Bot, Sparkles, Eye, EyeOff, FileSpreadsheet, FileText, Download, Info
 } from 'lucide-react';
 
 export const Settings: React.FC = () => {
@@ -14,12 +14,13 @@ export const Settings: React.FC = () => {
     transactions, 
     settings, 
     updateSettings, 
-    importData, 
+    importAssetsCSV,
+    importTransactionsCSV, 
     clearData,
     t
   } = usePortfolio();
 
-  const [importStatus, setImportStatus] = useState<{msg: string, type: 'success'|'error'} | null>(null);
+  const [importStatus, setImportStatus] = useState<{msg: string, type: 'success'|'error'|'warning'} | null>(null);
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -65,7 +66,7 @@ export const Settings: React.FC = () => {
     ].map(escapeCSV).join(','));
     
     const csvContent = [headers.join(','), ...rows].join('\n');
-    downloadCSV(csvContent, `panasset_assets_${new Date().toISOString().split('T')[0]}.csv`);
+    downloadCSV(csvContent, `panasset_assets.csv`);
   };
 
   const handleExportTransactions = () => {
@@ -83,7 +84,7 @@ export const Settings: React.FC = () => {
     ].map(escapeCSV).join(','));
 
     const csvContent = [headers.join(','), ...rows].join('\n');
-    downloadCSV(csvContent, `panasset_transactions_${new Date().toISOString().split('T')[0]}.csv`);
+    downloadCSV(csvContent, `panasset_transactions.csv`);
   };
 
   const parseCSVLine = (line: string): string[] => {
@@ -120,9 +121,9 @@ export const Settings: React.FC = () => {
         const headers = parseCSVLine(lines[0]).map(h => h.trim());
         
         // Detect Type based on headers
-        if (headers.includes('symbol') && headers.includes('type')) {
-            // Import Assets
-            const newAssets: Asset[] = lines.slice(1).map(line => {
+        if (headers.includes('symbol') && headers.includes('type') && headers.includes('currency')) {
+            // Import Assets (Metadata)
+            const newAssets = lines.slice(1).map(line => {
                 const vals = parseCSVLine(line);
                 const getVal = (key: string) => vals[headers.indexOf(key)];
                 
@@ -135,16 +136,15 @@ export const Settings: React.FC = () => {
                     currentPrice: parseFloat(getVal('currentPrice')) || 0,
                     dateAcquired: getVal('dateAcquired'),
                     lastUpdated: parseInt(getVal('lastUpdated')) || Date.now(),
-                    // Dummy computed values required by TS type, will be recalculated by context
-                    quantity: 0, avgCost: 0, totalCost: 0, currentValue: 0, pnl: 0, pnlPercent: 0, realizedPnL: 0
                 };
             });
-            importData({ assets: newAssets, transactions: [] }); // Empty transactions array implies we keep existing or ignore
-            setImportStatus({ msg: `${t('importSuccess')} (${newAssets.length} Assets)`, type: 'success' });
+            
+            const count = importAssetsCSV(newAssets);
+            setImportStatus({ msg: `${t('importSuccess')} (${count} Assets updated/added)`, type: 'success' });
 
-        } else if (headers.includes('assetId') && headers.includes('quantityChange')) {
+        } else if (headers.includes('assetId') && headers.includes('quantityChange') && headers.includes('type')) {
             // Import Transactions
-            const newTxs: Transaction[] = lines.slice(1).map(line => {
+            const newTxs = lines.slice(1).map(line => {
                 const vals = parseCSVLine(line);
                 const getVal = (key: string) => vals[headers.indexOf(key)];
                 return {
@@ -159,13 +159,14 @@ export const Settings: React.FC = () => {
                     note: getVal('note')
                 };
             });
-            importData({ assets: [], transactions: newTxs });
-            setImportStatus({ msg: `${t('importSuccess')} (${newTxs.length} Txns)`, type: 'success' });
+            
+            const count = importTransactionsCSV(newTxs);
+            setImportStatus({ msg: `${t('importSuccess')} (${count} Txns updated/added)`, type: 'success' });
         } else {
-            throw new Error("Unknown CSV format");
+            throw new Error("Unknown CSV format. Headers must match standard export.");
         }
         
-        setTimeout(() => setImportStatus(null), 3000);
+        setTimeout(() => setImportStatus(null), 5000);
       } catch (err) {
         console.error(err);
         setImportStatus({ msg: t('importError'), type: 'error' });
@@ -449,6 +450,88 @@ export const Settings: React.FC = () => {
         </div>
       </Card>
 
+      {/* Data Management Section */}
+      <Card title={t('dataManagement')}>
+        <div className="space-y-4">
+            {importStatus && (
+                <div className={`p-3 rounded-lg text-sm flex items-center gap-2 ${importStatus.type === 'success' ? 'bg-green-50 text-green-700' : (importStatus.type === 'error' ? 'bg-red-50 text-red-700' : 'bg-orange-50 text-orange-700')}`}>
+                    {importStatus.type === 'success' ? <CheckCircle size={16}/> : <AlertTriangle size={16}/>}
+                    {importStatus.msg}
+                </div>
+            )}
+
+            <div className="bg-blue-50/50 border border-blue-100 rounded-lg p-3 flex items-start gap-3">
+                <Lock size={16} className="text-blue-500 mt-0.5 shrink-0" />
+                <span className="text-sm text-blue-700 leading-relaxed">{t('localDataSecurity')}</span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Export Assets */}
+                <button 
+                    onClick={handleExportAssets}
+                    className="flex flex-col items-center justify-center p-4 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 hover:border-slate-300 transition-all group"
+                >
+                    <div className="p-3 bg-slate-100 text-slate-600 rounded-full mb-2 group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">
+                        <FileSpreadsheet size={20} />
+                    </div>
+                    <span className="font-medium text-slate-700 text-sm flex items-center gap-1">
+                        {settings.language === 'zh' ? "导出 资产清单" : "Export Assets"} <Download size={12}/>
+                    </span>
+                    <span className="text-xs text-slate-400 mt-0.5">CSV</span>
+                </button>
+
+                {/* Export Transactions */}
+                <button 
+                    onClick={handleExportTransactions}
+                    className="flex flex-col items-center justify-center p-4 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 hover:border-slate-300 transition-all group"
+                >
+                    <div className="p-3 bg-slate-100 text-slate-600 rounded-full mb-2 group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">
+                        <FileText size={20} />
+                    </div>
+                    <span className="font-medium text-slate-700 text-sm flex items-center gap-1">
+                        {settings.language === 'zh' ? "导出 交易记录" : "Export Transactions"} <Download size={12}/>
+                    </span>
+                    <span className="text-xs text-slate-400 mt-0.5">CSV</span>
+                </button>
+            </div>
+
+            <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
+                <div className="flex items-center gap-2 mb-2 text-slate-800 font-medium">
+                    <Upload size={18} className="text-blue-600"/> {t('importData')}
+                </div>
+                <div className="text-xs text-slate-500 mb-3 leading-relaxed flex items-start gap-2">
+                    <Info size={14} className="mt-0.5 shrink-0"/>
+                    {t('importHint')}
+                </div>
+                
+                <button 
+                    onClick={handleImportClick}
+                    className="w-full py-2.5 bg-white border border-blue-200 text-blue-700 font-medium rounded-lg hover:bg-blue-50 transition-colors text-sm shadow-sm"
+                >
+                    {t('uploadCSV')}
+                </button>
+                <input 
+                    type="file" 
+                    accept=".csv" 
+                    ref={fileInputRef} 
+                    onChange={handleFileChange} 
+                    className="hidden" 
+                />
+            </div>
+
+            <div className="border-t border-slate-100 my-4"></div>
+
+            {/* Reset */}
+            <button 
+                onClick={() => setIsResetConfirmOpen(true)}
+                className="w-full flex items-center justify-center gap-2 p-3 text-red-600 hover:bg-red-50 rounded-xl transition-colors text-sm font-medium"
+            >
+                <Trash2 size={16} />
+                {t('resetData')}
+            </button>
+        </div>
+      </Card>
+
       {/* Feedback */}
       <Card title={t('feedback')}>
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -471,80 +554,6 @@ export const Settings: React.FC = () => {
                 <span>{t('githubLinkText')}</span>
                 <ExternalLink size={14} className="opacity-70"/>
             </a>
-        </div>
-      </Card>
-
-      {/* Data Management Section */}
-      <Card title={t('dataManagement')}>
-        <div className="space-y-4">
-            {importStatus && (
-                <div className={`p-3 rounded-lg text-sm flex items-center gap-2 ${importStatus.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
-                    {importStatus.type === 'success' ? <CheckCircle size={16}/> : <AlertTriangle size={16}/>}
-                    {importStatus.msg}
-                </div>
-            )}
-
-            <div className="bg-blue-50/50 border border-blue-100 rounded-lg p-3 flex items-start gap-3">
-                <Lock size={16} className="text-blue-500 mt-0.5 shrink-0" />
-                <span className="text-sm text-blue-700">{t('localDataSecurity')}</span>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Export Assets */}
-                <button 
-                    onClick={handleExportAssets}
-                    className="flex flex-col items-center justify-center p-4 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 hover:border-slate-300 transition-all group"
-                >
-                    <div className="p-3 bg-slate-100 text-slate-600 rounded-full mb-2 group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">
-                        <FileSpreadsheet size={20} />
-                    </div>
-                    <span className="font-medium text-slate-700 text-sm">{settings.language === 'zh' ? "导出资产 (CSV)" : "Export Assets (CSV)"}</span>
-                </button>
-
-                {/* Export Transactions */}
-                <button 
-                    onClick={handleExportTransactions}
-                    className="flex flex-col items-center justify-center p-4 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 hover:border-slate-300 transition-all group"
-                >
-                    <div className="p-3 bg-slate-100 text-slate-600 rounded-full mb-2 group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">
-                        <FileText size={20} />
-                    </div>
-                    <span className="font-medium text-slate-700 text-sm">{settings.language === 'zh' ? "导出交易 (CSV)" : "Export Txns (CSV)"}</span>
-                </button>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Import */}
-                <button 
-                    onClick={handleImportClick}
-                    className="flex flex-col items-center justify-center p-4 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 hover:border-slate-300 transition-all group"
-                >
-                    <div className="p-3 bg-slate-100 text-slate-600 rounded-full mb-2 group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">
-                        <Upload size={20} />
-                    </div>
-                    <span className="font-medium text-slate-700 text-sm">{t('importData')}</span>
-                    <span className="text-xs text-slate-400 mt-0.5">.csv</span>
-                    <input 
-                        type="file" 
-                        accept=".csv" 
-                        ref={fileInputRef} 
-                        onChange={handleFileChange} 
-                        className="hidden" 
-                    />
-                </button>
-
-                {/* Reset */}
-                <button 
-                    onClick={() => setIsResetConfirmOpen(true)}
-                    className="flex flex-col items-center justify-center p-4 bg-white border border-slate-200 rounded-xl hover:bg-red-50 hover:border-red-200 transition-all group"
-                >
-                    <div className="p-3 bg-slate-100 text-slate-600 rounded-full mb-2 group-hover:bg-red-100 group-hover:text-red-600 transition-colors">
-                        <Trash2 size={20} />
-                    </div>
-                    <span className="font-medium text-slate-700 text-sm group-hover:text-red-700">{t('resetData')}</span>
-                    <span className="text-xs text-slate-400 mt-0.5 group-hover:text-red-400">{t('resetDesc')}</span>
-                </button>
-            </div>
         </div>
       </Card>
 
