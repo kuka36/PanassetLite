@@ -1,4 +1,6 @@
 
+
+
 import React, { createContext, useContext, useState, useEffect, ReactNode, useRef, useMemo } from 'react';
 import { Asset, AssetMetadata, AssetType, Currency, Transaction, TransactionType, Language, AIProvider } from '../types';
 import { 
@@ -116,11 +118,12 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
            // 3. If NO transactions, create an Initial Balance transaction from the current state
            // This ensures the calculated balance matches what the user sees
            if (!hasTx && a.quantity > 0) {
+              const defaultDate = a.dateAcquired ? `${a.dateAcquired}T00:00:00` : new Date().toISOString();
               newTxs.push({
                 id: crypto.randomUUID(),
                 assetId: a.id,
                 type: TransactionType.BUY, // Treat as initial buy
-                date: a.dateAcquired || new Date().toISOString().split('T')[0],
+                date: defaultDate,
                 quantityChange: a.quantity,
                 pricePerUnit: a.avgCost,
                 fee: 0,
@@ -182,7 +185,7 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
       });
     });
 
-    // 2. Sort Transactions by Date
+    // 2. Sort Transactions by Date (Chronological for correct cost basis)
     const sortedTxs = [...transactions].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
     // 3. Replay Transactions
@@ -280,7 +283,7 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
         id: crypto.randomUUID(),
         assetId: meta.id,
         type: meta.type === AssetType.LIABILITY ? TransactionType.BORROW : TransactionType.BUY,
-        date: date,
+        date: date, // Now passed as full ISO string from modal
         quantityChange: initialQty,
         pricePerUnit: initialCost,
         fee: 0,

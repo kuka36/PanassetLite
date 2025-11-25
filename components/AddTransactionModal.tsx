@@ -1,4 +1,6 @@
 
+
+
 import React, { useState, useEffect } from 'react';
 import { usePortfolio } from '../context/PortfolioContext';
 import { TransactionType, VoiceParseResult, AssetType } from '../types';
@@ -11,12 +13,18 @@ interface Props {
   preselectedAssetId?: string;
 }
 
+// Helper to get local ISO string for input
+const getLocalISOString = (d: Date) => {
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+};
+
 export const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, preselectedAssetId }) => {
   const { assets, addTransaction, t } = usePortfolio();
   
   const [assetId, setAssetId] = useState('');
   const [type, setType] = useState<TransactionType>(TransactionType.BUY);
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [date, setDate] = useState('');
   const [quantity, setQuantity] = useState('');
   const [price, setPrice] = useState('');
   const [fee, setFee] = useState('0');
@@ -48,7 +56,7 @@ export const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, preselec
         else if (asset?.type === AssetType.CASH) setType(TransactionType.DEPOSIT);
         else setType(TransactionType.BUY);
         
-        setDate(new Date().toISOString().split('T')[0]);
+        setDate(getLocalISOString(new Date()));
         setQuantity('');
         setPrice('');
         setFee('0');
@@ -69,7 +77,7 @@ export const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, preselec
       if (data.txType) setType(data.txType);
       if (data.quantity) setQuantity(data.quantity.toString());
       if (data.price) setPrice(data.price.toString());
-      if (data.date) setDate(data.date);
+      if (data.date) setDate(data.date); // Note: AI might return YYYY-MM-DD, input handles it but prefers ISO
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -90,7 +98,7 @@ export const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, preselec
     addTransaction({
       assetId,
       type,
-      date,
+      date, // ISO String including time
       quantityChange: qtyChange,
       pricePerUnit: priceNum,
       fee: feeNum,
@@ -159,7 +167,8 @@ export const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, preselec
              <div className="relative">
                  <Calendar className="absolute left-3 top-2.5 text-slate-400" size={16}/>
                  <input 
-                    type="date"
+                    type="datetime-local"
+                    step="1"
                     value={date}
                     onChange={(e) => setDate(e.target.value)}
                     className="w-full pl-9 p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"

@@ -1,4 +1,5 @@
 
+
 export enum AssetType {
   STOCK = 'STOCK',
   CRYPTO = 'CRYPTO',
@@ -51,7 +52,7 @@ export interface AssetMetadata {
   currency: Currency;
   currentPrice: number; // Latest known market price (API or Manual)
   lastUpdated?: number; 
-  dateAcquired?: string; // Display purpose only
+  dateAcquired?: string; // Display purpose only (ISO DateTime)
   isDeleted?: boolean;
 }
 
@@ -60,7 +61,7 @@ export interface Transaction {
   id: string;
   assetId: string;
   type: TransactionType;
-  date: string;         // YYYY-MM-DD
+  date: string;         // ISO 8601 DateTime (YYYY-MM-DDTHH:mm:ss)
   quantityChange: number; // Signed value: Buy (+), Sell (-), Borrow (+), Repay (-)
   pricePerUnit: number;   // Price at the time of transaction
   fee: number;

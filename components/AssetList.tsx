@@ -1,8 +1,8 @@
 
-
 import React, { useState, useMemo } from 'react';
 import { usePortfolio } from '../context/PortfolioContext';
 import { Card } from './ui/Card';
+import { ConfirmModal } from './ui/ConfirmModal';
 import { ArrowUpRight, ArrowDownRight, Pencil, Trash2, History, ArrowUp, ArrowDown, ArrowRightLeft, Wifi, PenTool, WifiOff } from 'lucide-react';
 import { Asset, AssetType, Currency } from '../types';
 import { convertValue } from '../services/marketData';
@@ -27,6 +27,9 @@ export const AssetList: React.FC<AssetListProps> = ({ onEdit, onTransaction }) =
   // Quick valuation update state
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [newValuation, setNewValuation] = useState('');
+
+  // Delete Confirmation State
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; symbol: string } | null>(null);
 
   // Sort Logic
   const sortedAssets = useMemo(() => {
@@ -118,12 +121,6 @@ export const AssetList: React.FC<AssetListProps> = ({ onEdit, onTransaction }) =
       }
   };
 
-  const handleDelete = (id: string, symbol: string) => {
-      if (window.confirm(`Are you sure you want to delete ${symbol}? This action cannot be undone.`)) {
-          deleteAsset(id);
-      }
-  };
-
   const handleUpdateClick = (asset: Asset) => {
     setUpdatingId(asset.id);
     setNewValuation(asset.currentPrice.toString());
@@ -166,6 +163,7 @@ export const AssetList: React.FC<AssetListProps> = ({ onEdit, onTransaction }) =
   );
 
   return (
+    <>
     <Card title={t('portfolioHoldings')} className="animate-slide-up">
       <div className="overflow-x-auto">
         <table className="w-full text-left border-collapse min-w-[900px]">
@@ -318,7 +316,7 @@ export const AssetList: React.FC<AssetListProps> = ({ onEdit, onTransaction }) =
                             )}
                             {onEdit && (
                                 <button 
-                                    onClick={() => handleDelete(asset.id, asset.symbol)}
+                                    onClick={() => setDeleteTarget({ id: asset.id, symbol: asset.symbol })}
                                     className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                                     title={t('delete')}
                                 >
@@ -342,5 +340,16 @@ export const AssetList: React.FC<AssetListProps> = ({ onEdit, onTransaction }) =
         </table>
       </div>
     </Card>
+
+    <ConfirmModal
+        isOpen={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={() => deleteTarget && deleteAsset(deleteTarget.id)}
+        title={t('delete')}
+        message={deleteTarget ? t('confirmDelete').replace('{symbol}', deleteTarget.symbol) : ''}
+        confirmText={t('delete')}
+        isDanger
+    />
+    </>
   );
 };

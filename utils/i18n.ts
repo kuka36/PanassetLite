@@ -1,5 +1,6 @@
 
 
+
 import { Language } from '../types';
 
 export const translations: Record<Language, Record<string, string>> = {
@@ -74,7 +75,7 @@ export const translations: Record<Language, Record<string, string>> = {
     unitPrice: "Current Unit Price",
     costBasis: "Avg Cost (USD Basis)",
     avgCostUnit: "Average Cost / Unit",
-    dateAcquired: "Date Acquired / Start Date",
+    dateAcquired: "Start Time",
     autoFetch: "* Live prices will be fetched automatically based on ticker symbol.",
     autoFetchCash: "* Live exchange rates (USD) will be fetched automatically.",
     saveChanges: "Save Changes",
@@ -95,7 +96,7 @@ export const translations: Record<Language, Record<string, string>> = {
     historySubtitle: "View and filter your investment activity.",
     exportCSV: "Export CSV",
     action: "Action",
-    date: "Date",
+    date: "Time",
     pricePerUnit: "Price per Unit",
     fees: "Fees",
     totalEstimate: "Total Estimate",
@@ -103,8 +104,8 @@ export const translations: Record<Language, Record<string, string>> = {
     type: "Type",
     allAssets: "All Assets",
     allTypes: "All Types",
-    fromDate: "From Date",
-    toDate: "To Date",
+    fromDate: "From",
+    toDate: "To",
     noTransactions: "No transactions found matching your filters.",
     selectAssetPlaceholder: "Select an asset...",
     tx_BUY: "Buy",
@@ -133,7 +134,7 @@ export const translations: Record<Language, Record<string, string>> = {
     label_assets: "Assets",
     label_liabilities: "Liabilities",
     label_cost: "Cost",
-    label_value: "市值",
+    label_value: "Market Value",
     label_net_pnl: "Net P&L",
 
     // Settings
@@ -270,7 +271,7 @@ export const translations: Record<Language, Record<string, string>> = {
     unitPrice: "当前单价",
     costBasis: "单位成本 (USD计价)",
     avgCostUnit: "平均成本 / 单位",
-    dateAcquired: "持仓起始日期",
+    dateAcquired: "持仓开始时间",
     autoFetch: "* 将根据代码自动获取实时价格。",
     autoFetchCash: "* 将自动获取实时汇率 (USD)。",
     saveChanges: "保存更改",
@@ -289,7 +290,7 @@ export const translations: Record<Language, Record<string, string>> = {
     historySubtitle: "查看与筛选您的投资活动。",
     exportCSV: "导出 CSV",
     action: "操作",
-    date: "日期",
+    date: "交易时间",
     pricePerUnit: "单价",
     fees: "手续费",
     totalEstimate: "预估总额",
@@ -297,8 +298,8 @@ export const translations: Record<Language, Record<string, string>> = {
     type: "类型",
     allAssets: "所有资产",
     allTypes: "所有类型",
-    fromDate: "起始日期",
-    toDate: "结束日期",
+    fromDate: "起始时间",
+    toDate: "结束时间",
     noTransactions: "未找到符合条件的交易。",
     selectAssetPlaceholder: "选择资产...",
     tx_BUY: "买入",

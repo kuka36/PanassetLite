@@ -1,4 +1,6 @@
 
+
+
 import { Content, FunctionDeclaration, GoogleGenAI, Type, Part } from "@google/genai";
 import { Asset, ChatMessage, Currency, PendingAction, TransactionType, AssetType, Language, Transaction, ActionType } from "../types";
 
@@ -51,7 +53,7 @@ const PROPOSE_TRANSACTION_MUTATION: FunctionDeclaration = {
       txType: { type: Type.STRING, enum: ["BUY", "SELL", "DIVIDEND", "DEPOSIT", "WITHDRAWAL", "BORROW", "REPAY"], description: "Transaction Type" },
       quantity: { type: Type.NUMBER, description: "Quantity" },
       price: { type: Type.NUMBER, description: "Price per unit" },
-      date: { type: Type.STRING, description: "Date YYYY-MM-DD" },
+      date: { type: Type.STRING, description: "ISO 8601 Date Time string (YYYY-MM-DDTHH:mm:ss)" },
       fee: { type: Type.NUMBER, description: "Transaction fees" }
     },
     required: ["mutationType"]
@@ -89,14 +91,17 @@ export class AgentService {
     }
 
     try {
-      const today = new Date().toISOString().split('T')[0];
+      const now = new Date();
+      const today = now.toISOString().split('T')[0];
+      const currentTime = now.toISOString();
+
       const langInstruction = language === 'zh' 
         ? "You MUST reply in Chinese (Simplified)." 
         : "You MUST reply in English.";
 
       const systemInstruction = `
         You are the intelligent assistant for "PanassetLite".
-        Today is ${today}. Base Currency: ${baseCurrency}.
+        Today is ${today}. Current Time is ${currentTime}. Base Currency: ${baseCurrency}.
         
         **Language Rule:**
         ${langInstruction}
@@ -110,6 +115,7 @@ export class AgentService {
         **Behavior:**
         - Be concise.
         - If the user says "I bought 10 AAPL", first check \`get_assets\` to see if AAPL exists. If yes, use its ID for \`propose_transaction_mutation\`. If no, you might need to Add Asset first.
+        - Use full ISO date strings if time is relevant, otherwise YYYY-MM-DD is acceptable (app handles both).
       `;
 
       const geminiHistory: Content[] = history

@@ -1,4 +1,6 @@
 
+
+
 import React, { useState, useEffect } from 'react';
 import { Asset, AssetType, Currency, VoiceParseResult, TransactionType, AssetMetadata } from '../types';
 import { usePortfolio } from '../context/PortfolioContext';
@@ -10,6 +12,11 @@ interface Props {
   onClose: () => void;
   initialAsset?: Asset | null;
 }
+
+const getLocalISOString = (d: Date) => {
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+};
 
 export const AddAssetModal: React.FC<Props> = ({ isOpen, onClose, initialAsset }) => {
   const { addAsset, editAsset, addTransaction, t } = usePortfolio();
@@ -24,7 +31,7 @@ export const AddAssetModal: React.FC<Props> = ({ isOpen, onClose, initialAsset }
   const [cost, setCost] = useState(''); // Avg Cost / Initial Price
   const [currentVal, setCurrentVal] = useState(''); // For manual assets
   const [currency, setCurrency] = useState<Currency>(Currency.USD);
-  const [dateAcquired, setDateAcquired] = useState(new Date().toISOString().split('T')[0]);
+  const [dateAcquired, setDateAcquired] = useState('');
 
   // Balance Correction State
   const [showAdjustment, setShowAdjustment] = useState(false);
@@ -51,7 +58,7 @@ export const AddAssetModal: React.FC<Props> = ({ isOpen, onClose, initialAsset }
         setCost(initialAsset.avgCost.toString());
         setCurrentVal(initialAsset.currentPrice.toString());
         setCurrency(initialAsset.currency);
-        setDateAcquired(initialAsset.dateAcquired || new Date().toISOString().split('T')[0]);
+        setDateAcquired(initialAsset.dateAcquired || getLocalISOString(new Date()));
         setStep(2); 
         setShowAdjustment(false);
       } else {
@@ -64,7 +71,7 @@ export const AddAssetModal: React.FC<Props> = ({ isOpen, onClose, initialAsset }
         setCost('');
         setCurrentVal('');
         setCurrency(Currency.USD);
-        setDateAcquired(new Date().toISOString().split('T')[0]);
+        setDateAcquired(getLocalISOString(new Date()));
         setShowAdjustment(false);
       }
     }
@@ -110,7 +117,7 @@ export const AddAssetModal: React.FC<Props> = ({ isOpen, onClose, initialAsset }
         addTransaction({
             assetId: initialAsset.id,
             type: TransactionType.BALANCE_ADJUSTMENT,
-            date: new Date().toISOString().split('T')[0],
+            date: getLocalISOString(new Date()),
             quantityChange: delta,
             pricePerUnit: initialAsset.avgCost, // keep cost basis same
             fee: 0,
@@ -300,7 +307,8 @@ export const AddAssetModal: React.FC<Props> = ({ isOpen, onClose, initialAsset }
                                 <div className="relative">
                                     <Calendar className="absolute left-3 top-2.5 text-slate-400" size={16}/>
                                     <input 
-                                        type="date"
+                                        type="datetime-local"
+                                        step="1"
                                         value={dateAcquired}
                                         onChange={(e) => setDateAcquired(e.target.value)}
                                         disabled={!!initialAsset}

@@ -1,7 +1,10 @@
 
+
+
 import React, { useState, useMemo } from 'react';
 import { usePortfolio } from '../context/PortfolioContext';
 import { Card } from './ui/Card';
+import { ConfirmModal } from './ui/ConfirmModal';
 import { TransactionType, Currency } from '../types';
 import { Filter, Download, ArrowDownLeft, ArrowUpRight, DollarSign, Trash2, ArrowRightLeft, CreditCard, RefreshCw } from 'lucide-react';
 
@@ -11,6 +14,9 @@ export const TransactionHistory: React.FC = () => {
   const [filterType, setFilterType] = useState<string>('all');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  
+  // Delete Confirmation State
+  const [deleteId, setDeleteId] = useState<string | null>(null);
 
   // Helper to find asset info (handle deleted assets gracefully)
   const getAssetInfo = (assetId: string) => {
@@ -27,7 +33,8 @@ export const TransactionHistory: React.FC = () => {
         if (endDate && t.date > endDate) return false;
         return true;
       })
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      // Sort by ID descending as requested (deterministic for inserted records)
+      .sort((a, b) => b.id.localeCompare(a.id));
   }, [transactions, selectedAssetId, filterType, startDate, endDate]);
 
   const getTypeStyle = (type: TransactionType) => {
@@ -69,6 +76,14 @@ export const TransactionHistory: React.FC = () => {
       }
   };
 
+  const formatDateTime = (dateStr: string) => {
+      if (!dateStr) return '-';
+      return new Date(dateStr).toLocaleString(undefined, {
+          year: 'numeric', month: 'numeric', day: 'numeric',
+          hour: '2-digit', minute: '2-digit', second: '2-digit'
+      });
+  };
+
   const handleExportCSV = () => {
      const headers = [t('date'), t('type'), t('asset'), t('quantity'), t('pricePerUnit'), t('fees'), t('total')];
      const rows = filteredTransactions.map(t => {
@@ -92,12 +107,6 @@ export const TransactionHistory: React.FC = () => {
      document.body.appendChild(link);
      link.click();
      document.body.removeChild(link);
-  };
-
-  const handleDelete = (id: string) => {
-      if (window.confirm(t('confirmDeleteTransaction'))) {
-          deleteTransaction(id);
-      }
   };
 
   // Get unique assets that are actually in transactions or currently in portfolio
@@ -183,7 +192,7 @@ export const TransactionHistory: React.FC = () => {
 
         {/* Table */}
         <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
+            <table className="w-full text-left border-collapse min-w-[800px]">
                 <thead>
                     <tr className="text-xs text-slate-400 uppercase border-b border-slate-100">
                         <th className="pb-3 pl-2 font-medium">{t('date')}</th>
@@ -204,8 +213,8 @@ export const TransactionHistory: React.FC = () => {
                         
                         return (
                             <tr key={tx.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/50 transition-colors">
-                                <td className="py-4 pl-2 text-slate-600 font-mono whitespace-nowrap">
-                                    {tx.date}
+                                <td className="py-4 pl-2 text-slate-600 font-mono text-xs whitespace-nowrap">
+                                    {formatDateTime(tx.date)}
                                 </td>
                                 <td className="py-4">
                                     <div className="font-semibold text-slate-800">{assetInfo.symbol}</div>
@@ -231,7 +240,7 @@ export const TransactionHistory: React.FC = () => {
                                 </td>
                                 <td className="py-4 text-right pr-2">
                                     <button 
-                                        onClick={() => handleDelete(tx.id)}
+                                        onClick={() => setDeleteId(tx.id)}
                                         className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                                         title={t('deleteTransaction')}
                                     >
@@ -252,6 +261,16 @@ export const TransactionHistory: React.FC = () => {
             </table>
         </div>
       </Card>
+      
+      <ConfirmModal
+        isOpen={!!deleteId}
+        onClose={() => setDeleteId(null)}
+        onConfirm={() => deleteId && deleteTransaction(deleteId)}
+        title={t('deleteTransaction')}
+        message={t('confirmDeleteTransaction')}
+        confirmText={t('delete')}
+        isDanger
+      />
     </div>
   );
 };

@@ -1,8 +1,8 @@
 
-
 import React, { useRef, useState } from 'react';
 import { usePortfolio } from '../context/PortfolioContext';
 import { Card } from './ui/Card';
+import { ConfirmModal } from './ui/ConfirmModal';
 import { Currency, Language, AIProvider } from '../types';
 import { 
   Download, Upload, Trash2, Shield, Globe, AlertTriangle, CheckCircle, Key, Languages, Activity, Lock, Github, ExternalLink, Bot, Sparkles, Eye, EyeOff
@@ -20,6 +20,7 @@ export const Settings: React.FC = () => {
   } = usePortfolio();
 
   const [importStatus, setImportStatus] = useState<{msg: string, type: 'success'|'error'} | null>(null);
+  const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Visibility States for API Keys
@@ -73,12 +74,10 @@ export const Settings: React.FC = () => {
     e.target.value = '';
   };
 
-  const handleClearData = () => {
-      if (window.confirm(t('resetConfirm'))) {
-          clearData();
-          setImportStatus({ msg: t('resetSuccess'), type: 'success' });
-          setTimeout(() => setImportStatus(null), 3000);
-      }
+  const confirmClearData = () => {
+      clearData();
+      setImportStatus({ msg: t('resetSuccess'), type: 'success' });
+      setTimeout(() => setImportStatus(null), 3000);
   };
 
   return (
@@ -419,7 +418,7 @@ export const Settings: React.FC = () => {
 
                 {/* Reset */}
                 <button 
-                    onClick={handleClearData}
+                    onClick={() => setIsResetConfirmOpen(true)}
                     className="flex flex-col items-center justify-center p-6 bg-white border border-slate-200 rounded-xl hover:bg-red-50 hover:border-red-200 transition-all group"
                 >
                     <div className="p-3 bg-slate-100 text-slate-600 rounded-full mb-3 group-hover:bg-red-100 group-hover:text-red-600 transition-colors">
@@ -431,6 +430,16 @@ export const Settings: React.FC = () => {
             </div>
         </div>
       </Card>
+
+      <ConfirmModal
+        isOpen={isResetConfirmOpen}
+        onClose={() => setIsResetConfirmOpen(false)}
+        onConfirm={confirmClearData}
+        title={t('resetData')}
+        message={t('resetConfirm')}
+        confirmText={t('resetData')}
+        isDanger
+      />
 
       <div className="text-center text-slate-400 text-sm pt-4">
           {settings.language === 'zh' ? "盘资产·轻 v1.1.0 • 本地数据存储" : "PanassetLite v1.1.0 • Local Data Storage"}

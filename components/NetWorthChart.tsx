@@ -1,4 +1,6 @@
 
+
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Line 
@@ -208,7 +210,8 @@ export const NetWorthChart: React.FC<NetWorthChartProps> = ({
         });
 
         // 2. Apply Transactions happening ON this date
-        const daysTransactions = allTransactions.filter(t => t.date === dateStr);
+        // Fix: Use startsWith to match YYYY-MM-DD even if t.date is full ISO
+        const daysTransactions = allTransactions.filter(t => t.date.startsWith(dateStr));
         
         for (const tx of daysTransactions) {
             if (currentHoldings[tx.assetId] === undefined) currentHoldings[tx.assetId] = 0;

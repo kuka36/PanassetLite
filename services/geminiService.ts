@@ -1,5 +1,6 @@
 
 
+
 import { Type } from "@google/genai";
 import { Asset, AssetType, Language, AIProvider, VoiceParseResult } from "../types";
 import { AIEngineFactory } from "./aiEngine";
@@ -220,15 +221,17 @@ export const parseVoiceCommand = async (
     if (!apiKey) throw new Error("API Key is missing");
 
     // Inject Current Date so LLM can resolve "Today", "Yesterday"
-    const today = new Date().toISOString().split('T')[0];
+    const now = new Date();
+    const today = now.toISOString().split('T')[0];
+    const fullTime = now.toISOString();
 
     const prompt = `
       Role: Financial Data Parser.
       Task: Parse user spoken input into structured JSON for an app called 'InvestFlow'.
       
       Time Context: 
-      - Current Reference Date: ${today} (YYYY-MM-DD).
-      - Use this date to correctly resolve relative time terms like "today", "yesterday", "last friday".
+      - Current Reference Date/Time: ${fullTime}.
+      - Use this date to correctly resolve relative time terms like "today", "yesterday", "last friday", "5 minutes ago".
 
       User Input: "${text}"
       
@@ -236,7 +239,7 @@ export const parseVoiceCommand = async (
       Existing Assets: ${JSON.stringify(existingContext.map(a => `${a.symbol} (${a.name})`))}
 
       Instructions:
-      1. Extract 'symbol', 'quantity', 'price', 'date' (YYYY-MM-DD), 'currency'.
+      1. Extract 'symbol', 'quantity', 'price', 'date' (YYYY-MM-DDTHH:mm:ss is preferred if specific time mentioned, else YYYY-MM-DD), 'currency'.
       2. **INTELLIGENT MAPPING**:
          - **Symbols**: Use your broad financial knowledge to map spoken company names or asset classes to standard Ticker Symbols (e.g. "Nvidia" -> "NVDA", "Gold" -> "GOLD", "Maotai" -> "600519.SS"). 
          - **Manual Assets**: For Real Estate or unique items, generate a logical, concise uppercase ID (e.g. "APT_NY", "ROLEX_SUB").
@@ -248,7 +251,7 @@ export const parseVoiceCommand = async (
          - Determine 'type' (STOCK, CRYPTO, FUND, CASH, REAL_ESTATE, LIABILITY, OTHER).
       
       Return STRICT JSON. No markdown formatting.
-      Fields: symbol, name, type (enum: STOCK, CRYPTO, FUND, CASH, REAL_ESTATE, LIABILITY, OTHER), txType (enum: BUY, SELL, DIVIDEND), quantity (number), price (number), date (string YYYY-MM-DD), currency (string).
+      Fields: symbol, name, type (enum: STOCK, CRYPTO, FUND, CASH, REAL_ESTATE, LIABILITY, OTHER), txType (enum: BUY, SELL, DIVIDEND), quantity (number), price (number), date (string), currency (string).
     `;
 
     const schema = {
