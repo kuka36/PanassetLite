@@ -32,6 +32,7 @@ interface PortfolioContextType {
   editAsset: (asset: Asset) => void;
   deleteAsset: (id: string) => void;
   addTransaction: (transaction: Omit<Transaction, 'id'>) => void;
+  editTransaction: (transaction: Transaction) => void;
   deleteTransaction: (id: string) => void;
   updateAssetPrice: (id: string, newPrice: number) => void;
   refreshPrices: (assetsOverride?: Asset[]) => Promise<void>;
@@ -194,17 +195,12 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
     }));
   };
 
-  const deleteTransaction = (id: string) => {
-    const tx = transactions.find(t => t.id === id);
-    if (!tx) return;
+  // Helper logic for transaction reversal
+  const applyTransactionReversal = (asset: Asset, tx: Transaction): { qty: number, cost: number } => {
+    let newQty = asset.quantity;
+    let newAvgCost = asset.avgCost;
 
-    // Attempt to reverse the transaction's effect on the asset
-    const asset = assets.find(a => a.id === tx.assetId);
-    if (asset) {
-      let newQty = asset.quantity;
-      let newAvgCost = asset.avgCost;
-
-      if (tx.type === TransactionType.BUY) {
+    if (tx.type === TransactionType.BUY) {
         // Reverse BUY: Remove quantity and subtract cost basis
         const currentTotalCost = asset.quantity * asset.avgCost;
         const txCostContribution = (tx.quantity * tx.price) + tx.fee;
@@ -213,22 +209,62 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
         newQty = asset.quantity - tx.quantity;
         
         if (newQty > 0 && newTotalCost > 0) {
-          newAvgCost = newTotalCost / newQty;
+            newAvgCost = newTotalCost / newQty;
         } else {
-          // If quantity becomes 0 or negative, reset cost to 0 or keep simplified
-          newAvgCost = newQty <= 0 ? 0 : newAvgCost; 
+            newAvgCost = newQty <= 0 ? 0 : newAvgCost; 
         }
-      } else if (tx.type === TransactionType.SELL) {
-        // Reverse SELL: Add quantity back. Average cost per unit usually doesn't change on Sell.
+    } else if (tx.type === TransactionType.SELL) {
+        // Reverse SELL: Add quantity back.
         newQty = asset.quantity + tx.quantity;
-      }
-      
-      // Update asset
-      setAssets(prev => prev.map(a => a.id === asset.id ? { ...a, quantity: newQty, avgCost: newAvgCost } : a));
+    }
+    return { qty: newQty, cost: newAvgCost };
+  };
+
+  const deleteTransaction = (id: string) => {
+    const tx = transactions.find(t => t.id === id);
+    if (!tx) return;
+
+    const asset = assets.find(a => a.id === tx.assetId);
+    if (asset) {
+      const { qty, cost } = applyTransactionReversal(asset, tx);
+      setAssets(prev => prev.map(a => a.id === asset.id ? { ...a, quantity: qty, avgCost: cost } : a));
     }
 
-    // Remove from history
     setTransactions(prev => prev.filter(t => t.id !== id));
+  };
+
+  const editTransaction = (newTx: Transaction) => {
+      const oldTx = transactions.find(t => t.id === newTx.id);
+      if (!oldTx) return;
+
+      // 1. Revert Old Transaction Effect
+      let targetAsset = assets.find(a => a.id === oldTx.assetId);
+      if (!targetAsset) return;
+
+      // Note: If assetId changed, we need to handle two assets. 
+      // For simplicity, we assume assetId change handled by UI via delete+add, 
+      // but here we support robust update on same asset.
+      
+      const reverted = applyTransactionReversal(targetAsset, oldTx);
+      
+      // Temporary asset state after reversal
+      const assetAfterRevert = { ...targetAsset, quantity: reverted.qty, avgCost: reverted.cost };
+
+      // 2. Apply New Transaction Effect
+      let finalQty = assetAfterRevert.quantity;
+      let finalCost = assetAfterRevert.avgCost;
+
+      if (newTx.type === TransactionType.BUY) {
+          const totalValue = (assetAfterRevert.quantity * assetAfterRevert.avgCost) + (newTx.quantity * newTx.price) + newTx.fee;
+          finalQty = assetAfterRevert.quantity + newTx.quantity;
+          finalCost = totalValue / finalQty;
+      } else if (newTx.type === TransactionType.SELL) {
+          finalQty = assetAfterRevert.quantity - newTx.quantity;
+      }
+
+      // 3. Update States
+      setAssets(prev => prev.map(a => a.id === targetAsset!.id ? { ...a, quantity: finalQty, avgCost: finalCost } : a));
+      setTransactions(prev => prev.map(t => t.id === newTx.id ? newTx : t));
   };
 
   const updateAssetPrice = (id: string, newPrice: number) => {
@@ -256,8 +292,6 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
         let newPrice = asset.currentPrice;
         let newCurrency = asset.currency;
         let timestamp = asset.lastUpdated; // Keep existing timestamp by default
-
-        // Note: We only update timestamp if we actually got a *new* value or confirmed from cache
         
         if (asset.type === AssetType.CRYPTO && cryptoPrices[asset.id]) {
           newPrice = cryptoPrices[asset.id];
@@ -268,7 +302,6 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
           newCurrency = stockData[asset.id].currency;
           timestamp = stockData[asset.id].lastUpdated || Date.now();
         } else if (asset.type === AssetType.CASH) {
-            // Smart Cash: Fetch exchange rate against USD automatically
             const rate = rates[asset.symbol];
             if (rate && rate > 0) {
                 newPrice = 1 / rate;
@@ -324,6 +357,7 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
       editAsset,
       deleteAsset,
       addTransaction,
+      editTransaction,
       deleteTransaction,
       updateAssetPrice, 
       refreshPrices,

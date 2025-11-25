@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Send, Sparkles, Check, AlertCircle, Trash2, User, Keyboard, AudioLines } from 'lucide-react';
 import { usePortfolio } from '../context/PortfolioContext';
@@ -17,7 +16,7 @@ interface AIChatAssistantProps {
 }
 
 export const AIChatAssistant: React.FC<AIChatAssistantProps> = ({ isOpen, onClose, isSidebarCollapsed = false }) => {
-  const { settings, assets, addTransaction, addAsset, t } = usePortfolio();
+  const { settings, assets, transactions, addTransaction, editTransaction, deleteTransaction, addAsset, editAsset, deleteAsset, t } = usePortfolio();
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -38,8 +37,8 @@ export const AIChatAssistant: React.FC<AIChatAssistantProps> = ({ isOpen, onClos
         id: 'init',
         role: 'model',
         content: settings.language === 'zh' 
-            ? "您好！我是您的资产助手。我可以帮您记录交易或分析持仓。试试说：“我以 150 的价格买入了 10 股苹果”。"
-            : "Hi! I'm your PanassetLite assistant. I can help you track assets or analyze your portfolio. Try saying \"I bought 10 AAPL at 150\".",
+            ? "您好！我是您的全能资产助手。我可以帮您增删改查资产或交易记录。试试说：“把昨天的苹果买入交易改成 20 股”。"
+            : "Hi! I'm your PanassetLite assistant. I can manage your portfolio fully. Try saying \"Update yesterday's AAPL buy to 20 shares\".",
         timestamp: Date.now()
       }]);
     }
@@ -75,10 +74,12 @@ export const AIChatAssistant: React.FC<AIChatAssistantProps> = ({ isOpen, onClos
 
     const agent = new AgentService(settings.geminiApiKey);
     
+    // Injected 'transactions' dependency
     const response = await agent.processMessage(
         userMsg.content, 
         messages, 
         assets, 
+        transactions,
         settings.baseCurrency, 
         settings.language
     );
@@ -97,50 +98,92 @@ export const AIChatAssistant: React.FC<AIChatAssistantProps> = ({ isOpen, onClos
 
   const handleConfirmAction = (msgId: string, action: PendingAction) => {
     try {
-      if (action.type === 'ADD_TRANSACTION') {
-        const asset = assets.find(a => a.symbol === action.data.symbol);
-        let assetId = asset?.id;
+      const { type, data, targetId } = action;
+
+      // --- ASSET CRUD ---
+      if (type === 'ADD_ASSET') {
+          addAsset({
+              id: crypto.randomUUID(),
+              symbol: data.symbol || 'UNKNOWN',
+              name: data.name || data.symbol || 'Unknown',
+              type: data.type as AssetType || AssetType.STOCK,
+              quantity: data.quantity || 0,
+              avgCost: data.price || 0,
+              currentPrice: data.price || 0,
+              currency: settings.baseCurrency,
+              lastUpdated: Date.now()
+          });
+      }
+      else if (type === 'UPDATE_ASSET' && targetId) {
+          const existing = assets.find(a => a.id === targetId);
+          if (existing) {
+              editAsset({
+                  ...existing,
+                  quantity: data.quantity ?? existing.quantity,
+                  avgCost: data.price ?? existing.avgCost,
+                  name: data.name ?? existing.name,
+                  symbol: data.symbol ?? existing.symbol,
+                  type: (data.type as AssetType) ?? existing.type
+              });
+          }
+      }
+      else if (type === 'DELETE_ASSET' && targetId) {
+          deleteAsset(targetId);
+      }
+
+      // --- TRANSACTION CRUD ---
+      else if (type === 'ADD_TRANSACTION') {
+        let assetId = data.assetId;
         
-        if (!assetId) {
+        // Auto-create asset if missing (and logic provided symbol, unlikely from strict Agent but good fallback)
+        if (!assetId && data.symbol) {
              assetId = crypto.randomUUID();
              addAsset({
                  id: assetId,
-                 symbol: action.data.symbol,
-                 name: action.data.symbol,
+                 symbol: data.symbol,
+                 name: data.symbol,
                  type: AssetType.STOCK, 
                  quantity: 0,
                  avgCost: 0,
-                 currentPrice: action.data.price,
+                 currentPrice: data.price || 0,
                  currency: settings.baseCurrency,
                  lastUpdated: Date.now()
              });
         }
 
-        addTransaction({
-          assetId: assetId,
-          type: action.data.type as TransactionType,
-          date: new Date().toISOString().split('T')[0],
-          quantity: action.data.quantity,
-          price: action.data.price,
-          fee: 0,
-          total: action.data.quantity * action.data.price
-        });
-      } else if (action.type === 'ADD_ASSET') {
-          addAsset({
-              id: crypto.randomUUID(),
-              symbol: action.data.symbol,
-              name: action.data.symbol,
-              type: action.data.type as AssetType,
-              quantity: action.data.quantity,
-              avgCost: action.data.price,
-              currentPrice: action.data.price,
-              currency: settings.baseCurrency,
-              lastUpdated: Date.now()
-          });
+        if (assetId) {
+            addTransaction({
+              assetId: assetId,
+              type: data.type as TransactionType || TransactionType.BUY,
+              date: data.date || new Date().toISOString().split('T')[0],
+              quantity: data.quantity || 0,
+              price: data.price || 0,
+              fee: data.fee || 0,
+              total: (data.quantity || 0) * (data.price || 0) + (data.fee || 0)
+            });
+        }
+      }
+      else if (type === 'UPDATE_TRANSACTION' && targetId) {
+          const existing = transactions.find(t => t.id === targetId);
+          if (existing) {
+              editTransaction({
+                  ...existing,
+                  quantity: data.quantity ?? existing.quantity,
+                  price: data.price ?? existing.price,
+                  date: data.date ?? existing.date,
+                  type: (data.type as TransactionType) ?? existing.type,
+                  fee: data.fee ?? existing.fee,
+                  // Recalculate total if qty or price changed, otherwise keep or re-calc
+                  total: ((data.quantity ?? existing.quantity) * (data.price ?? existing.price)) + (data.fee ?? existing.fee)
+              });
+          }
+      }
+      else if (type === 'DELETE_TRANSACTION' && targetId) {
+          deleteTransaction(targetId);
       }
 
       setMessages(prev => prev.map(m => 
-        m.id === msgId ? { ...m, content: m.content + (settings.language === 'zh' ? "\n\n✅ *操作已确认执行。*" : "\n\n✅ *Action Confirmed & Executed.*"), pendingAction: undefined } : m
+        m.id === msgId ? { ...m, content: m.content + (settings.language === 'zh' ? "\n\n✅ *操作已执行。*" : "\n\n✅ *Executed.*"), pendingAction: undefined } : m
       ));
 
     } catch (e) {
@@ -153,7 +196,7 @@ export const AIChatAssistant: React.FC<AIChatAssistantProps> = ({ isOpen, onClos
       setMessages([{
         id: crypto.randomUUID(),
         role: 'model',
-        content: settings.language === 'zh' ? "历史记录已清除。有什么可以帮您？" : "History cleared. How can I help you today?",
+        content: settings.language === 'zh' ? "历史记录已清除。" : "History cleared.",
         timestamp: Date.now()
       }]);
       localStorage.removeItem(HISTORY_KEY);
@@ -189,7 +232,7 @@ export const AIChatAssistant: React.FC<AIChatAssistantProps> = ({ isOpen, onClos
           </div>
           <div>
             <h3 className="font-bold text-sm">
-                {settings.language === 'zh' ? "盘资产·轻 智能助手" : "PanassetLite Assistant"}
+                {settings.language === 'zh' ? "AI 助手 (CRUD增强版)" : "AI Assistant (Pro)"}
             </h3>
             <p className="text-[10px] text-indigo-100 flex items-center gap-1 opacity-90">
                <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse"></span>
@@ -225,7 +268,7 @@ export const AIChatAssistant: React.FC<AIChatAssistantProps> = ({ isOpen, onClos
               <MarkdownContent content={msg.content} />
 
               {msg.pendingAction && (
-                <div className="mt-3 p-3 bg-indigo-50 border border-indigo-100 rounded-xl">
+                <div className="mt-3 p-3 bg-indigo-50 border border-indigo-100 rounded-xl animate-fade-in">
                     <div className="flex items-start gap-2 mb-2">
                         <AlertCircle size={16} className="text-indigo-600 mt-0.5 shrink-0"/>
                         <div className="text-xs text-indigo-800 font-medium">
@@ -238,9 +281,11 @@ export const AIChatAssistant: React.FC<AIChatAssistantProps> = ({ isOpen, onClos
                     <div className="flex gap-2 pl-6">
                         <button 
                             onClick={() => handleConfirmAction(msg.id, msg.pendingAction!)}
-                            className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold py-2 rounded-lg flex items-center justify-center gap-1 transition-colors shadow-sm"
+                            className={`flex-1 text-white text-xs font-bold py-2 rounded-lg flex items-center justify-center gap-1 transition-colors shadow-sm ${
+                                msg.pendingAction.type.includes('DELETE') ? 'bg-red-500 hover:bg-red-600' : 'bg-indigo-600 hover:bg-indigo-700'
+                            }`}
                         >
-                            <Check size={14} /> {settings.language === 'zh' ? "确认" : "Confirm"}
+                            <Check size={14} /> {settings.language === 'zh' ? "执行" : "Confirm"}
                         </button>
                     </div>
                 </div>

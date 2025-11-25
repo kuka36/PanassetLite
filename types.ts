@@ -80,15 +80,28 @@ export interface VoiceParseResult {
 
 // --- Chat & Agent Types ---
 
+export type ActionType = 
+  | 'ADD_ASSET' 
+  | 'UPDATE_ASSET' 
+  | 'DELETE_ASSET' 
+  | 'ADD_TRANSACTION' 
+  | 'UPDATE_TRANSACTION' 
+  | 'DELETE_TRANSACTION';
+
 export interface PendingAction {
-  type: 'ADD_ASSET' | 'ADD_TRANSACTION';
+  type: ActionType;
+  targetId?: string; // For Update/Delete
   data: {
-    symbol: string;
-    quantity: number;
-    price: number;
-    type: AssetType | TransactionType;
+    symbol?: string;
+    name?: string;
+    quantity?: number;
+    price?: number; // Current Price or Unit Price
+    fee?: number;
+    type?: AssetType | TransactionType;
+    date?: string;
+    assetId?: string; // For Transactions
   };
-  summary: string; // Human readable summary like "Buy 10 AAPL at $150"
+  summary: string; // Human readable summary
 }
 
 export interface ChatMessage {

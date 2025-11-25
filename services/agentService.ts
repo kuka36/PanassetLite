@@ -1,28 +1,60 @@
 
-
 import { Content, FunctionDeclaration, GoogleGenAI, Type, Part } from "@google/genai";
-import { Asset, ChatMessage, Currency, PendingAction, TransactionType, AssetType, Language } from "../types";
+import { Asset, ChatMessage, Currency, PendingAction, TransactionType, AssetType, Language, Transaction, ActionType } from "../types";
 
 // --- Tool Definitions ---
 
-const GET_PORTFOLIO_TOOL: FunctionDeclaration = {
-  name: "get_portfolio_summary",
-  description: "Get a detailed summary of the current portfolio holdings. Returns symbols, names, quantities, current prices, average costs, total values, and acquisition dates.",
+const GET_ASSETS_TOOL: FunctionDeclaration = {
+  name: "get_assets",
+  description: "Read current portfolio holdings/assets. Returns list of assets with ids, symbols, quantities, etc.",
 };
 
-const STAGE_TRANSACTION_TOOL: FunctionDeclaration = {
-  name: "stage_transaction",
-  description: "Propose a transaction (Buy/Sell) or adding a new asset. Do not execute, just stage it for confirmation.",
+const GET_TRANSACTIONS_TOOL: FunctionDeclaration = {
+  name: "get_transactions",
+  description: "Read transaction history. Supports filtering by symbol or type. Returns list of transactions with ids, dates, prices.",
   parameters: {
     type: Type.OBJECT,
     properties: {
-      action: { type: Type.STRING, enum: ["BUY", "SELL", "ADD_NEW_ASSET"], description: "The type of action" },
-      symbol: { type: Type.STRING, description: "Ticker symbol (e.g. AAPL, BTC)" },
+      symbol: { type: Type.STRING, description: "Filter by asset symbol (e.g. AAPL)" },
+      limit: { type: Type.NUMBER, description: "Limit number of results (default 10)" }
+    }
+  }
+};
+
+const PROPOSE_ASSET_MUTATION: FunctionDeclaration = {
+  name: "propose_asset_mutation",
+  description: "Propose to Add, Update, or Delete an Asset (Holding). Use this for opening new positions, editing asset details, or removing an asset entirely.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      mutationType: { type: Type.STRING, enum: ["ADD", "UPDATE", "DELETE"], description: "Type of change" },
+      symbol: { type: Type.STRING, description: "Asset Symbol (Required for ADD)" },
+      assetId: { type: Type.STRING, description: "Asset ID (Required for UPDATE/DELETE). Use get_assets to find ID." },
+      quantity: { type: Type.NUMBER, description: "New quantity (for ADD/UPDATE)" },
+      price: { type: Type.NUMBER, description: "Current price or cost basis" },
+      assetType: { type: Type.STRING, enum: ["STOCK", "CRYPTO", "CASH", "REAL_ESTATE", "LIABILITY", "FUND"], description: "Asset Type (for ADD)" },
+      name: { type: Type.STRING, description: "Asset Name" }
+    },
+    required: ["mutationType"]
+  }
+};
+
+const PROPOSE_TRANSACTION_MUTATION: FunctionDeclaration = {
+  name: "propose_transaction_mutation",
+  description: "Propose to Add (Record), Update, or Delete a Transaction. Use this for recording buys/sells/dividends, or fixing transaction history errors.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      mutationType: { type: Type.STRING, enum: ["ADD", "UPDATE", "DELETE"], description: "Type of change" },
+      transactionId: { type: Type.STRING, description: "Transaction ID (Required for UPDATE/DELETE). Use get_transactions to find ID." },
+      assetId: { type: Type.STRING, description: "Asset ID (Required for ADD). Use get_assets to find ID." },
+      txType: { type: Type.STRING, enum: ["BUY", "SELL", "DIVIDEND"], description: "Transaction Type (for ADD/UPDATE)" },
       quantity: { type: Type.NUMBER, description: "Quantity" },
       price: { type: Type.NUMBER, description: "Price per unit" },
-      assetType: { type: Type.STRING, enum: ["STOCK", "CRYPTO", "CASH", "REAL_ESTATE", "LIABILITY"], description: "Only for ADD_NEW_ASSET" }
+      date: { type: Type.STRING, description: "Date YYYY-MM-DD" },
+      fee: { type: Type.NUMBER, description: "Transaction fees" }
     },
-    required: ["action", "symbol", "quantity", "price"]
+    required: ["mutationType"]
   }
 };
 
@@ -42,6 +74,7 @@ export class AgentService {
     userMessage: string,
     history: ChatMessage[],
     assets: Asset[],
+    transactions: Transaction[], // Injected Dependency
     baseCurrency: Currency,
     language: Language
   ): Promise<{ text: string, action?: PendingAction }> {
@@ -50,17 +83,13 @@ export class AgentService {
     if (!this.ai) {
       return {
         text: language === 'zh' 
-          ? "我需要 **Gemini API Key** 才能作为您的 AI 助手工作。\n\n请前往 **设置** 页面进行配置。在此期间，您可以使用屏幕上的按钮手动记录交易。"
-          : "I need a **Gemini API Key** to function as your AI assistant. \n\nPlease go to **Settings** to configure it. In the meantime, you can manually record transactions using the buttons on the screen."
+          ? "我需要 **Gemini API Key** 才能作为您的 AI 助手工作。\n\n请前往 **设置** 页面进行配置。"
+          : "I need a **Gemini API Key** to function as your AI assistant. \n\nPlease go to **Settings** to configure it."
       };
     }
 
     try {
-      // 2. Prepare Context
       const today = new Date().toISOString().split('T')[0];
-      // Basic context for quick lookup without tool usage, kept concise
-      const assetSummary = assets.map(a => `${a.symbol} (${a.name})`).join(', ');
-      
       const langInstruction = language === 'zh' 
         ? "You MUST reply in Chinese (Simplified)." 
         : "You MUST reply in English.";
@@ -72,25 +101,20 @@ export class AgentService {
         **Language Rule:**
         ${langInstruction}
         
-        **Current Portfolio Context (Brief):**
-        Assets owned: ${assetSummary || "None yet"}.
-
-        **Role & Personality:**
-        You are a highly capable, friendly, and knowledgeable AI assistant.
-        While your primary special skill is managing the user's investment portfolio, **you are NOT limited to financial topics**.
-        You should help the user with **ANY** request—whether it's writing code, explaining complex concepts, chatting about daily life, or analyzing their assets.
-        Always be polite, concise, and helpful.
-
-        **Portfolio Capabilities:**
-        1. **Deep Analysis**: If the user asks about performance, costs, specific prices, or timing (e.g., "What is my avg cost for AAPL?", "When did I buy BTC?"), you MUST use the 'get_portfolio_summary' tool to get the detailed data.
-        2. **Transactions**: Help user record transactions. You CANNOT write to the database directly. You MUST use the 'stage_transaction' tool to propose an action.
+        **Capabilities:**
+        1. **READ**: You can inspect the user's Assets and Transaction History using \`get_assets\` and \`get_transactions\`.
+           - ALWAYS check \`get_assets\` before proposing a transaction to get the correct \`assetId\`.
+           - ALWAYS check \`get_transactions\` before updating/deleting a transaction to get the correct \`transactionId\`.
+        2. **WRITE**: You can propose changes using \`propose_asset_mutation\` (for holdings) or \`propose_transaction_mutation\` (for trades).
+           - Do not hallucinate IDs. Read them first.
         
-        **Transaction Rules:**
-        - If the user wants to buy/sell, infer the symbol, quantity, and price. If price is missing, estimate or ask.
+        **Behavior:**
+        - Be concise.
+        - If the user says "Delete my last Apple trade", first call \`get_transactions\` to find it, THEN call \`propose_transaction_mutation\` with the ID.
+        - If the user says "I bought 10 AAPL", first check \`get_assets\` to see if AAPL exists. If yes, use its ID for \`propose_transaction_mutation\`. If no, you might need to ask or just Add Asset first.
       `;
 
       // 3. Map & Sanitize History
-      // CRITICAL FIX: Filter out messages with empty content to prevent "ContentUnion is required" error
       const geminiHistory: Content[] = history
         .filter(m => m.role !== 'system' && m.content && m.content.trim().length > 0)
         .slice(-10)
@@ -105,77 +129,132 @@ export class AgentService {
         history: geminiHistory,
         config: {
           systemInstruction,
-          tools: [{ functionDeclarations: [GET_PORTFOLIO_TOOL, STAGE_TRANSACTION_TOOL] }],
+          tools: [{ functionDeclarations: [GET_ASSETS_TOOL, GET_TRANSACTIONS_TOOL, PROPOSE_ASSET_MUTATION, PROPOSE_TRANSACTION_MUTATION] }],
         }
       });
 
-      // 5. Send Message (Guard against empty input just in case)
+      // 5. Send Message
       const safeUserMessage = userMessage.trim() || ".";
-      const response = await chat.sendMessage({ message: safeUserMessage });
+      let response = await chat.sendMessage({ message: safeUserMessage });
       
-      // 6. Handle Function Calls
+      // 6. Loop for Tool Calls (Model might need to read, then write)
+      // Gemini 2.5 Flash can handle multi-turn tool use, but here we handle single turn response for simplicity or chained calls if SDK supports it.
+      // We manually handle the first tool call. If it's a "GET", we feed it back. If it's a "PROPOSE", we return the action.
+      
       const functionCalls = response.functionCalls;
       
       if (functionCalls && functionCalls.length > 0) {
         const call = functionCalls[0];
         
-        if (call.name === 'get_portfolio_summary') {
-           const functionResponseParts: Part[] = [{
-             functionResponse: {
-                name: call.name,
-                response: { 
-                  assets: assets.map(a => ({ 
-                    symbol: a.symbol, 
-                    name: a.name,
-                    quantity: a.quantity, 
-                    currentPrice: a.currentPrice,
-                    averageCost: a.avgCost,
-                    totalValue: (a.quantity * a.currentPrice),
-                    currency: a.currency,
-                    dateAcquired: a.dateAcquired || 'Unknown'
-                  })) 
-                }
-             }
-           }];
-           const finalResponse = await chat.sendMessage({ message: functionResponseParts });
-           return { text: finalResponse.text || (language === 'zh' ? "这是您的资产概览。" : "Here is your portfolio summary.") };
+        // --- READ TOOLS ---
+        if (call.name === 'get_assets') {
+           const result = { assets: assets.map(a => ({ id: a.id, symbol: a.symbol, name: a.name, qty: a.quantity, price: a.currentPrice })) };
+           // Send result back to model
+           response = await chat.sendMessage({ message: [{ functionResponse: { name: call.name, response: result } }] });
         }
+        else if (call.name === 'get_transactions') {
+           const args = call.args as any;
+           let filtered = [...transactions];
+           if (args.symbol) {
+             const targetAsset = assets.find(a => a.symbol === args.symbol.toUpperCase());
+             if (targetAsset) filtered = filtered.filter(t => t.assetId === targetAsset.id);
+             else filtered = [];
+           }
+           filtered = filtered.sort((a,b) => b.date.localeCompare(a.date)).slice(0, args.limit || 10);
+           
+           const result = { 
+               transactions: filtered.map(t => {
+                   const a = assets.find(as => as.id === t.assetId);
+                   return { id: t.id, date: t.date, type: t.type, symbol: a?.symbol, qty: t.quantity, price: t.price };
+               }) 
+           };
+           response = await chat.sendMessage({ message: [{ functionResponse: { name: call.name, response: result } }] });
+        }
+        
+        // --- MUTATION TOOLS (Check again if the response after GET is a mutation) ---
+        const finalCalls = response.functionCalls;
+        if (finalCalls && finalCalls.length > 0) {
+            const finalCall = finalCalls[0];
+            const args = finalCall.args as any;
 
-        if (call.name === 'stage_transaction') {
-          const args = call.args as any;
-          const action: PendingAction = {
-            type: args.action === 'ADD_NEW_ASSET' ? 'ADD_ASSET' : 'ADD_TRANSACTION',
-            data: {
-              symbol: args.symbol,
-              quantity: args.quantity,
-              price: args.price,
-              type: args.action === 'ADD_NEW_ASSET' 
-                  ? (args.assetType as AssetType || AssetType.STOCK) 
-                  : (args.action === 'BUY' ? TransactionType.BUY : TransactionType.SELL)
-            },
-            summary: `${args.action === 'BUY' ? (language==='zh'?'买入':'Buy') : (args.action === 'SELL' ? (language==='zh'?'卖出':'Sell') : (language==='zh'?'添加':'Add'))} ${args.quantity} ${args.symbol} @ ${args.price}`
-          };
-          
-          const confirmText = language === 'zh' 
-            ? `我已经为您准备了一份草稿: **${action.summary}**。请在下方确认。` 
-            : `I've prepared a draft for you: **${action.summary}**. Please confirm below.`;
+            if (finalCall.name === 'propose_asset_mutation') {
+                const typeMap: Record<string, ActionType> = {
+                    'ADD': 'ADD_ASSET',
+                    'UPDATE': 'UPDATE_ASSET',
+                    'DELETE': 'DELETE_ASSET'
+                };
+                const actionType = typeMap[args.mutationType];
+                const summary = `${args.mutationType} Asset: ${args.symbol || args.assetId}`;
 
-          return {
-            text: confirmText,
-            action
-          };
+                return {
+                    text: language === 'zh' ? `建议操作: **${args.mutationType} 资产**。请确认。` : `Proposed Action: **${args.mutationType} Asset**. Please confirm.`,
+                    action: {
+                        type: actionType,
+                        targetId: args.assetId,
+                        data: {
+                            symbol: args.symbol,
+                            name: args.name,
+                            quantity: args.quantity,
+                            price: args.price,
+                            type: args.assetType as AssetType
+                        },
+                        summary
+                    }
+                };
+            }
+
+            if (finalCall.name === 'propose_transaction_mutation') {
+                const typeMap: Record<string, ActionType> = {
+                    'ADD': 'ADD_TRANSACTION',
+                    'UPDATE': 'UPDATE_TRANSACTION',
+                    'DELETE': 'DELETE_TRANSACTION'
+                };
+                const actionType = typeMap[args.mutationType];
+                
+                // Try to resolve symbol for summary
+                let symbolStr = "Unknown";
+                if (args.assetId) {
+                    const a = assets.find(as => as.id === args.assetId);
+                    if (a) symbolStr = a.symbol;
+                } else if (args.transactionId) {
+                    const t = transactions.find(tr => tr.id === args.transactionId);
+                    if (t) {
+                        const a = assets.find(as => as.id === t.assetId);
+                        if (a) symbolStr = a.symbol;
+                    }
+                }
+
+                const summary = `${args.mutationType} Transaction: ${args.txType || ''} ${symbolStr}`;
+                
+                return {
+                    text: language === 'zh' ? `建议操作: **${args.mutationType} 交易记录**。请确认。` : `Proposed Action: **${args.mutationType} Transaction**. Please confirm.`,
+                    action: {
+                        type: actionType,
+                        targetId: args.transactionId,
+                        data: {
+                            assetId: args.assetId,
+                            type: args.txType as TransactionType,
+                            quantity: args.quantity,
+                            price: args.price,
+                            date: args.date,
+                            fee: args.fee
+                        },
+                        summary
+                    }
+                };
+            }
         }
       }
 
-      // Normal text response (Safe fallback if text is missing)
+      // Normal text response
       return { text: response.text || "" };
 
     } catch (error: any) {
       console.error("Agent Error:", error);
       return {
         text: language === 'zh' 
-          ? "抱歉，连接 AI 大脑时出现问题。请检查网络或 API Key。" 
-          : "Sorry, I encountered an issue connecting to the AI brain. Please check your network or API Key."
+          ? "抱歉，AI 暂时无法处理您的请求。" 
+          : "Sorry, I encountered an issue processing your request."
       };
     }
   }
