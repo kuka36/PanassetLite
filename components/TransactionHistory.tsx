@@ -1,12 +1,10 @@
 
-
-
 import React, { useState, useMemo } from 'react';
 import { usePortfolio } from '../context/PortfolioContext';
 import { Card } from './ui/Card';
 import { ConfirmModal } from './ui/ConfirmModal';
 import { TransactionType, Currency } from '../types';
-import { Filter, Download, ArrowDownLeft, ArrowUpRight, DollarSign, Trash2, ArrowRightLeft, CreditCard, RefreshCw } from 'lucide-react';
+import { Filter, ArrowDownLeft, ArrowUpRight, DollarSign, Trash2, ArrowRightLeft, CreditCard, RefreshCw } from 'lucide-react';
 
 export const TransactionHistory: React.FC = () => {
   const { transactions, assets, deleteTransaction, t } = usePortfolio();
@@ -84,31 +82,6 @@ export const TransactionHistory: React.FC = () => {
       });
   };
 
-  const handleExportCSV = () => {
-     const headers = [t('date'), t('type'), t('asset'), t('quantity'), t('pricePerUnit'), t('fees'), t('total')];
-     const rows = filteredTransactions.map(t => {
-         const info = getAssetInfo(t.assetId);
-         return [
-             t.date,
-             t.type,
-             info.symbol,
-             t.quantityChange,
-             t.pricePerUnit,
-             t.fee,
-             t.total
-         ].join(",");
-     });
-     
-     const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows].join("\n");
-     const encodedUri = encodeURI(csvContent);
-     const link = document.createElement("a");
-     link.setAttribute("href", encodedUri);
-     link.setAttribute("download", "transactions.csv");
-     document.body.appendChild(link);
-     link.click();
-     document.body.removeChild(link);
-  };
-
   // Get unique assets that are actually in transactions or currently in portfolio
   const availableAssets = useMemo(() => {
       const assetMap = new Map();
@@ -123,12 +96,6 @@ export const TransactionHistory: React.FC = () => {
             <h1 className="text-2xl font-bold text-slate-800">{t('transactionHistory')}</h1>
             <p className="text-slate-500">{t('historySubtitle')}</p>
         </div>
-        <button 
-            onClick={handleExportCSV}
-            className="px-4 py-2 bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 font-medium rounded-xl shadow-sm flex items-center gap-2 transition-colors"
-        >
-            <Download size={18}/> <span className="hidden sm:inline">{t('exportCSV')}</span>
-        </button>
       </div>
 
       <Card>

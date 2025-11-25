@@ -3,9 +3,9 @@ import React, { useRef, useState } from 'react';
 import { usePortfolio } from '../context/PortfolioContext';
 import { Card } from './ui/Card';
 import { ConfirmModal } from './ui/ConfirmModal';
-import { Currency, Language, AssetType, TransactionType } from '../types';
+import { Currency, Language, AssetType, TransactionType, AssetMetadata, Transaction } from '../types';
 import { 
-  Upload, Trash2, Shield, Globe, AlertTriangle, CheckCircle, Key, Languages, Activity, Lock, Github, ExternalLink, Bot, Sparkles, Eye, EyeOff, FileSpreadsheet, FileText, Download, Info
+  Upload, Trash2, Shield, Globe, AlertTriangle, CheckCircle, Key, Languages, Activity, Lock, Github, ExternalLink, Bot, Sparkles, Eye, EyeOff, Download, Info, FileText
 } from 'lucide-react';
 
 export const Settings: React.FC = () => {
@@ -52,39 +52,45 @@ export const Settings: React.FC = () => {
     URL.revokeObjectURL(url);
   };
 
-  const handleExportAssets = () => {
-    const headers = ['id', 'symbol', 'name', 'type', 'currency', 'currentPrice', 'dateAcquired', 'lastUpdated'];
-    const rows = assets.map(a => [
-      a.id,
-      a.symbol,
-      a.name,
-      a.type,
-      a.currency,
-      a.currentPrice,
-      a.dateAcquired || '',
-      a.lastUpdated || ''
-    ].map(escapeCSV).join(','));
-    
-    const csvContent = [headers.join(','), ...rows].join('\n');
-    downloadCSV(csvContent, `panasset_assets.csv`);
-  };
+  const handleExportUnified = () => {
+    // Defined Headers: Transaction Fields + Asset Fields
+    const headers = [
+        // Transaction Fields
+        'tx_id', 'tx_date', 'tx_type', 'tx_quantity', 'tx_price', 'tx_fee', 'tx_total', 'tx_note',
+        // Asset Fields (Enriched)
+        'asset_id', 'asset_symbol', 'asset_name', 'asset_type', 'asset_currency', 'asset_current_price', 'asset_date_acquired'
+    ];
 
-  const handleExportTransactions = () => {
-    const headers = ['id', 'assetId', 'type', 'date', 'quantityChange', 'pricePerUnit', 'fee', 'total', 'note'];
-    const rows = transactions.map(tx => [
-      tx.id,
-      tx.assetId,
-      tx.type,
-      tx.date,
-      tx.quantityChange,
-      tx.pricePerUnit,
-      tx.fee,
-      tx.total,
-      tx.note || ''
-    ].map(escapeCSV).join(','));
+    const rows = transactions.map(tx => {
+        const asset = assets.find(a => a.id === tx.assetId);
+        // If asset deleted, try to preserve basic info if possible or leave empty
+        // In this app architecture, transactions usually get deleted if asset is deleted, but safe guard here.
+        
+        return [
+            // Transaction Data
+            tx.id,
+            tx.date,
+            tx.type,
+            tx.quantityChange,
+            tx.pricePerUnit,
+            tx.fee,
+            tx.total,
+            tx.note || '',
+            
+            // Asset Data
+            tx.assetId,
+            asset?.symbol || 'UNKNOWN',
+            asset?.name || 'Unknown Asset',
+            asset?.type || AssetType.OTHER,
+            asset?.currency || Currency.USD,
+            asset?.currentPrice || 0,
+            asset?.dateAcquired || ''
+        ].map(escapeCSV).join(',');
+    });
 
     const csvContent = [headers.join(','), ...rows].join('\n');
-    downloadCSV(csvContent, `panasset_transactions.csv`);
+    const dateStr = new Date().toISOString().split('T')[0];
+    downloadCSV(csvContent, `panasset_data_${dateStr}.csv`);
   };
 
   const parseCSVLine = (line: string): string[] => {
@@ -120,51 +126,61 @@ export const Settings: React.FC = () => {
 
         const headers = parseCSVLine(lines[0]).map(h => h.trim());
         
-        // Detect Type based on headers
-        if (headers.includes('symbol') && headers.includes('type') && headers.includes('currency')) {
-            // Import Assets (Metadata)
-            const newAssets = lines.slice(1).map(line => {
-                const vals = parseCSVLine(line);
-                const getVal = (key: string) => vals[headers.indexOf(key)];
-                
-                return {
-                    id: getVal('id') || crypto.randomUUID(),
-                    symbol: getVal('symbol'),
-                    name: getVal('name'),
-                    type: getVal('type') as AssetType,
-                    currency: getVal('currency') as Currency,
-                    currentPrice: parseFloat(getVal('currentPrice')) || 0,
-                    dateAcquired: getVal('dateAcquired'),
-                    lastUpdated: parseInt(getVal('lastUpdated')) || Date.now(),
-                };
-            });
-            
-            const count = importAssetsCSV(newAssets);
-            setImportStatus({ msg: `${t('importSuccess')} (${count} Assets updated/added)`, type: 'success' });
-
-        } else if (headers.includes('assetId') && headers.includes('quantityChange') && headers.includes('type')) {
-            // Import Transactions
-            const newTxs = lines.slice(1).map(line => {
-                const vals = parseCSVLine(line);
-                const getVal = (key: string) => vals[headers.indexOf(key)];
-                return {
-                    id: getVal('id') || crypto.randomUUID(),
-                    assetId: getVal('assetId'),
-                    type: getVal('type') as TransactionType,
-                    date: getVal('date'),
-                    quantityChange: parseFloat(getVal('quantityChange')),
-                    pricePerUnit: parseFloat(getVal('pricePerUnit')),
-                    fee: parseFloat(getVal('fee')) || 0,
-                    total: parseFloat(getVal('total')) || 0,
-                    note: getVal('note')
-                };
-            });
-            
-            const count = importTransactionsCSV(newTxs);
-            setImportStatus({ msg: `${t('importSuccess')} (${count} Txns updated/added)`, type: 'success' });
-        } else {
-            throw new Error("Unknown CSV format. Headers must match standard export.");
+        // Validation: Check for required unified headers
+        if (!headers.includes('tx_id') || !headers.includes('asset_id')) {
+             throw new Error("Invalid CSV format. Missing required columns (tx_id, asset_id).");
         }
+
+        const assetsMap = new Map<string, AssetMetadata>();
+        const parsedTransactions: Transaction[] = [];
+
+        lines.slice(1).forEach(line => {
+             const vals = parseCSVLine(line);
+             const getVal = (key: string) => {
+                 const idx = headers.indexOf(key);
+                 return idx !== -1 ? vals[idx] : '';
+             };
+
+             const assetId = getVal('asset_id');
+             if (!assetId) return;
+
+             // 1. Reconstruct Asset (Deduplicate by ID)
+             if (!assetsMap.has(assetId)) {
+                 assetsMap.set(assetId, {
+                     id: assetId,
+                     symbol: getVal('asset_symbol'),
+                     name: getVal('asset_name'),
+                     type: getVal('asset_type') as AssetType,
+                     currency: getVal('asset_currency') as Currency,
+                     currentPrice: parseFloat(getVal('asset_current_price')) || 0,
+                     dateAcquired: getVal('asset_date_acquired'),
+                     lastUpdated: Date.now() // Reset update time on import
+                 });
+             }
+
+             // 2. Reconstruct Transaction
+             const txId = getVal('tx_id') || crypto.randomUUID();
+             parsedTransactions.push({
+                 id: txId,
+                 assetId: assetId,
+                 type: getVal('tx_type') as TransactionType,
+                 date: getVal('tx_date'),
+                 quantityChange: parseFloat(getVal('tx_quantity')),
+                 pricePerUnit: parseFloat(getVal('tx_price')),
+                 fee: parseFloat(getVal('tx_fee')) || 0,
+                 total: parseFloat(getVal('tx_total')) || 0,
+                 note: getVal('tx_note')
+             });
+        });
+        
+        // Execute Import
+        const assetCount = importAssetsCSV(Array.from(assetsMap.values()));
+        const txCount = importTransactionsCSV(parsedTransactions);
+
+        setImportStatus({ 
+            msg: `${t('importSuccess')} (${assetCount} Assets, ${txCount} Txs)`, 
+            type: 'success' 
+        });
         
         setTimeout(() => setImportStatus(null), 5000);
       } catch (err) {
@@ -465,35 +481,21 @@ export const Settings: React.FC = () => {
                 <span className="text-sm text-blue-700 leading-relaxed">{t('localDataSecurity')}</span>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Export Assets */}
-                <button 
-                    onClick={handleExportAssets}
-                    className="flex flex-col items-center justify-center p-4 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 hover:border-slate-300 transition-all group"
-                >
-                    <div className="p-3 bg-slate-100 text-slate-600 rounded-full mb-2 group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">
-                        <FileSpreadsheet size={20} />
+            {/* Unified Export Button */}
+            <button 
+                onClick={handleExportUnified}
+                className="w-full flex items-center justify-center p-4 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 hover:border-slate-300 transition-all group gap-3 shadow-sm"
+            >
+                <div className="p-2 bg-slate-100 text-slate-600 rounded-full group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">
+                    <FileText size={20} />
+                </div>
+                <div className="text-left">
+                    <div className="font-medium text-slate-700 text-sm flex items-center gap-2">
+                        {t('exportUnified')} <Download size={14} className="text-slate-400"/>
                     </div>
-                    <span className="font-medium text-slate-700 text-sm flex items-center gap-1">
-                        {settings.language === 'zh' ? "导出 资产清单" : "Export Assets"} <Download size={12}/>
-                    </span>
-                    <span className="text-xs text-slate-400 mt-0.5">CSV</span>
-                </button>
-
-                {/* Export Transactions */}
-                <button 
-                    onClick={handleExportTransactions}
-                    className="flex flex-col items-center justify-center p-4 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 hover:border-slate-300 transition-all group"
-                >
-                    <div className="p-3 bg-slate-100 text-slate-600 rounded-full mb-2 group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">
-                        <FileText size={20} />
-                    </div>
-                    <span className="font-medium text-slate-700 text-sm flex items-center gap-1">
-                        {settings.language === 'zh' ? "导出 交易记录" : "Export Transactions"} <Download size={12}/>
-                    </span>
-                    <span className="text-xs text-slate-400 mt-0.5">CSV</span>
-                </button>
-            </div>
+                    <div className="text-xs text-slate-400 mt-0.5">{t('exportUnifiedDesc')}</div>
+                </div>
+            </button>
 
             <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
                 <div className="flex items-center gap-2 mb-2 text-slate-800 font-medium">
