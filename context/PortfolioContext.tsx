@@ -19,7 +19,6 @@ interface AppSettings {
   aiProvider: AIProvider;
   alphaVantageApiKey: string;
   language: Language;
-  isAiAssistantEnabled: boolean;
 }
 
 interface PortfolioContextType {
@@ -54,12 +53,12 @@ const getBrowserLanguage = (): Language => {
 const INITIAL_SETTINGS: AppSettings = {
   baseCurrency: Currency.USD,
   isPrivacyMode: false,
-  geminiApiKey: '',
+  // Prioritize GEMINI_API_KEY, fallback to standard API_KEY
+  geminiApiKey: process.env.GEMINI_API_KEY || process.env.API_KEY || '',
   deepSeekApiKey: '',
   aiProvider: 'gemini',
   alphaVantageApiKey: '',
   language: getBrowserLanguage(),
-  isAiAssistantEnabled: true,
 };
 
 export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
@@ -69,9 +68,16 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
   
   const [settings, setSettings] = useState<AppSettings>(() => {
     const saved = localStorage.getItem('investflow_settings');
+    const envKey = process.env.GEMINI_API_KEY || process.env.API_KEY || '';
+    
     if (saved) {
       const parsed = JSON.parse(saved);
-      return { ...INITIAL_SETTINGS, ...parsed };
+      return { 
+        ...INITIAL_SETTINGS, 
+        ...parsed,
+        // If local storage has empty key but env has one, use env
+        geminiApiKey: parsed.geminiApiKey || envKey
+      };
     }
     return INITIAL_SETTINGS;
   });
@@ -211,9 +217,6 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
          // Cost Basis of sold items
          const costBasisSold = qtySold * asset.avgCost;
          
-         // Realized PnL = Proceeds - Cost Basis - Fee (already in total?) 
-         // Note: tx.total for SELL is usually positive proceeds. 
-         // Let's assume tx.total = (price * qty) - fee.
          const proceeds = tx.total; 
          const realized = proceeds - costBasisSold;
          
@@ -228,9 +231,6 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
          }
       }
       else if (tx.type === TransactionType.BALANCE_ADJUSTMENT) {
-         // Special case: Cost basis adjustments could be complex.
-         // Simple approach: Adjust quantity, assume pricePerUnit matches current avgCost (no PnL impact) OR explicit price provided.
-         // For now, treat like a BUY/SELL without PnL impact logic unless derived differently.
          if (tx.quantityChange > 0) {
              // Treat like receiving free shares or buying at specific price
              asset.quantity += tx.quantityChange;
@@ -253,9 +253,6 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
     // 4. Final Calculations (Current Value, Unrealized PnL)
     return Array.from(assetMap.values()).map(asset => {
       const currentValue = asset.quantity * asset.currentPrice;
-      // For Liabilities, 'Value' is debt amount (negative equity), but we track magnitude here.
-      // logic handles liability display in Dashboard.
-      
       const unrealizedPnL = currentValue - asset.totalCost;
       const pnl = unrealizedPnL; 
       const pnlPercent = asset.totalCost !== 0 ? (pnl / asset.totalCost) * 100 : 0;
@@ -390,7 +387,7 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
         });
         return next;
     });
-    return count;
+    return newMetas.length; // Return input length as count since the async update is void
   };
 
   const importTransactionsCSV = (newTxs: Transaction[]): number => {
@@ -408,7 +405,7 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
         });
         return next;
     });
-    return count;
+    return newTxs.length;
   };
 
   const clearData = () => {

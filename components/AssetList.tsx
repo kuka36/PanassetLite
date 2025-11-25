@@ -88,8 +88,8 @@ export const AssetList: React.FC<AssetListProps> = ({ onEdit, onTransaction }) =
   };
 
   const renderSortIcon = (columnKey: SortKey) => {
-    if (sortConfig.key !== columnKey) return <div className="w-4 h-4" />; // Placeholder to prevent layout jump
-    return sortConfig.direction === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />;
+    if (sortConfig.key !== columnKey) return <div className="w-3 h-3" />; // Placeholder
+    return sortConfig.direction === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />;
   };
 
   // Helper for conditional styling
@@ -148,9 +148,9 @@ export const AssetList: React.FC<AssetListProps> = ({ onEdit, onTransaction }) =
   };
 
   // Table Header Helper
-  const SortableHeader = ({ label, sortKey, alignRight = false }: { label: string, sortKey: SortKey, alignRight?: boolean }) => (
+  const SortableHeader = ({ label, sortKey, alignRight = false, className = "" }: { label: string, sortKey: SortKey, alignRight?: boolean, className?: string }) => (
     <th 
-      className={`pb-3 font-medium cursor-pointer group select-none ${alignRight ? 'text-right' : 'text-left'} ${alignRight ? 'pr-2' : 'pl-2'}`}
+      className={`pb-3 font-medium cursor-pointer group select-none ${alignRight ? 'text-right' : 'text-left'} ${alignRight ? 'pr-2' : 'pl-2'} ${className}`}
       onClick={() => handleSort(sortKey)}
     >
       <div className={`flex items-center gap-1 ${alignRight ? 'justify-end' : 'justify-start'} text-slate-500 group-hover:text-blue-600 transition-colors`}>
@@ -166,15 +166,43 @@ export const AssetList: React.FC<AssetListProps> = ({ onEdit, onTransaction }) =
     <>
     <Card title={t('portfolioHoldings')} className="animate-slide-up">
       <div className="overflow-x-auto">
-        <table className="w-full text-left border-collapse min-w-[900px]">
+        <table className="w-full text-left border-collapse">
           <thead>
             <tr className="text-xs text-slate-400 uppercase border-b border-slate-100">
+              {/* 1. Asset (Always Visible) */}
               <SortableHeader label={t('asset')} sortKey="symbol" />
-              <SortableHeader label={t('currentPrice')} sortKey="price" />
-              <SortableHeader label={t('avgCost')} sortKey="cost" />
-              <SortableHeader label={t('holdings')} sortKey="quantity" />
-              <SortableHeader label={t('value')} sortKey="value" alignRight />
+
+              {/* 2. Mobile: Holdings & Value (Combined) - Hidden on Desktop */}
+              <th 
+                  className="md:hidden pb-3 text-right pr-2 font-medium cursor-pointer"
+                  onClick={() => handleSort('value')}
+              >
+                  <div className="flex flex-col items-end gap-0.5">
+                     <span className="flex items-center gap-1 text-slate-500">{t('value')} {sortConfig.key === 'value' && renderSortIcon('value')}</span>
+                     {/* Removed Avg Cost label for cleaner look */}
+                  </div>
+              </th>
+
+              {/* 3. Mobile: Price & Cost (Combined) - Hidden on Desktop */}
+              <th 
+                  className="md:hidden pb-3 text-right pr-2 font-medium cursor-pointer"
+                  onClick={() => handleSort('price')}
+              >
+                  <div className="flex flex-col items-end gap-0.5">
+                     <span className="flex items-center gap-1 text-slate-500">{t('currentPrice')} {sortConfig.key === 'price' && renderSortIcon('price')}</span>
+                  </div>
+              </th>
+
+              {/* Desktop Columns (Hidden on Mobile) */}
+              <SortableHeader label={t('currentPrice')} sortKey="price" className="hidden md:table-cell" />
+              <SortableHeader label={t('avgCost')} sortKey="cost" className="hidden md:table-cell" />
+              <SortableHeader label={t('holdings')} sortKey="quantity" className="hidden md:table-cell" />
+              <SortableHeader label={t('value')} sortKey="value" alignRight className="hidden md:table-cell" />
+
+              {/* P&L (Always Visible) */}
               <SortableHeader label={t('statusPnL')} sortKey="pnl" alignRight />
+
+              {/* Actions */}
               {(onEdit || onTransaction) && <th className="pb-3 font-medium text-right pr-2">{t('actions')}</th>}
             </tr>
           </thead>
@@ -197,21 +225,51 @@ export const AssetList: React.FC<AssetListProps> = ({ onEdit, onTransaction }) =
 
               return (
                 <tr key={asset.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors group">
+                  
+                  {/* 1. Asset Info */}
                   <td className="py-4 pl-2">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-xs ${getTypeColor(asset.type)}`}>
+                    <div className="flex items-center gap-2 md:gap-3">
+                      <div className={`w-8 h-8 md:w-10 md:h-10 rounded-full flex items-center justify-center font-bold text-xs shrink-0 ${getTypeColor(asset.type)}`}>
                         {asset.symbol.substring(0, 1)}
                       </div>
-                      <div>
+                      <div className="min-w-0">
                         <div className="flex items-center gap-1">
-                            <div className="font-semibold text-slate-800">{asset.symbol}</div>
-                            <span className="text-[10px] px-1 py-0.5 bg-slate-100 text-slate-500 rounded">{asset.currency}</span>
+                            <div className="font-semibold text-slate-800 truncate max-w-[80px] md:max-w-none">{asset.symbol}</div>
+                            <span className="hidden md:inline-block text-[10px] px-1 py-0.5 bg-slate-100 text-slate-500 rounded">{asset.currency}</span>
                         </div>
-                        <div className="text-xs text-slate-400 max-w-[100px] truncate">{asset.name}</div>
+                        <div className="text-xs text-slate-400 truncate max-w-[90px] md:max-w-[120px]">{asset.name}</div>
                       </div>
                     </div>
                   </td>
-                  <td className="py-4">
+
+                  {/* 2. Mobile: Holdings & Value */}
+                  <td className="md:hidden py-4 text-right pr-2">
+                      <div className={`font-bold text-sm ${isLiability ? 'text-red-700' : 'text-slate-800'}`}>
+                        {settings.isPrivacyMode 
+                            ? '••••••' 
+                            : `${isLiability ? '-' : ''}${baseCurrencySymbol}${baseValue.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 1})}`
+                        }
+                      </div>
+                      <div className="text-xs text-slate-500 mt-0.5">
+                         {settings.isPrivacyMode 
+                            ? '••••••'
+                            : asset.quantity.toLocaleString(undefined, {maximumFractionDigits: 4})
+                         }
+                      </div>
+                  </td>
+
+                   {/* 3. Mobile: Price & Cost */}
+                   <td className="md:hidden py-4 text-right pr-2">
+                      <div className="font-medium text-sm text-slate-700">
+                         {symbol}{asset.currentPrice.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                      </div>
+                      <div className="text-xs text-slate-400 mt-0.5">
+                         {settings.isPrivacyMode ? '••••••' : `${symbol}${asset.avgCost.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`}
+                      </div>
+                  </td>
+
+                  {/* Desktop: Price */}
+                  <td className="hidden md:table-cell py-4">
                     {isUpdating ? (
                          <div className="flex items-center gap-1">
                             <span className="text-slate-400 text-xs">{symbol}</span>
@@ -262,40 +320,66 @@ export const AssetList: React.FC<AssetListProps> = ({ onEdit, onTransaction }) =
                         </div>
                     )}
                   </td>
-                  <td className="py-4">
+
+                  {/* Desktop: Cost */}
+                  <td className="hidden md:table-cell py-4">
                     <div className="font-medium text-slate-700">
-                        {symbol}{asset.avgCost.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 6})}
+                        {settings.isPrivacyMode 
+                            ? '••••••' 
+                            : `${symbol}${asset.avgCost.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 6})}`
+                        }
                     </div>
                   </td>
-                  <td className="py-4">
-                    <div className="font-medium text-slate-700">{asset.quantity.toLocaleString()}</div>
+
+                  {/* Desktop: Quantity */}
+                  <td className="hidden md:table-cell py-4">
+                    <div className="font-medium text-slate-700">
+                        {settings.isPrivacyMode 
+                            ? '••••••' 
+                            : asset.quantity.toLocaleString()
+                        }
+                    </div>
                   </td>
-                  {/* Base Currency Value */}
-                  <td className={`py-4 text-right pr-2 font-bold ${isLiability ? 'text-red-700' : 'text-slate-800'}`}>
-                    {isLiability ? '-' : ''}{baseCurrencySymbol}{baseValue.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+
+                  {/* Desktop: Value */}
+                  <td className={`hidden md:table-cell py-4 text-right pr-2 font-bold ${isLiability ? 'text-red-700' : 'text-slate-800'}`}>
+                     {settings.isPrivacyMode 
+                        ? '••••••' 
+                        : `${isLiability ? '-' : ''}${baseCurrencySymbol}${baseValue.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`
+                     }
                   </td>
+
+                  {/* P&L - Always Visible */}
                   <td className="py-4 text-right pr-2">
                     {isManual && !pnl ? (
                         <div className="text-right">
                              <div className="text-xs font-medium text-slate-500 bg-slate-100 inline-block px-2 py-0.5 rounded-md">
-                                {t('lastUpdated')}: {formatLastUpdated(asset.lastUpdated)}
+                                {t('lastUpdated')}<span className="hidden md:inline">: {formatLastUpdated(asset.lastUpdated)}</span>
                              </div>
                         </div>
                     ) : (
-                        <>
-                            <div className={`flex items-center justify-end gap-1 font-medium ${pnl >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-                            {pnl >= 0 ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
-                            {Math.abs(pnlPercent).toFixed(2)}%
+                        settings.isPrivacyMode ? (
+                            <div className="text-right">
+                                <span className="text-slate-400 font-bold tracking-widest">••••••</span>
                             </div>
-                            <div className={`text-xs ${pnl >= 0 ? 'text-green-600/70' : 'text-red-500/70'}`}>
-                            {pnl >= 0 ? '+' : '-'}{symbol}{Math.abs(pnl).toLocaleString(undefined, {maximumFractionDigits: 0})}
-                            </div>
-                        </>
+                        ) : (
+                            <>
+                                <div className={`flex items-center justify-end gap-1 font-medium ${pnl >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                                {pnl >= 0 ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
+                                {Math.abs(pnlPercent).toFixed(2)}%
+                                </div>
+                                <div className={`text-xs ${pnl >= 0 ? 'text-green-600/70' : 'text-red-500/70'}`}>
+                                {pnl >= 0 ? '+' : '-'}{symbol}{Math.abs(pnl).toLocaleString(undefined, {maximumFractionDigits: 0})}
+                                </div>
+                            </>
+                        )
                     )}
                   </td>
+
+                  {/* Actions - Always Visible but potentially tight on mobile */}
                   {(onEdit || onTransaction) && (
                     <td className="py-4 text-right pr-2">
-                        <div className="flex items-center justify-end gap-2">
+                        <div className="flex items-center justify-end gap-1 md:gap-2">
                             {onTransaction && (
                                 <button 
                                     onClick={() => onTransaction(asset)}

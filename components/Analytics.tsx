@@ -13,9 +13,9 @@ import { PieChart as PieIcon, Sparkles, Scale, RefreshCw, Zap } from 'lucide-rea
 
 const COLORS = ['#0ea5e9', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444', '#6366f1', '#f97316'];
 const RISK_COLORS = {
-  High: '#ef4444', // Crypto
-  Medium: '#f59e0b', // Stock
-  Low: '#10b981', // Fund/Cash/RealEstate
+  High: '#ef4444', 
+  Medium: '#f59e0b', 
+  Low: '#10b981', 
 };
 
 interface RiskData {
@@ -31,7 +31,7 @@ export const Analytics: React.FC = () => {
   const [riskError, setRiskError] = useState(false);
 
   const formatCurrency = (val: number) => {
-    if (settings.isPrivacyMode) return '****';
+    if (settings.isPrivacyMode) return '••••••';
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: settings.baseCurrency, notation: 'compact' }).format(val);
   };
 
@@ -49,7 +49,6 @@ export const Analytics: React.FC = () => {
     setRiskError(false);
 
     try {
-        // Force refresh or fetch
         const data = await getRiskAssessment(assets, apiKey, settings.aiProvider, settings.language, true);
         setRiskData(data);
     } catch (e) {
@@ -60,13 +59,10 @@ export const Analytics: React.FC = () => {
     }
   };
 
-  // --- Data Preparations ---
-
-  // 1. Distribution by Asset Type (Excluding Liabilities)
   const typeDistribution = useMemo(() => {
     const dist: Record<string, number> = {};
     assets.forEach(a => {
-      if (a.type === AssetType.LIABILITY) return; // Exclude debt
+      if (a.type === AssetType.LIABILITY) return; 
 
       const rawVal = a.quantity * a.currentPrice;
       const val = convertValue(rawVal, a.currency, settings.baseCurrency, exchangeRates);
@@ -77,7 +73,6 @@ export const Analytics: React.FC = () => {
       .sort((a, b) => b.value - a.value);
   }, [assets, settings.baseCurrency, exchangeRates, t]);
 
-  // 2. Liabilities Distribution
   const liabilityDistribution = useMemo(() => {
     return assets
       .filter(a => a.type === AssetType.LIABILITY)
@@ -89,7 +84,6 @@ export const Analytics: React.FC = () => {
       .sort((a, b) => b.value - a.value);
   }, [assets, settings.baseCurrency, exchangeRates]);
 
-  // 3. Balance Sheet Summary (Assets vs Liabilities)
   const balanceSheet = useMemo(() => {
     let totalAssets = 0;
     let totalLiabilities = 0;
@@ -107,8 +101,8 @@ export const Analytics: React.FC = () => {
 
     return { 
       data: [
-        { name: t('label_assets'), value: totalAssets, fill: '#10b981' }, // Green
-        { name: t('label_liabilities'), value: totalLiabilities, fill: '#ef4444' } // Red
+        { name: t('label_assets'), value: totalAssets, fill: '#10b981' }, 
+        { name: t('label_liabilities'), value: totalLiabilities, fill: '#ef4444' } 
       ],
       totalAssets,
       totalLiabilities,
@@ -116,7 +110,6 @@ export const Analytics: React.FC = () => {
     };
   }, [assets, settings.baseCurrency, exchangeRates, t]);
 
-  // 4. Top Assets by Value (Excluding Liabilities)
   const topAssets = useMemo(() => {
     return [...assets]
       .filter(a => a.type !== AssetType.LIABILITY) 
@@ -134,7 +127,6 @@ export const Analytics: React.FC = () => {
       .slice(0, 6);
   }, [assets, settings.baseCurrency, exchangeRates]);
 
-  // 5. Visual Risk Distribution (Assets Only)
   const riskProfile = useMemo(() => {
     let high = 0, med = 0, low = 0;
     assets.forEach(a => {
@@ -159,7 +151,6 @@ export const Analytics: React.FC = () => {
     ].filter(x => x.value > 0);
   }, [assets, settings.baseCurrency, exchangeRates, t]);
 
-  // 6. P&L Ranking
   const pnlRanking = useMemo(() => {
     return [...assets]
       .filter(a => a.type !== AssetType.LIABILITY)
@@ -191,9 +182,7 @@ export const Analytics: React.FC = () => {
          </div>
       </div>
 
-      {/* --- Section 1: Financial Health (The Big Picture) --- */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {/* 1. Net Worth Structure */}
           <Card title={t('netWorthStructure')} className="md:col-span-2 min-w-0">
              <div className="h-[200px] w-full min-w-0">
                 <ResponsiveContainer width="100%" height="100%">
@@ -219,7 +208,6 @@ export const Analytics: React.FC = () => {
              </div>
           </Card>
 
-          {/* 2. Debt Ratio Indicator */}
           <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 flex flex-col justify-center items-center md:col-span-1 relative overflow-hidden">
               <h3 className="text-slate-500 text-sm font-medium mb-3 flex items-center gap-2 z-10">
                   <Scale size={16} /> {t('debtRatio')}
@@ -235,7 +223,6 @@ export const Analytics: React.FC = () => {
                      {balanceSheet.ratio > 30 ? t('highLeverage') : t('healthy')}
                  </div>
               </div>
-              {/* Visual Progress Bar at bottom */}
               <div className="w-full bg-slate-100 h-1.5 mt-4 rounded-full overflow-hidden">
                   <div 
                     className={`h-full transition-all duration-1000 ${balanceSheet.ratio > 50 ? 'bg-red-500' : 'bg-green-500'}`} 
@@ -245,10 +232,8 @@ export const Analytics: React.FC = () => {
           </div>
       </div>
 
-      {/* --- Section 2: Composition & Risk (The Characteristics) --- */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        {/* Asset Allocation */}
         <Card title={t('assetAllocation')} className="lg:col-span-1 min-w-0">
           <div className="h-[240px] w-full min-w-0">
             <ResponsiveContainer width="100%" height="100%">
@@ -276,7 +261,6 @@ export const Analytics: React.FC = () => {
           </div>
         </Card>
 
-        {/* Risk Profile & AI Insight - UPDATED */}
         <Card className="lg:col-span-2 min-w-0" title={t('riskAnalysis')}>
            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 h-full">
              <div className="h-[240px] min-w-0 flex flex-col justify-center">
@@ -308,7 +292,6 @@ export const Analytics: React.FC = () => {
              
              <div className="flex flex-col justify-center pr-2 py-2">
                  <div className="bg-slate-50/50 rounded-2xl p-5 border border-slate-100 h-full flex flex-col relative overflow-hidden">
-                     {/* Background Decoration */}
                      <div className="absolute top-0 right-0 p-4 opacity-5">
                         <Sparkles size={64} className="text-purple-600"/>
                      </div>
@@ -394,10 +377,8 @@ export const Analytics: React.FC = () => {
         </Card>
       </div>
 
-      {/* --- Section 3: Performance (The Details) --- */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         
-        {/* Cost vs Value */}
         <Card title={t('costVsValue')} className="min-w-0">
            <div className="h-[250px] w-full min-w-0">
             <ResponsiveContainer width="100%" height="100%">
@@ -424,7 +405,6 @@ export const Analytics: React.FC = () => {
           </div>
         </Card>
 
-        {/* P&L Performance */}
         <Card title={t('topMovers')} className="min-w-0">
            <div className="h-[250px] w-full min-w-0">
             <ResponsiveContainer width="100%" height="100%">
@@ -456,7 +436,6 @@ export const Analytics: React.FC = () => {
           </div>
         </Card>
 
-        {/* Liability Breakdown (Conditional Row) */}
         {liabilityDistribution.length > 0 && (
             <Card title={t('liabilityBreakdown')} className="md:col-span-2 min-w-0">
                  <div className="h-[180px] w-full flex items-center justify-center min-w-0">

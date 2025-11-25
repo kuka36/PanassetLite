@@ -1,7 +1,4 @@
 
-
-
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Line 
@@ -22,8 +19,6 @@ interface NetWorthChartProps {
 
 type TimeRange = '1W' | '1M' | '3M' | '6M' | '1Y' | 'ALL';
 
-// Helper to formatted YYYY-MM-DD in local time
-// CRITICAL FIX: Use Local Time for Axis to match Transaction Dates
 const toLocalYMD = (date: Date) => {
     const y = date.getFullYear();
     const m = (date.getMonth() + 1).toString().padStart(2, '0');
@@ -31,11 +26,9 @@ const toLocalYMD = (date: Date) => {
     return `${y}-${m}-${d}`;
 };
 
-// Helper to generate array of dates (Local Time)
 const getDatesInRange = (startDate: Date, endDate: Date) => {
     const dates = [];
     const theDate = new Date(startDate);
-    // Safety break to prevent infinite loops
     let loops = 0;
     while (theDate <= endDate && loops < 5000) {
         dates.push(toLocalYMD(theDate));
@@ -58,7 +51,6 @@ export const NetWorthChart: React.FC<NetWorthChartProps> = ({
   const [historyMap, setHistoryMap] = useState<Record<string, HistoricalDataPoint[]>>({});
   const [loadingHistory, setLoadingHistory] = useState(false);
   
-  // 1. Fetch History
   useEffect(() => {
     let isMounted = true;
     const loadData = async () => {
@@ -68,9 +60,7 @@ export const NetWorthChart: React.FC<NetWorthChartProps> = ({
       const map: Record<string, HistoricalDataPoint[]> = {};
       const apiKey = settings.alphaVantageApiKey;
 
-      // Process in chunks
       const promises = assets.map(async (asset) => {
-        // Skip manual assets history fetch to speed up
         if (asset.type === AssetType.REAL_ESTATE || asset.type === AssetType.LIABILITY || asset.type === AssetType.OTHER || asset.type === AssetType.CASH) {
              return { id: asset.id, data: [] };
         }
@@ -97,9 +87,8 @@ export const NetWorthChart: React.FC<NetWorthChartProps> = ({
     return () => { isMounted = false; };
   }, [assets.length, settings.alphaVantageApiKey]); 
 
-  // 2. Format Helpers
   const formatCurrency = (val: number) => {
-    if (isPrivacyMode) return '****';
+    if (isPrivacyMode) return '••••••';
     return new Intl.NumberFormat('en-US', { 
       style: 'currency', 
       currency: baseCurrency, 
@@ -108,14 +97,12 @@ export const NetWorthChart: React.FC<NetWorthChartProps> = ({
     }).format(val);
   };
 
-  // 3. Build Lookup Map for Price (Optimized for O(1) access)
   const priceLookupMap = useMemo(() => {
       const lookup: Record<string, Map<string, number>> = {};
       
       Object.keys(historyMap).forEach(assetId => {
           const points = historyMap[assetId];
           const assetMap = new Map<string, number>();
-          // Sort to ensure order
           const sortedPoints = [...points].sort((a, b) => a.date.localeCompare(b.date));
           
           sortedPoints.forEach(p => {
@@ -126,28 +113,23 @@ export const NetWorthChart: React.FC<NetWorthChartProps> = ({
       return lookup;
   }, [historyMap]);
 
-  // 4. Core Calculation: Forward Replay with Synthetic Transactions
   const chartData = useMemo(() => {
     if (assets.length === 0) return [];
     
-    // Safety check: if transactions are undefined, default to empty
     const safeTransactions = transactions || [];
 
-    // A. Generate Synthetic Transactions for "Simple Mode" assets (Legacy Support)
-    // If an asset has NO transactions in the log, we treat its current state as the Initial Buy.
     const assetIdsWithTx = new Set(safeTransactions.map(t => t.assetId));
     const syntheticTransactions: any[] = [];
     
     assets.forEach(a => {
         if (!assetIdsWithTx.has(a.id)) {
-            const date = a.dateAcquired || toLocalYMD(new Date()); // Fix: Use local date fallback
-            // Create a synthetic transaction that matches the Transaction interface
+            const date = a.dateAcquired || toLocalYMD(new Date()); 
             syntheticTransactions.push({
                 id: `synthetic-${a.id}`,
                 assetId: a.id,
                 type: a.type === AssetType.LIABILITY ? TransactionType.BORROW : TransactionType.BUY,
                 date: date,
-                quantityChange: a.quantity, // Normalized field
+                quantityChange: a.quantity, 
                 pricePerUnit: a.avgCost,
                 fee: 0,
                 total: a.quantity * a.avgCost
@@ -159,11 +141,9 @@ export const NetWorthChart: React.FC<NetWorthChartProps> = ({
         new Date(a.date).getTime() - new Date(b.date).getTime()
     );
 
-    // B. Determine Timeline
     const now = new Date();
     const startDate = new Date();
     
-    // Find first ever transaction time (real or synthetic)
     const firstTxTime = allTransactions.length > 0 
         ? Math.min(...allTransactions.map(t => new Date(t.date).getTime())) 
         : now.getTime();
@@ -177,31 +157,26 @@ export const NetWorthChart: React.FC<NetWorthChartProps> = ({
       case '1Y': startDate.setFullYear(now.getFullYear() - 1); break;
       case 'ALL': 
         startDate.setTime(firstTxTime); 
-        startDate.setDate(startDate.getDate() - 2); // Buffer
+        startDate.setDate(startDate.getDate() - 2); 
         break;
     }
 
-    // Replay start date logic
     const replayStartDate = new Date(Math.min(startDate.getTime(), firstTxDate.getTime()));
     replayStartDate.setHours(0,0,0,0);
     
     const dateList = getDatesInRange(replayStartDate, now);
 
-    // C. Simulation State
     const currentHoldings: Record<string, number> = {};
     const currentCostBasis: Record<string, number> = {}; 
     
-    // Initialize
     assets.forEach(a => {
         currentHoldings[a.id] = 0;
         currentCostBasis[a.id] = 0;
     });
 
-    // Last Known Prices Map (Forward Fill)
     const lastKnownPrices: Record<string, number> = {};
     assets.forEach(a => {
         const history = historyMap[a.id];
-        // Use history start if available, else current price
         if (history && history.length > 0) {
             lastKnownPrices[a.id] = history[0].price;
         } else {
@@ -212,9 +187,7 @@ export const NetWorthChart: React.FC<NetWorthChartProps> = ({
     const dataPoints = [];
     const filterStartDateStr = toLocalYMD(startDate);
 
-    // D. Iterate
     for (const dateStr of dateList) {
-        // 1. Update Prices for this date (if available)
         assets.forEach(a => {
              const priceMap = priceLookupMap[a.id];
              if (priceMap && priceMap.has(dateStr)) {
@@ -222,28 +195,21 @@ export const NetWorthChart: React.FC<NetWorthChartProps> = ({
              }
         });
 
-        // 2. Apply Transactions happening ON this date
-        // Note: t.date is usually ISO "YYYY-MM-DDTHH:mm:ss" in Local Time.
-        // dateStr is "YYYY-MM-DD" in Local Time.
-        // startsWith works correctly now.
         const daysTransactions = allTransactions.filter(t => t.date.startsWith(dateStr));
         
         for (const tx of daysTransactions) {
             if (currentHoldings[tx.assetId] === undefined) currentHoldings[tx.assetId] = 0;
             if (currentCostBasis[tx.assetId] === undefined) currentCostBasis[tx.assetId] = 0;
 
-            // Handle signed quantityChange correctly
             const qtyChange = tx.quantityChange || 0;
             const absQty = Math.abs(qtyChange);
             const total = tx.total || 0;
 
             if (tx.type === TransactionType.BUY || tx.type === TransactionType.DEPOSIT || tx.type === TransactionType.BORROW || tx.type === TransactionType.BALANCE_ADJUSTMENT) {
-                // If Balance Adjustment is positive, it's like a Buy
                 if (qtyChange >= 0) {
                     currentHoldings[tx.assetId] += qtyChange;
                     currentCostBasis[tx.assetId] += total;
                 } else {
-                    // Negative Adjustment (Reduction)
                      const previousQty = currentHoldings[tx.assetId];
                      if (previousQty > 0) {
                          const ratio = absQty / previousQty;
@@ -254,7 +220,6 @@ export const NetWorthChart: React.FC<NetWorthChartProps> = ({
             } else if (tx.type === TransactionType.SELL || tx.type === TransactionType.WITHDRAWAL || tx.type === TransactionType.REPAY) {
                 const previousQty = currentHoldings[tx.assetId];
                 if (previousQty > 0) {
-                    // Reduce cost basis proportionally
                     const ratio = absQty / previousQty;
                     currentCostBasis[tx.assetId] -= (currentCostBasis[tx.assetId] * ratio);
                 }
@@ -263,7 +228,6 @@ export const NetWorthChart: React.FC<NetWorthChartProps> = ({
             }
         }
 
-        // 3. Calculate Daily Aggregate Value
         let dayNetWorth = 0;
         let dayTotalCost = 0;
 
@@ -277,8 +241,6 @@ export const NetWorthChart: React.FC<NetWorthChartProps> = ({
 
                 if (asset.type === AssetType.LIABILITY) {
                     dayNetWorth -= val;
-                    // Liabilities don't usually add to "Investment Cost" in the same way, 
-                    // but for Net Worth tracking, we subtract the value.
                 } else {
                     dayNetWorth += val;
                     dayTotalCost += cost;
@@ -286,7 +248,6 @@ export const NetWorthChart: React.FC<NetWorthChartProps> = ({
             }
         });
 
-        // 4. Push Data (Only if within requested range)
         if (dateStr >= filterStartDateStr) {
             dataPoints.push({
                 date: dateStr,
@@ -347,7 +308,6 @@ export const NetWorthChart: React.FC<NetWorthChartProps> = ({
 
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden h-full flex flex-col">
-      {/* Header */}
       <div className="px-6 py-4 border-b border-slate-50 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
             <h3 className="font-semibold text-slate-800 text-lg flex items-center gap-2">

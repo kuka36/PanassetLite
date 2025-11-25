@@ -4,14 +4,17 @@ import { usePortfolio } from '../context/PortfolioContext';
 import { Card } from './ui/Card';
 import { ConfirmModal } from './ui/ConfirmModal';
 import { TransactionType, Currency } from '../types';
-import { Filter, ArrowDownLeft, ArrowUpRight, DollarSign, Trash2, ArrowRightLeft, CreditCard, RefreshCw } from 'lucide-react';
+import { Filter, ArrowDownLeft, ArrowUpRight, DollarSign, Trash2, ArrowRightLeft, CreditCard, RefreshCw, ChevronDown, ChevronUp, Calendar, Hash } from 'lucide-react';
 
 export const TransactionHistory: React.FC = () => {
-  const { transactions, assets, deleteTransaction, t } = usePortfolio();
+  const { transactions, assets, deleteTransaction, settings, t } = usePortfolio();
   const [selectedAssetId, setSelectedAssetId] = useState<string>('all');
   const [filterType, setFilterType] = useState<string>('all');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  
+  // Mobile Filter Toggle State
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
   
   // Delete Confirmation State
   const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -25,6 +28,7 @@ export const TransactionHistory: React.FC = () => {
   const filteredTransactions = useMemo(() => {
     return transactions
       .filter(t => {
+        if (!t) return false;
         if (selectedAssetId !== 'all' && t.assetId !== selectedAssetId) return false;
         if (filterType !== 'all' && t.type !== filterType) return false;
         if (startDate && t.date < startDate) return false;
@@ -76,10 +80,14 @@ export const TransactionHistory: React.FC = () => {
 
   const formatDateTime = (dateStr: string) => {
       if (!dateStr) return '-';
-      return new Date(dateStr).toLocaleString(undefined, {
-          year: 'numeric', month: 'numeric', day: 'numeric',
-          hour: '2-digit', minute: '2-digit', second: '2-digit'
-      });
+      try {
+        return new Date(dateStr).toLocaleString(undefined, {
+            year: 'numeric', month: 'numeric', day: 'numeric',
+            hour: '2-digit', minute: '2-digit'
+        });
+      } catch (e) {
+        return dateStr;
+      }
   };
 
   // Get unique assets that are actually in transactions or currently in portfolio
@@ -99,8 +107,20 @@ export const TransactionHistory: React.FC = () => {
       </div>
 
       <Card>
-        {/* Filters */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6 pb-6 border-b border-slate-100">
+        {/* Mobile Filter Toggle */}
+        <div className="md:hidden flex justify-end mb-2">
+            <button 
+                onClick={() => setIsFilterOpen(!isFilterOpen)}
+                className="flex items-center gap-2 text-sm font-medium text-slate-600 bg-slate-100 px-3 py-2 rounded-lg hover:bg-slate-200 transition-colors"
+            >
+                <Filter size={16} /> 
+                Filter
+                {isFilterOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+            </button>
+        </div>
+
+        {/* Filters Grid */}
+        <div className={`${isFilterOpen ? 'grid' : 'hidden'} md:grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6 pb-6 border-b border-slate-100 animate-fade-in`}>
             <div>
                 <label className="block text-xs font-medium text-slate-500 uppercase mb-1">{t('asset')}</label>
                 <div className="relative">
@@ -157,8 +177,89 @@ export const TransactionHistory: React.FC = () => {
             </div>
         </div>
 
-        {/* Table */}
-        <div className="overflow-x-auto">
+        {/* --- Mobile List View --- */}
+        <div className="md:hidden space-y-3">
+            {filteredTransactions.map(tx => {
+                if (!tx) return null;
+                const assetInfo = getAssetInfo(tx.assetId);
+                const currencySymbol = getCurrencySymbol(assetInfo.currency);
+                
+                // Safe Parsing
+                const safePrice = Number(tx.pricePerUnit || 0);
+                const safeTotal = Number(tx.total || 0);
+                const qtyChange = Number(tx.quantityChange || 0);
+                
+                const isAdjustment = tx.type === TransactionType.BALANCE_ADJUSTMENT;
+                
+                const displayQty = isAdjustment 
+                    ? (qtyChange > 0 ? `+${qtyChange.toLocaleString()}` : qtyChange.toLocaleString())
+                    : Math.abs(qtyChange).toLocaleString();
+                
+                const qtyColorClass = isAdjustment 
+                    ? (qtyChange >= 0 ? 'text-green-600' : 'text-red-600') 
+                    : 'text-slate-700';
+
+                return (
+                    <div key={tx.id} className="bg-slate-50 rounded-xl p-4 border border-slate-100 relative group">
+                        {/* Delete Action (Top Right) */}
+                        <button 
+                            onClick={() => setDeleteId(tx.id)}
+                            className="absolute top-3 right-3 p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                        >
+                            <Trash2 size={16} />
+                        </button>
+
+                        <div className="flex justify-between items-start mb-2 pr-8">
+                            <div>
+                                <div className="font-bold text-slate-800 text-lg flex items-center gap-2">
+                                    {assetInfo.symbol}
+                                    <span className="text-xs font-normal text-slate-400 bg-white px-1.5 py-0.5 rounded border border-slate-100">
+                                        {assetInfo.name}
+                                    </span>
+                                </div>
+                                <div className="flex items-center gap-1.5 text-xs text-slate-500 mt-1">
+                                    <Calendar size={12}/>
+                                    {formatDateTime(tx.date)}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="flex items-center justify-between mb-3">
+                             <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold ${getTypeStyle(tx.type)}`}>
+                                {getTypeIcon(tx.type)}
+                                {t(`tx_${tx.type}`) || tx.type}
+                            </span>
+                            <div className="text-right">
+                                <div className={`font-bold text-lg text-slate-800`}>
+                                    {settings.isPrivacyMode 
+                                        ? '••••••' 
+                                        : `${currencySymbol}${safeTotal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`
+                                    }
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="pt-3 border-t border-slate-200/50 flex justify-between items-center text-sm">
+                             <div className="flex flex-col">
+                                <span className="text-xs text-slate-400 uppercase mb-0.5">{t('quantity')}</span>
+                                <span className={`font-mono font-medium ${qtyColorClass}`}>
+                                    {settings.isPrivacyMode ? '••••••' : displayQty}
+                                </span>
+                             </div>
+                             <div className="flex flex-col text-right">
+                                <span className="text-xs text-slate-400 uppercase mb-0.5">{t('pricePerUnit')}</span>
+                                <span className="font-mono text-slate-600">
+                                    {currencySymbol}{safePrice.toLocaleString()}
+                                </span>
+                             </div>
+                        </div>
+                    </div>
+                );
+            })}
+        </div>
+
+        {/* --- Desktop Table View --- */}
+        <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-left border-collapse min-w-[800px]">
                 <thead>
                     <tr className="text-xs text-slate-400 uppercase border-b border-slate-100">
@@ -174,17 +275,21 @@ export const TransactionHistory: React.FC = () => {
                 </thead>
                 <tbody className="text-sm">
                     {filteredTransactions.map(tx => {
+                        if (!tx) return null;
                         const assetInfo = getAssetInfo(tx.assetId);
                         const currencySymbol = getCurrencySymbol(assetInfo.currency);
                         
-                        // Quantity Logic
+                        // Safe Parsing
+                        const safePrice = Number(tx.pricePerUnit || 0);
+                        const safeFee = Number(tx.fee || 0);
+                        const safeTotal = Number(tx.total || 0);
+                        const qtyChange = Number(tx.quantityChange || 0);
+                        
                         const isAdjustment = tx.type === TransactionType.BALANCE_ADJUSTMENT;
-                        const qtyChange = tx.quantityChange || 0;
                         const displayQty = isAdjustment 
                             ? (qtyChange > 0 ? `+${qtyChange.toLocaleString()}` : qtyChange.toLocaleString())
                             : Math.abs(qtyChange).toLocaleString();
                         
-                        // Color logic for Adjustment
                         const qtyColorClass = isAdjustment 
                             ? (qtyChange >= 0 ? 'text-green-600 font-bold' : 'text-red-600 font-bold') 
                             : 'text-slate-700';
@@ -205,16 +310,19 @@ export const TransactionHistory: React.FC = () => {
                                     </span>
                                 </td>
                                 <td className={`py-4 text-right font-medium ${qtyColorClass}`}>
-                                    {displayQty !== '0' ? displayQty : '-'}
+                                    {settings.isPrivacyMode ? '••••••' : (displayQty !== '0' ? displayQty : '-')}
                                 </td>
                                 <td className="py-4 text-right text-slate-600 whitespace-nowrap">
-                                    {currencySymbol}{tx.pricePerUnit.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                                    {currencySymbol}{safePrice.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
                                 </td>
                                 <td className="py-4 text-right text-slate-500 whitespace-nowrap">
-                                    {tx.fee > 0 ? `${currencySymbol}${tx.fee.toFixed(2)}` : '-'}
+                                    {safeFee > 0 ? `${currencySymbol}${safeFee.toFixed(2)}` : '-'}
                                 </td>
                                 <td className="py-4 text-right pr-2 font-bold text-slate-800 whitespace-nowrap">
-                                    {currencySymbol}{tx.total.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                                    {settings.isPrivacyMode 
+                                        ? '••••••' 
+                                        : `${currencySymbol}${safeTotal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`
+                                    }
                                 </td>
                                 <td className="py-4 text-right pr-2">
                                     <button 
@@ -228,16 +336,16 @@ export const TransactionHistory: React.FC = () => {
                             </tr>
                         );
                     })}
-                    {filteredTransactions.length === 0 && (
-                        <tr>
-                            <td colSpan={8} className="py-12 text-center text-slate-400 italic">
-                                {t('noTransactions')}
-                            </td>
-                        </tr>
-                    )}
                 </tbody>
             </table>
         </div>
+
+        {filteredTransactions.length === 0 && (
+            <div className="py-12 text-center text-slate-400 italic">
+                {t('noTransactions')}
+            </div>
+        )}
+
       </Card>
       
       <ConfirmModal

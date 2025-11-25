@@ -5,7 +5,7 @@ import { Card } from './ui/Card';
 import { ConfirmModal } from './ui/ConfirmModal';
 import { Currency, Language, AssetType, TransactionType, AssetMetadata, Transaction } from '../types';
 import { 
-  Upload, Trash2, Shield, Globe, AlertTriangle, CheckCircle, Key, Languages, Activity, Lock, Github, ExternalLink, Bot, Sparkles, Eye, EyeOff, Download, Info, FileText
+  Upload, Trash2, Shield, Globe, AlertTriangle, CheckCircle, Key, Languages, Activity, Lock, Github, ExternalLink, Bot, Eye, EyeOff, Download, Info, FileText
 } from 'lucide-react';
 
 export const Settings: React.FC = () => {
@@ -52,22 +52,21 @@ export const Settings: React.FC = () => {
     URL.revokeObjectURL(url);
   };
 
+  const safeFloat = (val: string): number => {
+      const parsed = parseFloat(val);
+      return isNaN(parsed) ? 0 : parsed;
+  };
+
   const handleExportUnified = () => {
-    // Defined Headers: Transaction Fields + Asset Fields
     const headers = [
-        // Transaction Fields
         'tx_id', 'tx_date', 'tx_type', 'tx_quantity', 'tx_price', 'tx_fee', 'tx_total', 'tx_note',
-        // Asset Fields (Enriched)
         'asset_id', 'asset_symbol', 'asset_name', 'asset_type', 'asset_currency', 'asset_current_price', 'asset_date_acquired'
     ];
 
     const rows = transactions.map(tx => {
         const asset = assets.find(a => a.id === tx.assetId);
-        // If asset deleted, try to preserve basic info if possible or leave empty
-        // In this app architecture, transactions usually get deleted if asset is deleted, but safe guard here.
         
         return [
-            // Transaction Data
             tx.id,
             tx.date,
             tx.type,
@@ -76,8 +75,6 @@ export const Settings: React.FC = () => {
             tx.fee,
             tx.total,
             tx.note || '',
-            
-            // Asset Data
             tx.assetId,
             asset?.symbol || 'UNKNOWN',
             asset?.name || 'Unknown Asset',
@@ -90,7 +87,7 @@ export const Settings: React.FC = () => {
 
     const csvContent = [headers.join(','), ...rows].join('\n');
     const dateStr = new Date().toISOString().split('T')[0];
-    downloadCSV(csvContent, `panasset_data_${dateStr}.csv`);
+    downloadCSV(csvContent, `panasset_full_data_${dateStr}.csv`);
   };
 
   const parseCSVLine = (line: string): string[] => {
@@ -126,9 +123,8 @@ export const Settings: React.FC = () => {
 
         const headers = parseCSVLine(lines[0]).map(h => h.trim());
         
-        // Validation: Check for required unified headers
         if (!headers.includes('tx_id') || !headers.includes('asset_id')) {
-             throw new Error("Invalid CSV format. Missing required columns (tx_id, asset_id).");
+             throw new Error("Invalid CSV format. Please use the Unified Export format.");
         }
 
         const assetsMap = new Map<string, AssetMetadata>();
@@ -144,41 +140,41 @@ export const Settings: React.FC = () => {
              const assetId = getVal('asset_id');
              if (!assetId) return;
 
-             // 1. Reconstruct Asset (Deduplicate by ID)
              if (!assetsMap.has(assetId)) {
                  assetsMap.set(assetId, {
                      id: assetId,
-                     symbol: getVal('asset_symbol'),
-                     name: getVal('asset_name'),
-                     type: getVal('asset_type') as AssetType,
-                     currency: getVal('asset_currency') as Currency,
-                     currentPrice: parseFloat(getVal('asset_current_price')) || 0,
+                     symbol: getVal('asset_symbol') || 'UNKNOWN',
+                     name: getVal('asset_name') || 'Unknown',
+                     type: (getVal('asset_type') as AssetType) || AssetType.OTHER,
+                     currency: (getVal('asset_currency') as Currency) || Currency.USD,
+                     currentPrice: safeFloat(getVal('asset_current_price')),
                      dateAcquired: getVal('asset_date_acquired'),
-                     lastUpdated: Date.now() // Reset update time on import
+                     lastUpdated: Date.now() 
                  });
              }
 
-             // 2. Reconstruct Transaction
              const txId = getVal('tx_id') || crypto.randomUUID();
              parsedTransactions.push({
                  id: txId,
                  assetId: assetId,
-                 type: getVal('tx_type') as TransactionType,
-                 date: getVal('tx_date'),
-                 quantityChange: parseFloat(getVal('tx_quantity')),
-                 pricePerUnit: parseFloat(getVal('tx_price')),
-                 fee: parseFloat(getVal('tx_fee')) || 0,
-                 total: parseFloat(getVal('tx_total')) || 0,
+                 type: (getVal('tx_type') as TransactionType) || TransactionType.BUY,
+                 date: getVal('tx_date') || new Date().toISOString(),
+                 quantityChange: safeFloat(getVal('tx_quantity')),
+                 pricePerUnit: safeFloat(getVal('tx_price')),
+                 fee: safeFloat(getVal('tx_fee')),
+                 total: safeFloat(getVal('tx_total')),
                  note: getVal('tx_note')
              });
         });
         
-        // Execute Import
-        const assetCount = importAssetsCSV(Array.from(assetsMap.values()));
-        const txCount = importTransactionsCSV(parsedTransactions);
+        const assetsToImport = Array.from(assetsMap.values());
+        const txsToImport = parsedTransactions;
+
+        importAssetsCSV(assetsToImport);
+        importTransactionsCSV(txsToImport);
 
         setImportStatus({ 
-            msg: `${t('importSuccess')} (${assetCount} Assets, ${txCount} Txs)`, 
+            msg: `${t('importSuccess')} (${assetsToImport.length} Assets, ${txsToImport.length} Txs)`, 
             type: 'success' 
         });
         
@@ -211,47 +207,47 @@ export const Settings: React.FC = () => {
         </div>
       </div>
 
+      {/* Privacy & Security Section - Redesigned */}
+      <Card title={t('privacySecurity')}>
+         <div className="space-y-6">
+             {/* Privacy Mode Professional Toggle */}
+             <div className="flex items-center justify-between">
+                 <div className="flex items-start gap-4">
+                     <div className={`p-3 rounded-xl transition-all ${settings.isPrivacyMode ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200' : 'bg-slate-100 text-slate-400'}`}>
+                         {settings.isPrivacyMode ? <EyeOff size={24} /> : <Eye size={24} />}
+                     </div>
+                     <div>
+                         <div className="font-semibold text-slate-800 text-base">{t('privacyMode')}</div>
+                         <div className="text-sm text-slate-500 mt-1 max-w-sm leading-relaxed">{t('privacyModeDesc')}</div>
+                     </div>
+                 </div>
+
+                 <button
+                    onClick={() => updateSettings({ isPrivacyMode: !settings.isPrivacyMode })}
+                    className={`relative w-14 h-8 rounded-full transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 ${
+                        settings.isPrivacyMode ? 'bg-indigo-600' : 'bg-slate-200'
+                    }`}
+                 >
+                    <span 
+                        className={`absolute top-1 left-1 bg-white w-6 h-6 rounded-full shadow-sm transform transition-transform duration-200 ease-in-out ${
+                            settings.isPrivacyMode ? 'translate-x-6' : 'translate-x-0'
+                        }`}
+                    />
+                 </button>
+             </div>
+
+             <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-4 flex items-start gap-3">
+                <Shield size={20} className="text-emerald-600 mt-0.5 shrink-0" />
+                <span className="text-sm text-emerald-800 leading-relaxed font-medium">
+                    {t('localDataSecurity')}
+                </span>
+            </div>
+         </div>
+      </Card>
+
       {/* API Configuration */}
       <Card title={t('apiConfiguration')}>
         <div className="space-y-6">
-            
-            {/* Global Security Note */}
-            <div className="bg-green-50/50 border border-green-100 rounded-lg p-3 flex items-start gap-3">
-                <Shield size={16} className="text-green-600 mt-0.5 shrink-0" />
-                <span className="text-sm text-green-800 leading-relaxed">
-                    {t('apiKeysSecurity')}
-                </span>
-            </div>
-
-            {/* AI Assistant Toggle */}
-            <div className={`flex items-center justify-between p-4 rounded-xl border transition-colors ${!settings.geminiApiKey ? 'bg-slate-50 border-slate-200' : 'bg-indigo-50/50 border-indigo-100'}`}>
-                <div className="flex items-center gap-3">
-                    <div className={`p-2 rounded-lg ${!settings.geminiApiKey ? 'bg-slate-200 text-slate-400' : 'bg-indigo-100 text-indigo-600'}`}>
-                        <Sparkles size={20} />
-                    </div>
-                    <div>
-                        <div className={`font-medium ${!settings.geminiApiKey ? 'text-slate-500' : 'text-slate-800'}`}>{t('enableAiAssistant')}</div>
-                        <div className="text-xs text-slate-500">
-                             {!settings.geminiApiKey 
-                               ? (settings.language === 'zh' ? "需要配置 Gemini API Key 才能开启" : "Requires Gemini API Key to enable")
-                               : "Show AI chat bubble in the sidebar"
-                             }
-                        </div>
-                    </div>
-                </div>
-                <label className={`relative inline-flex items-center ${!settings.geminiApiKey ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
-                    <input 
-                        type="checkbox" 
-                        className="sr-only peer"
-                        checked={settings.isAiAssistantEnabled && !!settings.geminiApiKey}
-                        disabled={!settings.geminiApiKey}
-                        onChange={(e) => updateSettings({ isAiAssistantEnabled: e.target.checked })}
-                    />
-                    <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-100 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
-                </label>
-            </div>
-
-            <div className="border-t border-slate-100"></div>
             
             {/* AI Provider Selection */}
             <div className="flex items-start gap-3">
@@ -393,6 +389,14 @@ export const Settings: React.FC = () => {
                      </div>
                 </div>
             </div>
+            
+            {/* Security Note */}
+            <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 flex items-start gap-3 mt-4">
+                <Shield size={16} className="text-slate-400 mt-0.5 shrink-0" />
+                <span className="text-sm text-slate-500 leading-relaxed">
+                    {t('apiKeysSecurity')}
+                </span>
+            </div>
         </div>
       </Card>
 
@@ -422,7 +426,7 @@ export const Settings: React.FC = () => {
             </div>
 
             {/* Language */}
-            <div className="flex items-center justify-between pb-4 border-b border-slate-50 last:border-0 last:pb-0">
+            <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                     <div className="p-2 bg-emerald-50 text-emerald-600 rounded-lg">
                         <Languages size={20} />
@@ -441,28 +445,6 @@ export const Settings: React.FC = () => {
                     <option value="zh">中文 (简体)</option>
                 </select>
             </div>
-
-            {/* Privacy Mode */}
-            <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                    <div className="p-2 bg-purple-50 text-purple-600 rounded-lg">
-                        <Shield size={20} />
-                    </div>
-                    <div>
-                        <div className="font-medium text-slate-800">{t('privacyMode')}</div>
-                        <div className="text-sm text-slate-500">{t('privacyModeDesc')}</div>
-                    </div>
-                </div>
-                <label className="relative inline-flex items-center cursor-pointer">
-                    <input 
-                        type="checkbox" 
-                        className="sr-only peer"
-                        checked={settings.isPrivacyMode}
-                        onChange={(e) => updateSettings({ isPrivacyMode: e.target.checked })}
-                    />
-                    <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-100 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                </label>
-            </div>
         </div>
       </Card>
 
@@ -475,11 +457,6 @@ export const Settings: React.FC = () => {
                     {importStatus.msg}
                 </div>
             )}
-
-            <div className="bg-blue-50/50 border border-blue-100 rounded-lg p-3 flex items-start gap-3">
-                <Lock size={16} className="text-blue-500 mt-0.5 shrink-0" />
-                <span className="text-sm text-blue-700 leading-relaxed">{t('localDataSecurity')}</span>
-            </div>
 
             {/* Unified Export Button */}
             <button 
@@ -570,7 +547,7 @@ export const Settings: React.FC = () => {
       />
 
       <div className="text-center text-slate-400 text-sm pt-4">
-          {settings.language === 'zh' ? "盘资产·轻 v1.2.0 • 本地数据存储" : "PanassetLite v1.2.0 • Local Data Storage"}
+          {settings.language === 'zh' ? "盘资产·轻 v1.2.1 • 本地数据存储" : "PanassetLite v1.2.1 • Local Data Storage"}
       </div>
     </div>
   );

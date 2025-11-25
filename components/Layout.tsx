@@ -22,8 +22,8 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
     localStorage.setItem('investflow_sidebar_collapsed', String(isCollapsed));
   }, [isCollapsed]);
 
-  // Logic: AI Assistant is only enabled if the toggle is ON AND the Gemini Key is present.
-  const isAiEnabled = settings.isAiAssistantEnabled && !!settings.geminiApiKey;
+  // Logic: AI Assistant is enabled if the Key is present (Gemini or DeepSeek).
+  const isAiEnabled = !!(settings.geminiApiKey || settings.deepSeekApiKey);
 
   // Subtitle Name (Localized)
   const subName = settings.language === 'zh' ? "盘资产·轻" : "Personal Asset Manager";

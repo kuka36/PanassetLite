@@ -111,7 +111,8 @@ export type ActionType =
   | 'DELETE_ASSET' 
   | 'ADD_TRANSACTION' 
   | 'UPDATE_TRANSACTION' 
-  | 'DELETE_TRANSACTION';
+  | 'DELETE_TRANSACTION'
+  | 'BULK_ASSET_UPDATE'; // Added for bulk image processing
 
 export interface PendingAction {
   type: ActionType;
@@ -127,6 +128,7 @@ export interface PendingAction {
     assetId?: string; // For Transactions
     currency?: Currency | string; // ADDED: Allow agent to specify currency
   };
+  items?: any[]; // Added for BULK_ASSET_UPDATE to hold multiple items
   summary: string; // Human readable summary
 }
 

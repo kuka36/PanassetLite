@@ -11,14 +11,12 @@ import { Link } from 'react-router-dom';
 
 const COLORS = ['#0ea5e9', '#6366f1', '#8b5cf6', '#ec4899', '#10b981', '#f59e0b', '#f97316'];
 
-// Manual valuation assets should not have "fake" market noise
 const isManualValuation = (type: AssetType) => 
   type === AssetType.REAL_ESTATE || type === AssetType.LIABILITY || type === AssetType.OTHER;
 
 export const Dashboard: React.FC = () => {
   const { assets, transactions, settings, exchangeRates, t } = usePortfolio();
 
-  // Calculate Summaries with Currency Conversion (Handling Liabilities)
   const summary = useMemo(() => {
     let totalAssetsValue = 0;
     let totalLiabilitiesValue = 0;
@@ -26,26 +24,19 @@ export const Dashboard: React.FC = () => {
     let dayPnL = 0;
 
     assets.forEach(asset => {
-      // Raw Value in Native Currency
       const nativeValue = asset.quantity * asset.currentPrice;
       const nativeCost = asset.quantity * asset.avgCost;
 
-      // Convert to Base Currency
       const convertedValue = convertValue(nativeValue, asset.currency, settings.baseCurrency, exchangeRates);
       const convertedCost = convertValue(nativeCost, asset.currency, settings.baseCurrency, exchangeRates);
 
       if (asset.type === AssetType.LIABILITY) {
-        // For Liabilities:
-        // Value is debt (positive number in data, conceptually negative for Net Worth)
         totalLiabilitiesValue += convertedValue;
-        // Cost basis for liability (Principal) is tracked but PnL calc logic differs
-        // For simplicity in this view, we subtract liability cost from total Cost Basis of Net Worth
         totalCost -= convertedCost; 
       } else {
         totalAssetsValue += convertedValue;
         totalCost += convertedCost;
         
-        // Mocking Day P&L for Market Assets only
         if (!isManualValuation(asset.type)) {
             dayPnL += convertedValue * (Math.random() * 0.03 - 0.01); 
         }
@@ -59,7 +50,6 @@ export const Dashboard: React.FC = () => {
     return { totalNetWorth, totalAssetsValue, totalLiabilitiesValue, totalCost, totalPnL, totalPnLPercent, dayPnL };
   }, [assets, settings.baseCurrency, exchangeRates]);
 
-  // Prepare Pie Chart Data (Assets Only - Exclude Liabilities for Allocation)
   const allocationData = useMemo(() => {
     return assets
       .filter(a => a.type !== AssetType.LIABILITY)
@@ -76,16 +66,15 @@ export const Dashboard: React.FC = () => {
   }, [assets, settings.baseCurrency, exchangeRates]);
 
   const formatCurrency = (val: number) => {
-      if (settings.isPrivacyMode) return '****';
+      if (settings.isPrivacyMode) return '••••••';
       return new Intl.NumberFormat('en-US', { style: 'currency', currency: settings.baseCurrency, maximumFractionDigits: 0 }).format(val);
   };
   
   const formatPercent = (val: number) => {
-      if (settings.isPrivacyMode) return '**%';
+      if (settings.isPrivacyMode) return '•••%';
       return `${val.toFixed(2)}%`;
   };
 
-  // Determine which icon to show based on currency
   const CurrencyIcon = settings.baseCurrency === Currency.CNY ? JapaneseYen : DollarSign;
 
   return (
@@ -110,7 +99,7 @@ export const Dashboard: React.FC = () => {
             </Link>
             <div className="text-sm text-blue-100 flex items-center gap-2">
                 <span className={summary.totalPnL >= 0 ? "text-green-300" : "text-red-300"}>
-                    {summary.totalPnL >= 0 ? '+' : ''}{formatPercent(summary.totalPnLPercent)}
+                    {settings.isPrivacyMode ? '' : (summary.totalPnL >= 0 ? '+' : '')}{formatPercent(summary.totalPnLPercent)}
                 </span>
                 {t('allTime')}
             </div>
@@ -135,7 +124,7 @@ export const Dashboard: React.FC = () => {
                 <CreditCard size={16} className="text-red-500"/> {t('totalLiabilities')}
             </span>
             <div className={`text-2xl font-bold mb-1 ${summary.totalLiabilitiesValue > 0 ? 'text-red-600' : 'text-slate-800'}`}>
-                {summary.totalLiabilitiesValue > 0 ? '-' : ''}{formatCurrency(summary.totalLiabilitiesValue)}
+                {settings.isPrivacyMode ? '••••••' : (summary.totalLiabilitiesValue > 0 ? '-' : '') + new Intl.NumberFormat('en-US', { style: 'currency', currency: settings.baseCurrency, maximumFractionDigits: 0 }).format(summary.totalLiabilitiesValue)}
             </div>
             <div className="text-xs text-slate-400">
                 {t('outstandingDebt')}
@@ -149,7 +138,7 @@ export const Dashboard: React.FC = () => {
             </span>
             <div className="text-2xl font-bold text-slate-800 mb-1">{formatCurrency(summary.dayPnL)}</div>
             <div className={`text-sm font-medium flex items-center gap-1 ${summary.dayPnL >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-                {summary.dayPnL >= 0 ? <TrendingUp size={14}/> : <TrendingDown size={14}/>}
+                {settings.isPrivacyMode ? null : (summary.dayPnL >= 0 ? <TrendingUp size={14}/> : <TrendingDown size={14}/>)}
                 {formatPercent(summary.dayPnL !== 0 ? Math.abs(summary.dayPnL / (summary.totalNetWorth || 1)) * 100 : 0)}
             </div>
         </Card>

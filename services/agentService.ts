@@ -22,7 +22,7 @@ const GET_TRANSACTIONS_TOOL: FunctionDeclaration = {
 
 const PROPOSE_ASSET_MUTATION: FunctionDeclaration = {
   name: "propose_asset_mutation",
-  description: "Propose to Add, Update, or Delete an Asset Metadata (Holding Info). For 'ADD', providing 'initialQuantity' will automatically create the initial buy transaction.",
+  description: "Propose to Add, Update, or Delete a single Asset Metadata. Use this for precise single edits.",
   parameters: {
     type: Type.OBJECT,
     properties: {
@@ -33,9 +33,36 @@ const PROPOSE_ASSET_MUTATION: FunctionDeclaration = {
       price: { type: Type.NUMBER, description: "Price or Cost" },
       assetType: { type: Type.STRING, enum: ["STOCK", "CRYPTO", "CASH", "REAL_ESTATE", "LIABILITY", "FUND"], description: "Asset Type (for ADD)" },
       name: { type: Type.STRING, description: "Asset Name" },
-      currency: { type: Type.STRING, enum: ["USD", "CNY", "HKD"], description: "Currency of the asset. INFER based on symbol (e.g. 000217 -> CNY, AAPL -> USD, 00700 -> HKD)." }
+      currency: { type: Type.STRING, enum: ["USD", "CNY", "HKD"], description: "Currency of the asset." }
     },
     required: ["mutationType"]
+  }
+};
+
+const PROPOSE_BULK_ASSET_UPDATE: FunctionDeclaration = {
+  name: "propose_bulk_asset_update",
+  description: "Propose MULTIPLE asset additions or updates at once. Use this specifically when analyzing an IMAGE or SCREENSHOT containing a list of holdings.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      assets: {
+        type: Type.ARRAY,
+        description: "List of assets identified from the image.",
+        items: {
+          type: Type.OBJECT,
+          properties: {
+            symbol: { type: Type.STRING, description: "Ticker Symbol (e.g. AAPL, 00700)" },
+            name: { type: Type.STRING, description: "Asset Name" },
+            quantity: { type: Type.NUMBER, description: "Quantity held" },
+            price: { type: Type.NUMBER, description: "Current Price or Cost Basis" },
+            currency: { type: Type.STRING, enum: ["USD", "CNY", "HKD"], description: "Inferred currency" },
+            assetType: { type: Type.STRING, enum: ["STOCK", "CRYPTO", "CASH", "REAL_ESTATE", "LIABILITY", "FUND"], description: "Asset Type" }
+          },
+          required: ["symbol", "quantity"]
+        }
+      }
+    },
+    required: ["assets"]
   }
 };
 
@@ -106,22 +133,19 @@ export class AgentService {
         
         **Capabilities:**
         1. **READ**: You can inspect the user's Assets and Transaction History using \`get_assets\` and \`get_transactions\`.
-           - ALWAYS check \`get_assets\` before proposing a transaction to get the correct \`assetId\`.
-           - ALWAYS check \`get_transactions\` before updating/deleting a transaction to get the correct \`transactionId\`.
-        2. **WRITE**: You can propose changes using \`propose_asset_mutation\` (for holdings) or \`propose_transaction_mutation\` (for trades).
+        2. **WRITE**: You can propose changes using \`propose_asset_mutation\` (single) or \`propose_transaction_mutation\` (trades).
+        3. **BULK IMPORT**: If the user provides an IMAGE/SCREENSHOT with multiple assets, use \`propose_bulk_asset_update\` to extract them all at once.
+        
+        **Rules for Image Analysis (Bulk Import):**
+        - If an image is provided, act as an OCR extraction engine.
+        - Extract Symbol, Quantity, Price, and Asset Type.
+        - Infer Currency (CNY for numeric codes starting with 6/0/3, HKD for 5 digits, USD for Alpha codes).
+        - Return the data using \`propose_bulk_asset_update\`.
         
         **Important Rules for Asset Creation:**
         - **Currency Inference**: When adding a new asset, you MUST infer the \`currency\` based on the symbol or name.
-          - Example: "600519", "000217", "Moutai" -> **CNY**
-          - Example: "00700", "Tencent" -> **HKD**
-          - Example: "AAPL", "NVDA", "BTC" -> **USD**
-        - If the user provides a raw code like "000217", identify the market (Shenzhen/Shanghai) and use **CNY**.
-
-        **Behavior:**
-        - Be concise.
         - If the user says "I bought 10 AAPL" and AAPL is NOT in \`get_assets\`, use \`propose_asset_mutation\` with \`initialQuantity=10\`.
         - If the user says "I bought 10 AAPL" and AAPL IS in \`get_assets\`, use \`propose_transaction_mutation\` with the existing \`assetId\`.
-        - Use full ISO date strings if time is relevant, otherwise YYYY-MM-DD is acceptable (app handles both).
       `;
 
       const geminiHistory: Content[] = history
@@ -148,7 +172,7 @@ export class AgentService {
         history: geminiHistory,
         config: {
           systemInstruction,
-          tools: [{ functionDeclarations: [GET_ASSETS_TOOL, GET_TRANSACTIONS_TOOL, PROPOSE_ASSET_MUTATION, PROPOSE_TRANSACTION_MUTATION] }],
+          tools: [{ functionDeclarations: [GET_ASSETS_TOOL, GET_TRANSACTIONS_TOOL, PROPOSE_ASSET_MUTATION, PROPOSE_BULK_ASSET_UPDATE, PROPOSE_TRANSACTION_MUTATION] }],
         }
       });
 
@@ -157,12 +181,14 @@ export class AgentService {
           const base64Data = image.split(',')[1];
           const mimeType = image.split(';')[0].split(':')[1];
           currentParts.push({ inlineData: { mimeType, data: base64Data } });
+          currentParts.push({ text: "Please analyze this image and list all asset holdings found. Use the bulk update tool." });
       }
       const safeUserMessage = userMessage.trim();
       if (safeUserMessage) {
           currentParts.push({ text: safeUserMessage });
+      } else if (currentParts.length === 0) {
+          currentParts.push({ text: "." });
       }
-      if (currentParts.length === 0) currentParts.push({ text: "." });
 
       let response = await chat.sendMessage({ message: currentParts });
       
@@ -209,7 +235,6 @@ export class AgentService {
                 };
                 const actionType = typeMap[args.mutationType];
                 
-                // Attempt to resolve asset name for better summary
                 let displaySymbol = args.symbol;
                 if (!displaySymbol && args.assetId) {
                     const existing = assets.find(a => a.id === args.assetId);
@@ -218,18 +243,35 @@ export class AgentService {
                 const summary = `${args.mutationType} Asset: ${displaySymbol || args.assetId || 'Unknown'}`;
 
                 return {
-                    text: "", // Empty string to avoid redundancy in UI
+                    text: "",
                     action: {
                         type: actionType,
                         targetId: args.assetId,
                         data: {
                             symbol: args.symbol,
                             name: args.name,
-                            quantity: args.initialQuantity, // Maps initialQuantity to quantity
+                            quantity: args.initialQuantity,
                             price: args.price,
                             type: args.assetType as AssetType,
                             currency: args.currency
                         },
+                        summary
+                    }
+                };
+            }
+
+            if (finalCall.name === 'propose_bulk_asset_update') {
+                const count = args.assets?.length || 0;
+                const summary = language === 'zh' 
+                  ? `从图片识别到 ${count} 个资产持仓` 
+                  : `Identified ${count} assets from image`;
+                
+                return {
+                    text: language === 'zh' ? "我从图片中识别到了以下资产，请确认是否导入：" : "I found the following assets in the image. Please confirm to import:",
+                    action: {
+                        type: 'BULK_ASSET_UPDATE',
+                        data: {}, // Dummy data for interface
+                        items: args.assets, // Array of items
                         summary
                     }
                 };
@@ -252,7 +294,7 @@ export class AgentService {
                 const summary = `${args.mutationType} Transaction: ${args.txType || ''} ${symbolStr}`;
                 
                 return {
-                    text: "", // Empty string to avoid redundancy in UI
+                    text: "",
                     action: {
                         type: actionType,
                         targetId: args.transactionId,

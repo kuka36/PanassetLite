@@ -1,5 +1,6 @@
+
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Send, Sparkles, Check, AlertCircle, Trash2, User, Keyboard, AudioLines, Image as ImageIcon } from 'lucide-react';
+import { X, Send, Sparkles, Check, AlertCircle, Trash2, User, Keyboard, AudioLines, Image as ImageIcon, ListChecks, ArrowUpRight } from 'lucide-react';
 import { usePortfolio } from '../context/PortfolioContext';
 import { AgentService } from '../services/agentService';
 import { ChatMessage, PendingAction, TransactionType, AssetType, Currency } from '../types';
@@ -7,6 +8,7 @@ import ReactMarkdown from 'react-markdown';
 import { VoiceInput } from './ui/VoiceInput';
 
 const HISTORY_KEY = 'panasset_chat_history';
+const DIMENSIONS_KEY = 'panasset_chat_dim';
 
 interface AIChatAssistantProps {
   isOpen: boolean;
@@ -21,11 +23,21 @@ export const AIChatAssistant: React.FC<AIChatAssistantProps> = ({ isOpen, onClos
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isVoiceMode, setIsVoiceMode] = useState(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  
+  // Resizable State
+  const [dimensions, setDimensions] = useState({ width: 400, height: 600 });
+  const [isResizing, setIsResizing] = useState(false);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const dimensionsRef = useRef(dimensions);
 
-  // Load History on Mount
+  // Sync dimensions ref
+  useEffect(() => { dimensionsRef.current = dimensions; }, [dimensions]);
+
+  // Load History & Dimensions on Mount
   useEffect(() => {
     const saved = localStorage.getItem(HISTORY_KEY);
     if (saved) {
@@ -44,6 +56,17 @@ export const AIChatAssistant: React.FC<AIChatAssistantProps> = ({ isOpen, onClos
         timestamp: Date.now()
       }]);
     }
+
+    // Load Dimensions
+    try {
+        const savedDim = localStorage.getItem(DIMENSIONS_KEY);
+        if (savedDim) setDimensions(JSON.parse(savedDim));
+    } catch(e) {}
+
+    // Mobile Check Listener
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
   }, []);
 
   // Save History on Update
@@ -62,14 +85,45 @@ export const AIChatAssistant: React.FC<AIChatAssistantProps> = ({ isOpen, onClos
   // Auto resize textarea
   useEffect(() => {
     if (textareaRef.current) {
-        // Reset height to auto to get correct scrollHeight
         textareaRef.current.style.height = 'auto';
-        // Set new height based on scrollHeight, capped at 120px
         const newHeight = Math.min(textareaRef.current.scrollHeight, 120);
-        // Only increase, don't shrink below base line (e.g. 24px)
         textareaRef.current.style.height = `${Math.max(24, newHeight)}px`;
     }
   }, [input]);
+
+  // --- Resize Logic ---
+  const handleResizeStart = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizing(true);
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const startW = dimensions.width;
+    const startH = dimensions.height;
+
+    const onMouseMove = (ev: MouseEvent) => {
+        const deltaX = ev.clientX - startX;
+        const deltaY = ev.clientY - startY;
+        
+        // Logic: Dragging Top-Right corner.
+        // Moving Right (+X) increases Width.
+        // Moving Up (-Y) increases Height (since it's anchored to bottom).
+        
+        const newW = Math.max(320, Math.min(1200, startW + deltaX));
+        const newH = Math.max(400, Math.min(window.innerHeight - 50, startH - deltaY));
+        
+        setDimensions({ width: newW, height: newH });
+    };
+
+    const onMouseUp = () => {
+        setIsResizing(false);
+        window.removeEventListener('mousemove', onMouseMove);
+        window.removeEventListener('mouseup', onMouseUp);
+        localStorage.setItem(DIMENSIONS_KEY, JSON.stringify(dimensionsRef.current));
+    };
+
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+  };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -84,14 +138,34 @@ export const AIChatAssistant: React.FC<AIChatAssistantProps> = ({ isOpen, onClos
         };
         reader.readAsDataURL(file);
     }
-    // Reset input so same file can be selected again
     e.target.value = '';
+  };
+
+  const handlePaste = (e: React.ClipboardEvent) => {
+    const items = e.clipboardData.items;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.indexOf('image') !== -1) {
+        e.preventDefault();
+        const blob = items[i].getAsFile();
+        if (blob) {
+            if (blob.size > 5 * 1024 * 1024) {
+                 alert(settings.language === 'zh' ? "图片大小不能超过 5MB" : "Image size must be less than 5MB");
+                 return;
+            }
+            const reader = new FileReader();
+            reader.onload = (event) => {
+              setSelectedImage(event.target?.result as string);
+            };
+            reader.readAsDataURL(blob);
+        }
+        return; 
+      }
+    }
   };
 
   const handleSend = async (textOverride?: string) => {
     const textToSend = typeof textOverride === 'string' ? textOverride : input;
     
-    // Only return if both text and image are missing
     if (!textToSend?.trim() && !selectedImage) return;
 
     const userMsg: ChatMessage = {
@@ -105,12 +179,11 @@ export const AIChatAssistant: React.FC<AIChatAssistantProps> = ({ isOpen, onClos
     setMessages(prev => [...prev, userMsg]);
     if (typeof textOverride !== 'string') setInput('');
     const imageToSend = selectedImage;
-    setSelectedImage(null); // Clear image immediately
+    setSelectedImage(null); 
     setIsTyping(true);
 
     const agent = new AgentService(settings.geminiApiKey);
     
-    // Injected 'transactions' dependency
     const response = await agent.processMessage(
         userMsg.content, 
         messages, 
@@ -135,17 +208,58 @@ export const AIChatAssistant: React.FC<AIChatAssistantProps> = ({ isOpen, onClos
 
   const handleConfirmAction = (msgId: string, action: PendingAction) => {
     try {
-      const { type, data, targetId } = action;
+      const { type, data, targetId, items } = action;
 
-      // --- ASSET CRUD ---
-      if (type === 'ADD_ASSET') {
+      if (type === 'BULK_ASSET_UPDATE' && items && items.length > 0) {
+          items.forEach(item => {
+              const symbolUpper = item.symbol?.toUpperCase();
+              if (!symbolUpper) return;
+
+              const existing = assets.find(a => a.symbol === symbolUpper);
+              
+              if (existing) {
+                  const newQty = Number(item.quantity);
+                  const delta = newQty - existing.quantity;
+                  
+                  if (item.price && Math.abs(item.price - existing.currentPrice) > 0.00001) {
+                      editAsset({ ...existing, currentPrice: Number(item.price), lastUpdated: Date.now() });
+                  }
+
+                  if (Math.abs(delta) > 0.000001) {
+                       addTransaction({
+                          assetId: existing.id,
+                          type: TransactionType.BALANCE_ADJUSTMENT,
+                          date: new Date().toISOString(),
+                          quantityChange: delta,
+                          pricePerUnit: item.price || existing.currentPrice, 
+                          fee: 0,
+                          total: delta * (item.price || existing.currentPrice),
+                          note: 'AI Bulk Import Adjustment'
+                       });
+                  }
+              } else {
+                  const meta = {
+                    id: crypto.randomUUID(),
+                    symbol: symbolUpper,
+                    name: item.name || symbolUpper,
+                    type: item.assetType as AssetType || AssetType.STOCK,
+                    currentPrice: Number(item.price) || 0,
+                    currency: (item.currency as Currency) || settings.baseCurrency,
+                    lastUpdated: Date.now(),
+                    dateAcquired: new Date().toISOString().split('T')[0]
+                  };
+                  addAsset(meta, Number(item.quantity) || 0, Number(item.price) || 0, meta.dateAcquired);
+              }
+          });
+      }
+
+      else if (type === 'ADD_ASSET') {
           const meta = {
             id: crypto.randomUUID(),
             symbol: data.symbol || 'UNKNOWN',
             name: data.name || data.symbol || 'Unknown',
             type: data.type as AssetType || AssetType.STOCK,
             currentPrice: data.price || 0,
-            // Priority: Agent provided currency > Base Currency
             currency: (data.currency as Currency) || settings.baseCurrency,
             lastUpdated: Date.now(),
             dateAcquired: new Date().toISOString().split('T')[0]
@@ -155,7 +269,6 @@ export const AIChatAssistant: React.FC<AIChatAssistantProps> = ({ isOpen, onClos
       else if (type === 'UPDATE_ASSET' && targetId) {
           const existing = assets.find(a => a.id === targetId);
           if (existing) {
-              // 1. Update Metadata (Name, Symbol, Type, Current Price)
               editAsset({
                   ...existing,
                   name: data.name ?? existing.name,
@@ -165,22 +278,18 @@ export const AIChatAssistant: React.FC<AIChatAssistantProps> = ({ isOpen, onClos
                   currency: (data.currency as Currency) ?? existing.currency
               });
 
-              // 2. Handle Quantity Update via Balance Adjustment
-              // Because we use Event Sourcing, we cannot just set 'quantity'. 
-              // We must create a transaction that bridges the gap.
               if (data.quantity !== undefined && data.quantity !== null) {
                   const newQty = Number(data.quantity);
                   const currentQty = existing.quantity;
                   const delta = newQty - currentQty;
                   
-                  // Only add transaction if there is a meaningful difference
                   if (Math.abs(delta) > 0.000001) {
                        addTransaction({
                           assetId: existing.id,
                           type: TransactionType.BALANCE_ADJUSTMENT,
                           date: new Date().toISOString(),
                           quantityChange: delta,
-                          pricePerUnit: existing.currentPrice, // Keep valuation consistent
+                          pricePerUnit: existing.currentPrice, 
                           fee: 0,
                           total: delta * existing.currentPrice,
                           note: 'AI Assistant Balance Correction'
@@ -193,11 +302,9 @@ export const AIChatAssistant: React.FC<AIChatAssistantProps> = ({ isOpen, onClos
           deleteAsset(targetId);
       }
 
-      // --- TRANSACTION CRUD ---
       else if (type === 'ADD_TRANSACTION') {
         let assetId = data.assetId;
         
-        // Auto-create asset if missing (and logic provided symbol, unlikely from strict Agent but good fallback)
         if (!assetId && data.symbol) {
              assetId = crypto.randomUUID();
              const meta = {
@@ -206,7 +313,6 @@ export const AIChatAssistant: React.FC<AIChatAssistantProps> = ({ isOpen, onClos
                 name: data.symbol,
                 type: AssetType.STOCK, 
                 currentPrice: data.price || 0,
-                // If Agent provides currency for new asset, use it, else default
                 currency: (data.currency as Currency) || settings.baseCurrency,
                 lastUpdated: Date.now(),
                 dateAcquired: new Date().toISOString().split('T')[0]
@@ -274,9 +380,8 @@ export const AIChatAssistant: React.FC<AIChatAssistantProps> = ({ isOpen, onClos
       localStorage.removeItem(HISTORY_KEY);
   };
 
-  if (!settings.isAiAssistantEnabled) return null;
-
   const desktopLeftClass = isSidebarCollapsed ? 'md:left-24' : 'md:left-72';
+  const resizeStyle = !isMobile ? { width: dimensions.width, height: dimensions.height } : {};
 
   const MarkdownContent = ({ content }: { content: string }) => {
      if (!content) return null;
@@ -293,14 +398,17 @@ export const AIChatAssistant: React.FC<AIChatAssistantProps> = ({ isOpen, onClos
     <div 
         onClick={(e) => e.stopPropagation()} 
         className={`
-        fixed z-50 flex flex-col overflow-hidden bg-white shadow-2xl transition-all duration-300
+        fixed z-50 flex flex-col overflow-hidden bg-white shadow-2xl transition-all duration-75
         inset-0 rounded-none 
-        md:inset-auto md:bottom-4 md:right-auto md:w-[400px] md:h-[600px] md:max-h-[80vh] md:rounded-2xl md:border md:border-slate-200 ${desktopLeftClass}
+        md:inset-auto md:bottom-4 md:right-auto md:rounded-2xl md:border md:border-slate-200 ${desktopLeftClass}
         animate-slide-up origin-bottom-left
-    `}>
+        ${isResizing ? 'pointer-events-none select-none' : ''}
+    `}
+    style={resizeStyle}
+    >
       
       {/* Header */}
-      <div className="p-4 bg-gradient-to-r from-indigo-600 to-blue-600 flex justify-between items-center shrink-0 text-white shadow-sm">
+      <div className={`p-4 bg-gradient-to-r from-indigo-600 to-blue-600 flex justify-between items-center shrink-0 text-white shadow-sm relative ${isResizing ? 'pointer-events-auto' : ''}`}>
         <div className="flex items-center gap-3">
           <div className="p-1.5 bg-white/20 rounded-lg">
             <Sparkles size={18} className="text-white" />
@@ -315,7 +423,7 @@ export const AIChatAssistant: React.FC<AIChatAssistantProps> = ({ isOpen, onClos
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 pr-6 md:pr-0">
             <button onClick={handleClearHistory} className="text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-colors p-2" title={settings.language==='zh'?"清除历史":"Clear History"}>
                 <Trash2 size={18} />
             </button>
@@ -323,10 +431,21 @@ export const AIChatAssistant: React.FC<AIChatAssistantProps> = ({ isOpen, onClos
                 <X size={22} />
             </button>
         </div>
+
+        {/* Resize Handle (Desktop Only) */}
+        {!isMobile && (
+            <div 
+                className="absolute top-0 right-0 w-8 h-8 cursor-ne-resize flex items-center justify-center text-white/50 hover:text-white hover:bg-white/10 rounded-bl-xl transition-colors z-20"
+                onMouseDown={handleResizeStart}
+                title="Resize"
+            >
+                <ArrowUpRight size={16} />
+            </div>
+        )}
       </div>
 
       {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-6 bg-slate-50 scroll-smooth">
+      <div className={`flex-1 overflow-y-auto p-4 space-y-6 bg-slate-50 scroll-smooth ${isResizing ? 'pointer-events-auto' : ''}`}>
         {messages.map((msg) => (
           <div key={msg.id} className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
             <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 shadow-sm ${
@@ -350,7 +469,9 @@ export const AIChatAssistant: React.FC<AIChatAssistantProps> = ({ isOpen, onClos
               {msg.pendingAction && (
                 <div className="mt-2 p-3 bg-indigo-50 border border-indigo-100 rounded-xl animate-fade-in">
                     <div className="flex items-start gap-2 mb-2">
-                        <AlertCircle size={16} className="text-indigo-600 mt-0.5 shrink-0"/>
+                        <div className="text-indigo-600 mt-0.5 shrink-0">
+                           {msg.pendingAction.type === 'BULK_ASSET_UPDATE' ? <ListChecks size={16}/> : <AlertCircle size={16}/>}
+                        </div>
                         <div className="text-xs text-indigo-800 font-medium">
                             {settings.language === 'zh' ? "需确认操作" : "Action Required"}
                         </div>
@@ -359,19 +480,45 @@ export const AIChatAssistant: React.FC<AIChatAssistantProps> = ({ isOpen, onClos
                         {msg.pendingAction.summary}
                     </div>
 
-                    {/* Data Details View */}
-                    <div className="pl-6 mb-3">
-                        <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs bg-white/50 p-2 rounded-lg border border-indigo-100">
-                           {Object.entries(msg.pendingAction.data).map(([k, v]) => (
-                               v !== undefined && v !== null && k !== 'assetId' && k !== 'targetId' ? (
-                                   <React.Fragment key={k}>
-                                       <span className="text-slate-500 font-medium capitalize">{k}:</span>
-                                       <span className="text-slate-800 text-right truncate font-mono">{v.toString()}</span>
-                                   </React.Fragment>
-                               ) : null
-                           ))}
+                    {msg.pendingAction.type === 'BULK_ASSET_UPDATE' && msg.pendingAction.items && (
+                        <div className="pl-6 mb-3">
+                            <div className="bg-white/50 rounded-lg border border-indigo-100 overflow-hidden text-xs max-h-[200px] overflow-y-auto">
+                                <table className="w-full text-left">
+                                    <thead className="bg-indigo-50/50 text-indigo-600 font-medium">
+                                        <tr>
+                                            <th className="p-2">Symbol</th>
+                                            <th className="p-2 text-right">Qty</th>
+                                            <th className="p-2 text-right">Price</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-indigo-50">
+                                        {msg.pendingAction.items.map((item, idx) => (
+                                            <tr key={idx} className="hover:bg-white">
+                                                <td className="p-2 font-medium text-slate-700">{item.symbol}</td>
+                                                <td className="p-2 text-right text-slate-600">{item.quantity}</td>
+                                                <td className="p-2 text-right text-slate-600">{item.price || '-'}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
-                    </div>
+                    )}
+
+                    {msg.pendingAction.type !== 'BULK_ASSET_UPDATE' && (
+                        <div className="pl-6 mb-3">
+                            <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs bg-white/50 p-2 rounded-lg border border-indigo-100">
+                            {Object.entries(msg.pendingAction.data).map(([k, v]) => (
+                                v !== undefined && v !== null && k !== 'assetId' && k !== 'targetId' ? (
+                                    <React.Fragment key={k}>
+                                        <span className="text-slate-500 font-medium capitalize">{k}:</span>
+                                        <span className="text-slate-800 text-right truncate font-mono">{v.toString()}</span>
+                                    </React.Fragment>
+                                ) : null
+                            ))}
+                            </div>
+                        </div>
+                    )}
 
                     <div className="flex gap-2 pl-6">
                         <button 
@@ -380,7 +527,7 @@ export const AIChatAssistant: React.FC<AIChatAssistantProps> = ({ isOpen, onClos
                                 msg.pendingAction.type.includes('DELETE') ? 'bg-red-500 hover:bg-red-600' : 'bg-indigo-600 hover:bg-indigo-700'
                             }`}
                         >
-                            <Check size={14} /> {settings.language === 'zh' ? "执行" : "Confirm"}
+                            <Check size={14} /> {settings.language === 'zh' ? (msg.pendingAction.type === 'BULK_ASSET_UPDATE' ? "确认导入全部" : "执行") : "Confirm"}
                         </button>
                     </div>
                 </div>
@@ -405,7 +552,7 @@ export const AIChatAssistant: React.FC<AIChatAssistantProps> = ({ isOpen, onClos
         <div ref={messagesEndRef} />
       </div>
 
-      <div className="p-3 bg-white border-t border-slate-200 flex items-end gap-2 shrink-0 pb-6 md:pb-3 transition-all duration-300 relative">
+      <div className={`p-3 bg-white border-t border-slate-200 flex items-end gap-2 shrink-0 pb-6 md:pb-3 transition-all duration-300 relative ${isResizing ? 'pointer-events-auto' : ''}`}>
         
         {/* Toggle Mode */}
         <button 
@@ -467,6 +614,7 @@ export const AIChatAssistant: React.FC<AIChatAssistantProps> = ({ isOpen, onClos
                                 if (!isTyping) handleSend();
                             }
                         }}
+                        onPaste={handlePaste}
                         placeholder={settings.language === 'zh' ? "输入消息..." : "Type a message..."}
                         disabled={isTyping} 
                         rows={1}
