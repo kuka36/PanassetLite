@@ -90,7 +90,7 @@ export type ActionType =
 
 export interface PendingAction {
   type: ActionType;
-  targetId?: string; // For Update/Delete
+  targetId?: string; // For Update/Delete operations
   data: {
     symbol?: string;
     name?: string;
@@ -111,4 +111,5 @@ export interface ChatMessage {
   timestamp: number;
   pendingAction?: PendingAction; // If the bot proposes an action
   isError?: boolean;
+  image?: string; // Base64 encoded image
 }

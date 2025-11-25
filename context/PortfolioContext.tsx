@@ -215,6 +215,8 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
         }
     } else if (tx.type === TransactionType.SELL) {
         // Reverse SELL: Add quantity back.
+        // Note: Reversing a sell is simpler for quantity, but cost basis technically shouldn't change on a sell
+        // unless we track lots. Here we assume avgCost remains consistent on Sell reversal.
         newQty = asset.quantity + tx.quantity;
     }
     return { qty: newQty, cost: newAvgCost };

@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Send, Sparkles, Check, AlertCircle, Trash2, User, Keyboard, AudioLines } from 'lucide-react';
+import { X, Send, Sparkles, Check, AlertCircle, Trash2, User, Keyboard, AudioLines, Image as ImageIcon } from 'lucide-react';
 import { usePortfolio } from '../context/PortfolioContext';
 import { AgentService } from '../services/agentService';
 import { ChatMessage, PendingAction, TransactionType, AssetType } from '../types';
@@ -21,7 +21,9 @@ export const AIChatAssistant: React.FC<AIChatAssistantProps> = ({ isOpen, onClos
   const [isTyping, setIsTyping] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isVoiceMode, setIsVoiceMode] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Load History on Mount
   useEffect(() => {
@@ -37,8 +39,8 @@ export const AIChatAssistant: React.FC<AIChatAssistantProps> = ({ isOpen, onClos
         id: 'init',
         role: 'model',
         content: settings.language === 'zh' 
-            ? "您好！我是您的全能资产助手。我可以帮您增删改查资产或交易记录。试试说：“把昨天的苹果买入交易改成 20 股”。"
-            : "Hi! I'm your PanassetLite assistant. I can manage your portfolio fully. Try saying \"Update yesterday's AAPL buy to 20 shares\".",
+            ? "您好！我是您的全能资产助手。您可以发送截图让我识别资产信息，或直接说：“把昨天的苹果买入交易改成 20 股”。"
+            : "Hi! I'm your PanassetLite assistant. You can upload screenshots for me to analyze, or say \"Update yesterday's AAPL buy to 20 shares\".",
         timestamp: Date.now()
       }]);
     }
@@ -47,7 +49,7 @@ export const AIChatAssistant: React.FC<AIChatAssistantProps> = ({ isOpen, onClos
   // Save History on Update
   useEffect(() => {
     if (messages.length > 0) {
-      const validMessages = messages.filter(m => m.content && m.content.trim() !== '');
+      const validMessages = messages.filter(m => (m.content && m.content.trim() !== '') || m.image);
       localStorage.setItem(HISTORY_KEY, JSON.stringify(validMessages.slice(-50))); 
     }
   }, [messages]);
@@ -55,21 +57,43 @@ export const AIChatAssistant: React.FC<AIChatAssistantProps> = ({ isOpen, onClos
   // Auto Scroll
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, isOpen, isTyping, isVoiceMode]);
+  }, [messages, isOpen, isTyping, isVoiceMode, selectedImage]);
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+        const file = e.target.files[0];
+        if (file.size > 5 * 1024 * 1024) {
+            alert(settings.language === 'zh' ? "图片大小不能超过 5MB" : "Image size must be less than 5MB");
+            return;
+        }
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+            setSelectedImage(ev.target?.result as string);
+        };
+        reader.readAsDataURL(file);
+    }
+    // Reset input so same file can be selected again
+    e.target.value = '';
+  };
 
   const handleSend = async (textOverride?: string) => {
     const textToSend = typeof textOverride === 'string' ? textOverride : input;
-    if (!textToSend?.trim()) return;
+    
+    // Only return if both text and image are missing
+    if (!textToSend?.trim() && !selectedImage) return;
 
     const userMsg: ChatMessage = {
       id: crypto.randomUUID(),
       role: 'user',
       content: textToSend.trim(),
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      image: selectedImage || undefined
     };
 
     setMessages(prev => [...prev, userMsg]);
     if (typeof textOverride !== 'string') setInput('');
+    const imageToSend = selectedImage;
+    setSelectedImage(null); // Clear image immediately
     setIsTyping(true);
 
     const agent = new AgentService(settings.geminiApiKey);
@@ -81,7 +105,8 @@ export const AIChatAssistant: React.FC<AIChatAssistantProps> = ({ isOpen, onClos
         assets, 
         transactions,
         settings.baseCurrency, 
-        settings.language
+        settings.language,
+        imageToSend || undefined
     );
 
     const botMsg: ChatMessage = {
@@ -232,7 +257,7 @@ export const AIChatAssistant: React.FC<AIChatAssistantProps> = ({ isOpen, onClos
           </div>
           <div>
             <h3 className="font-bold text-sm">
-                {settings.language === 'zh' ? "AI 助手 (CRUD增强版)" : "AI Assistant (Pro)"}
+                {settings.language === 'zh' ? "盘资产 智能助手" : "Panasset Assistant"}
             </h3>
             <p className="text-[10px] text-indigo-100 flex items-center gap-1 opacity-90">
                <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse"></span>
@@ -265,6 +290,11 @@ export const AIChatAssistant: React.FC<AIChatAssistantProps> = ({ isOpen, onClos
                 ? 'bg-slate-200 text-slate-800 rounded-tr-none' 
                 : 'bg-white text-slate-700 border border-slate-200 rounded-tl-none'
             }`}>
+              {msg.image && (
+                 <div className="mb-2">
+                    <img src={msg.image} alt="Upload" className="max-w-full max-h-[200px] rounded-lg border border-slate-300/50" />
+                 </div>
+              )}
               <MarkdownContent content={msg.content} />
 
               {msg.pendingAction && (
@@ -310,19 +340,19 @@ export const AIChatAssistant: React.FC<AIChatAssistantProps> = ({ isOpen, onClos
         <div ref={messagesEndRef} />
       </div>
 
-      <div className="p-3 bg-white border-t border-slate-200 flex items-center gap-2 shrink-0 pb-6 md:pb-3 transition-all duration-300">
+      <div className="p-3 bg-white border-t border-slate-200 flex items-end gap-2 shrink-0 pb-6 md:pb-3 transition-all duration-300 relative">
         
         {/* Toggle Mode */}
         <button 
             onClick={() => setIsVoiceMode(!isVoiceMode)}
-            className="p-2.5 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-full transition-colors shrink-0"
+            className="p-2.5 mb-0.5 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-full transition-colors shrink-0"
             title={isVoiceMode ? t('switchToKeyboard') : t('switchToVoice')}
         >
             {isVoiceMode ? <Keyboard size={24} /> : <AudioLines size={24} />}
         </button>
 
         {isVoiceMode ? (
-            <div className="flex-1 animate-in fade-in duration-200">
+            <div className="flex-1 animate-in fade-in duration-200 mb-0.5">
                 <VoiceInput 
                     mode="CHAT" 
                     variant="bar"
@@ -331,20 +361,58 @@ export const AIChatAssistant: React.FC<AIChatAssistantProps> = ({ isOpen, onClos
             </div>
         ) : (
             <>
-                <input
-                  type="text"
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && !isTyping && handleSend()}
-                  placeholder={settings.language === 'zh' ? "输入消息..." : "Type a message..."}
-                  disabled={isTyping} 
-                  autoFocus
-                  className="flex-1 bg-slate-50 border border-slate-200 text-slate-800 text-sm rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50 transition-all animate-in fade-in duration-200"
-                />
+                {/* Image Preview */}
+                {selectedImage && (
+                    <div className="absolute bottom-full left-0 w-full p-2 bg-gradient-to-t from-white to-transparent">
+                        <div className="relative inline-block">
+                            <img src={selectedImage} alt="Preview" className="h-20 w-auto object-cover rounded-lg border border-slate-200 shadow-sm bg-white" />
+                            <button 
+                                onClick={() => setSelectedImage(null)}
+                                className="absolute -top-2 -right-2 bg-slate-800 text-white rounded-full p-0.5 hover:bg-slate-700 shadow-md border border-white"
+                            >
+                                <X size={12} />
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                <div className="flex-1 flex gap-2 items-end bg-slate-50 border border-slate-200 rounded-xl px-2 py-2 focus-within:ring-2 focus-within:ring-indigo-500 focus-within:bg-white transition-all">
+                    <button 
+                        onClick={() => fileInputRef.current?.click()}
+                        className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors shrink-0"
+                        title="Upload Image"
+                    >
+                        <ImageIcon size={20} />
+                    </button>
+                    <input 
+                        type="file" 
+                        ref={fileInputRef} 
+                        className="hidden" 
+                        accept="image/*" 
+                        onChange={handleFileSelect} 
+                    />
+                    
+                    <textarea
+                        value={input}
+                        onChange={(e) => setInput(e.target.value)}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter' && !e.shiftKey) {
+                                e.preventDefault();
+                                if (!isTyping) handleSend();
+                            }
+                        }}
+                        placeholder={settings.language === 'zh' ? "输入消息..." : "Type a message..."}
+                        disabled={isTyping} 
+                        rows={1}
+                        className="flex-1 bg-transparent border-none p-1.5 text-sm focus:ring-0 resize-none max-h-24 outline-none disabled:opacity-50"
+                        style={{ minHeight: '36px' }}
+                    />
+                </div>
+
                 <button 
                     onClick={() => handleSend()}
-                    disabled={!input.trim() || isTyping}
-                    className="p-3 bg-indigo-600 text-white rounded-xl shadow-md hover:bg-indigo-700 disabled:bg-slate-200 disabled:text-slate-400 transition-all active:scale-95 flex items-center justify-center shrink-0"
+                    disabled={(!input.trim() && !selectedImage) || isTyping}
+                    className="p-3 mb-0.5 bg-indigo-600 text-white rounded-xl shadow-md hover:bg-indigo-700 disabled:bg-slate-200 disabled:text-slate-400 transition-all active:scale-95 flex items-center justify-center shrink-0"
                 >
                     <Send size={20} />
                 </button>

@@ -76,7 +76,8 @@ export class AgentService {
     assets: Asset[],
     transactions: Transaction[], // Injected Dependency
     baseCurrency: Currency,
-    language: Language
+    language: Language,
+    image?: string
   ): Promise<{ text: string, action?: PendingAction }> {
     
     // 1. Fallback: No API Key
@@ -107,6 +108,7 @@ export class AgentService {
            - ALWAYS check \`get_transactions\` before updating/deleting a transaction to get the correct \`transactionId\`.
         2. **WRITE**: You can propose changes using \`propose_asset_mutation\` (for holdings) or \`propose_transaction_mutation\` (for trades).
            - Do not hallucinate IDs. Read them first.
+        3. **VISION**: You can see images uploaded by the user. If an image contains financial data (e.g. screenshot of a portfolio or trade), extract the data and suggest relevant actions using the tools.
         
         **Behavior:**
         - Be concise.
@@ -116,12 +118,23 @@ export class AgentService {
 
       // 3. Map & Sanitize History
       const geminiHistory: Content[] = history
-        .filter(m => m.role !== 'system' && m.content && m.content.trim().length > 0)
+        .filter(m => m.role !== 'system')
         .slice(-10)
-        .map(m => ({
-          role: m.role === 'user' ? 'user' : 'model',
-          parts: [{ text: m.content }]
-        }));
+        .map(m => {
+          const parts: Part[] = [];
+          if (m.image) {
+            const base64Data = m.image.split(',')[1];
+            const mimeType = m.image.split(';')[0].split(':')[1];
+            parts.push({ inlineData: { mimeType, data: base64Data } });
+          }
+          if (m.content && m.content.trim().length > 0) {
+            parts.push({ text: m.content });
+          }
+          return {
+            role: m.role === 'user' ? 'user' : 'model',
+            parts: parts
+          };
+        });
 
       // 4. Create Chat Session
       const chat = this.ai.chats.create({
@@ -134,12 +147,23 @@ export class AgentService {
       });
 
       // 5. Send Message
-      const safeUserMessage = userMessage.trim() || ".";
-      let response = await chat.sendMessage({ message: safeUserMessage });
+      const currentParts: Part[] = [];
+      if (image) {
+          const base64Data = image.split(',')[1];
+          const mimeType = image.split(';')[0].split(':')[1];
+          currentParts.push({ inlineData: { mimeType, data: base64Data } });
+      }
+      const safeUserMessage = userMessage.trim();
+      if (safeUserMessage) {
+          currentParts.push({ text: safeUserMessage });
+      }
+      
+      // If no text and no image, send "." as fallback to keep conversation alive (unlikely case)
+      if (currentParts.length === 0) currentParts.push({ text: "." });
+
+      let response = await chat.sendMessage({ message: currentParts });
       
       // 6. Loop for Tool Calls (Model might need to read, then write)
-      // Gemini 2.5 Flash can handle multi-turn tool use, but here we handle single turn response for simplicity or chained calls if SDK supports it.
-      // We manually handle the first tool call. If it's a "GET", we feed it back. If it's a "PROPOSE", we return the action.
       
       const functionCalls = response.functionCalls;
       

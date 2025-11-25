@@ -139,7 +139,7 @@ export const translations: Record<Language, Record<string, string>> = {
     // Settings
     managePreferences: "Manage your preferences and data.",
     apiConfiguration: "API Configuration",
-    apiKeysSecurity: "All API keys are stored exclusively in your browser's LocalStorage. They are never sent to our servers.",
+    apiKeysSecurity: "All API keys are stored exclusively in your browser's LocalStorage.",
     enableAiAssistant: "Enable AI Chat Assistant",
     aiProvider: "AI Model Provider",
     aiProviderDesc: "Select which AI service to use for Portfolio Insights.",
@@ -331,7 +331,7 @@ export const translations: Record<Language, Record<string, string>> = {
 
     managePreferences: "管理您的偏好与数据。",
     apiConfiguration: "API 配置",
-    apiKeysSecurity: "所有 API 密钥仅存储在您浏览器的本地存储中，绝不会发送至我们的服务器。",
+    apiKeysSecurity: "所有 API 密钥仅存储在您浏览器的本地存储中。",
     enableAiAssistant: "开启 AI 助手浮窗",
     aiProvider: "AI 模型服务商",
     aiProviderDesc: "选择用于投资组合智能分析的 AI 服务。",
