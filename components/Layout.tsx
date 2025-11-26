@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, PieChart, Wallet, Settings, Menu, X, History, ChevronLeft, ChevronRight, BookOpen, Sparkles } from 'lucide-react';
+import { LayoutDashboard, PieChart, Wallet, Settings, Menu, X, History, BookOpen, Sparkles } from 'lucide-react';
 import { usePortfolio } from '../context/PortfolioContext';
 import { AIChatAssistant } from './AIChatAssistant';
 import { Logo } from './ui/Logo';
@@ -52,10 +52,14 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
       >
         {/* Header / Logo */}
         <div className={`p-6 flex flex-col justify-center ${isCollapsed ? 'items-center px-0' : ''}`}>
-            {/* Logo Component */}
-            <div className={`transition-all duration-300 ${isCollapsed ? 'scale-90' : ''}`}>
+            {/* Logo Component - Clickable to Toggle Sidebar */}
+            <button 
+                onClick={() => setIsCollapsed(!isCollapsed)}
+                className={`transition-all duration-300 hover:opacity-80 focus:outline-none cursor-pointer ${isCollapsed ? 'scale-90' : ''}`}
+                title={isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+            >
                 <Logo collapsed={isCollapsed} title={title} subTitle={subTitle} />
-            </div>
+            </button>
         </div>
 
         {/* Navigation */}
@@ -85,15 +89,6 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                     {!isCollapsed && <span className="font-semibold">{t('aiAssistant')}</span>}
                 </button>
             )}
-
-            {/* Toggle Button */}
-            <button 
-              onClick={() => setIsCollapsed(!isCollapsed)}
-              className="w-full flex items-center justify-center p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-              title={isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
-            >
-              {isCollapsed ? <ChevronRight size={20} /> : <ChevronLeft size={20} />}
-            </button>
 
             {!isCollapsed ? (
               <div className="animate-fade-in">
