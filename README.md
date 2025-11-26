@@ -10,24 +10,23 @@
 ![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript)
 ![TailwindCSS](https://img.shields.io/badge/Tailwind-38B2AC?style=for-the-badge&logo=tailwind-css)
 
-**一款简易实用的全资产管理应用**
+**一款人由工智能驱动动、Local-First 保证主权数据和强大的可视化功能的现代个人金融系统。**
 <br/>
-**具有极好的用户体验、强大的可视化功能和人工智能驱动的投资组合洞察。**
-
 ---
 
 <p align="left">
 这是“零门槛、无需注册、本地数据”的版本。<br/>
-它的精神是：<strong>简易、随时用、轻松地帮你管理资产</strong>。
+它的精神是：<strong>轻松、智能地帮您管理资产</strong>。
 </p>
 
 </div>
 
 ## 📸 系统截图 (Screenshots)
 
-![Dashboard](panassetlite.png)
+![Dashboard](_image/panassetlite.png)
 
-> *仪表盘概览 - 实时掌握净值动态与资产分布*
+> *仪表盘概览 - 实时掌握净值动态与资产分布*  
+> *智能助手 - 接管您一切操作*
 
 ---
 
@@ -40,7 +39,7 @@
   无需注册，数据完全加密存储在您的本地浏览器 (LocalStorage)，确保财务隐私绝对安全。
 
 - **🧠 AI 智能顾问 (Dual Engine)**  
-  支持 **Google Gemini** 与 **DeepSeek** 双引擎，为您提供专业的投资组合风险评估、财富健康检查与优化建议。用户可任选其一进行配置。
+  所有操作可通过自然语言对话完成，并为您提供专业的投资组合风险评估、财富健康检查与优化建议。
 
 - **📈 实时行情**  
   自动对接 Alpha Vantage (股票) 和 CoinGecko (加密货币) API，实时更新资产现值。
@@ -95,7 +94,7 @@
 
 为了获得完整的 AI 分析与实时股价体验，建议在应用的 **设置 (Settings)** 页面配置以下 Key（均为免费申请）：
 
-1.  **AI 智能顾问 (任选其一)**:
+1.  **AI 智能顾问**:
     *   **Google Gemini API Key**: ([申请链接](https://aistudio.google.com/app/apikey))
     *   **DeepSeek API Key**: ([申请链接](https://platform.deepseek.com/api_keys))
 2.  **Alpha Vantage API Key**: 用于美股/港股实时价格。 ([申请链接](https://www.alphavantage.co/support/#api-key))
