@@ -25,8 +25,8 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   // Logic: AI Assistant is enabled if the Key is present (Gemini or DeepSeek).
   const isAiEnabled = !!(settings.geminiApiKey || settings.deepSeekApiKey);
 
-  // Subtitle Name (Localized)
-  const subName = settings.language === 'zh' ? "盘资产·轻" : "Personal Asset Manager";
+    const title = settings.language === 'zh' ? "盘资产" : "Panasset";
+    const subTitle = settings.language === 'zh' ? "轻" : "Lite";
 
   const NavItem = ({ to, icon, label, onClick }: { to: string, icon: React.ReactNode, label: string, onClick?: () => void }) => (
     <NavLink 
@@ -54,15 +54,8 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
         <div className={`p-6 flex flex-col justify-center ${isCollapsed ? 'items-center px-0' : ''}`}>
             {/* Logo Component */}
             <div className={`transition-all duration-300 ${isCollapsed ? 'scale-90' : ''}`}>
-                <Logo collapsed={isCollapsed} />
+                <Logo collapsed={isCollapsed} title={title} subTitle={subTitle} />
             </div>
-            
-            {/* Subtitle (Only when expanded) */}
-            {!isCollapsed && (
-              <div className="mt-2 pl-1 animate-fade-in">
-                  <span className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">{subName}</span>
-              </div>
-            )}
         </div>
 
         {/* Navigation */}
