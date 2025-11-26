@@ -130,6 +130,7 @@ export interface PendingAction {
   };
   items?: any[]; // Added for BULK_ASSET_UPDATE to hold multiple items
   summary: string; // Human readable summary
+  status?: 'pending' | 'executed'; // ADDED: To track state without removing the object
 }
 
 export interface ChatMessage {

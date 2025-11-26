@@ -1,6 +1,7 @@
 
+
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Send, Sparkles, Check, AlertCircle, Trash2, User, Keyboard, AudioLines, Image as ImageIcon, ListChecks, ArrowUpRight } from 'lucide-react';
+import { X, Send, Sparkles, Check, AlertCircle, Trash2, User, Keyboard, AudioLines, Image as ImageIcon, ListChecks, ArrowUpRight, CheckCircle2 } from 'lucide-react';
 import { usePortfolio } from '../context/PortfolioContext';
 import { AgentService } from '../services/agentService';
 import { ChatMessage, PendingAction, TransactionType, AssetType, Currency } from '../types';
@@ -360,8 +361,12 @@ export const AIChatAssistant: React.FC<AIChatAssistantProps> = ({ isOpen, onClos
           deleteTransaction(targetId);
       }
 
+      // Mark the action as executed but keep the data for display
       setMessages(prev => prev.map(m => 
-        m.id === msgId ? { ...m, content: m.content + (settings.language === 'zh' ? "\n\n✅ *操作已执行。*" : "\n\n✅ *Executed.*"), pendingAction: undefined } : m
+        m.id === msgId ? { 
+            ...m, 
+            pendingAction: { ...m.pendingAction!, status: 'executed' } 
+        } : m
       ));
 
     } catch (e) {
@@ -371,12 +376,8 @@ export const AIChatAssistant: React.FC<AIChatAssistantProps> = ({ isOpen, onClos
   };
 
   const handleClearHistory = () => {
-      setMessages([{
-        id: crypto.randomUUID(),
-        role: 'model',
-        content: settings.language === 'zh' ? "历史记录已清除。" : "History cleared.",
-        timestamp: Date.now()
-      }]);
+      // Cleanest approach: just empty the array.
+      setMessages([]);
       localStorage.removeItem(HISTORY_KEY);
   };
 
@@ -467,13 +468,22 @@ export const AIChatAssistant: React.FC<AIChatAssistantProps> = ({ isOpen, onClos
               <MarkdownContent content={msg.content} />
 
               {msg.pendingAction && (
-                <div className="mt-2 p-3 bg-indigo-50 border border-indigo-100 rounded-xl animate-fade-in">
+                <div className={`mt-2 p-3 rounded-xl animate-fade-in border ${
+                    msg.pendingAction.status === 'executed' 
+                    ? 'bg-slate-50 border-slate-200 opacity-80' 
+                    : 'bg-indigo-50 border-indigo-100'
+                }`}>
                     <div className="flex items-start gap-2 mb-2">
-                        <div className="text-indigo-600 mt-0.5 shrink-0">
-                           {msg.pendingAction.type === 'BULK_ASSET_UPDATE' ? <ListChecks size={16}/> : <AlertCircle size={16}/>}
+                        <div className={`${msg.pendingAction.status === 'executed' ? 'text-green-500' : 'text-indigo-600'} mt-0.5 shrink-0`}>
+                           {msg.pendingAction.status === 'executed' ? <CheckCircle2 size={16} /> : (
+                               msg.pendingAction.type === 'BULK_ASSET_UPDATE' ? <ListChecks size={16}/> : <AlertCircle size={16}/>
+                           )}
                         </div>
-                        <div className="text-xs text-indigo-800 font-medium">
-                            {settings.language === 'zh' ? "需确认操作" : "Action Required"}
+                        <div className={`text-xs font-medium ${msg.pendingAction.status === 'executed' ? 'text-green-700' : 'text-indigo-800'}`}>
+                            {settings.language === 'zh' 
+                                ? (msg.pendingAction.status === 'executed' ? "操作已执行" : "需确认操作") 
+                                : (msg.pendingAction.status === 'executed' ? "Action Executed" : "Action Required")
+                            }
                         </div>
                     </div>
                     <div className="text-sm font-bold text-slate-800 mb-3 pl-6">
@@ -520,16 +530,18 @@ export const AIChatAssistant: React.FC<AIChatAssistantProps> = ({ isOpen, onClos
                         </div>
                     )}
 
-                    <div className="flex gap-2 pl-6">
-                        <button 
-                            onClick={() => handleConfirmAction(msg.id, msg.pendingAction!)}
-                            className={`flex-1 text-white text-xs font-bold py-2 rounded-lg flex items-center justify-center gap-1 transition-colors shadow-sm ${
-                                msg.pendingAction.type.includes('DELETE') ? 'bg-red-500 hover:bg-red-600' : 'bg-indigo-600 hover:bg-indigo-700'
-                            }`}
-                        >
-                            <Check size={14} /> {settings.language === 'zh' ? (msg.pendingAction.type === 'BULK_ASSET_UPDATE' ? "确认导入全部" : "执行") : "Confirm"}
-                        </button>
-                    </div>
+                    {msg.pendingAction.status !== 'executed' && (
+                        <div className="flex gap-2 pl-6">
+                            <button 
+                                onClick={() => handleConfirmAction(msg.id, msg.pendingAction!)}
+                                className={`flex-1 text-white text-xs font-bold py-2 rounded-lg flex items-center justify-center gap-1 transition-colors shadow-sm ${
+                                    msg.pendingAction.type.includes('DELETE') ? 'bg-red-500 hover:bg-red-600' : 'bg-indigo-600 hover:bg-indigo-700'
+                                }`}
+                            >
+                                <Check size={14} /> {settings.language === 'zh' ? (msg.pendingAction.type === 'BULK_ASSET_UPDATE' ? "确认导入全部" : "执行") : "Confirm"}
+                            </button>
+                        </div>
+                    )}
                 </div>
               )}
             </div>
