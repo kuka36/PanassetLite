@@ -1,10 +1,25 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
 
+// Custom Error Classes
+export class AIError extends Error {
+  constructor(message: string, public provider: string, public originalError?: any) {
+    super(message);
+    this.name = 'AIError';
+  }
+}
+
+export class AIParseError extends AIError {
+  constructor(message: string, provider: string, originalError?: any) {
+    super(message, provider, originalError);
+    this.name = 'AIParseError';
+  }
+}
+
 // 1. Define the Strategy Interface
 export interface IAIEngine {
   generateText(prompt: string): Promise<string>;
-  generateJSON(prompt: string, schema?: any): Promise<any>;
+  generateJSON<T = any>(prompt: string, schema?: any): Promise<T>;
 }
 
 // 2. Concrete Strategy: Gemini
@@ -16,14 +31,18 @@ export class GeminiEngine implements IAIEngine {
   }
 
   async generateText(prompt: string): Promise<string> {
-    const response = await this.ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: prompt,
-    });
-    return response.text || "";
+    try {
+      const response = await this.ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: prompt,
+      });
+      return response.text || "";
+    } catch (e) {
+      throw new AIError("Gemini Text Generation Failed", 'gemini', e);
+    }
   }
 
-  async generateJSON(prompt: string, schema?: any): Promise<any> {
+  async generateJSON<T = any>(prompt: string, schema?: any): Promise<T> {
     const config: any = {
       responseMimeType: 'application/json',
     };
@@ -33,17 +52,21 @@ export class GeminiEngine implements IAIEngine {
       config.responseSchema = schema;
     }
 
-    const response = await this.ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: prompt,
-      config: config
-    });
-
     try {
-      return JSON.parse(response.text as string);
+      const response = await this.ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: prompt,
+        config: config
+      });
+
+      try {
+        return JSON.parse(response.text as string);
+      } catch (e) {
+        throw new AIParseError("Invalid JSON response from Gemini", 'gemini', e);
+      }
     } catch (e) {
-      console.error("Gemini JSON Parse Error", e);
-      throw new Error("Invalid JSON response from Gemini");
+      if (e instanceof AIParseError) throw e;
+      throw new AIError("Gemini JSON Generation Failed", 'gemini', e);
     }
   }
 }
@@ -58,44 +81,48 @@ export class DeepSeekEngine implements IAIEngine {
   }
 
   private async callAPI(messages: any[], jsonMode: boolean = false): Promise<string> {
-    const response = await fetch(this.baseUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.apiKey}`
-      },
-      body: JSON.stringify({
-        model: "deepseek-chat",
-        messages: messages,
-        response_format: jsonMode ? { type: "json_object" } : undefined,
-        stream: false
-      })
-    });
+    try {
+      const response = await fetch(this.baseUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.apiKey}`
+        },
+        body: JSON.stringify({
+          model: "deepseek-chat",
+          messages: messages,
+          response_format: jsonMode ? { type: "json_object" } : undefined,
+          stream: false
+        })
+      });
 
-    if (!response.ok) {
-      const errData = await response.json().catch(() => ({}));
-      const msg = errData.error?.message || response.statusText;
-      throw new Error(`DeepSeek API Error: ${msg}`);
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        const msg = errData.error?.message || response.statusText;
+        throw new AIError(`DeepSeek API Error: ${msg}`, 'deepseek');
+      }
+
+      const data = await response.json();
+      return data.choices?.[0]?.message?.content || '';
+    } catch (e) {
+      if (e instanceof AIError) throw e;
+      throw new AIError("DeepSeek Network/API Error", 'deepseek', e);
     }
-
-    const data = await response.json();
-    return data.choices?.[0]?.message?.content || '';
   }
 
   async generateText(prompt: string): Promise<string> {
     return this.callAPI([{ role: "user", content: prompt }], false);
   }
 
-  async generateJSON(prompt: string, _schema?: any): Promise<any> {
+  async generateJSON<T = any>(prompt: string, _schema?: any): Promise<T> {
     // DeepSeek V3 supports JSON mode but doesn't support strict Schema validation like Gemini in the same way.
     // We rely on the prompt instructions and JSON mode enforcement.
     const responseText = await this.callAPI([{ role: "user", content: prompt }], true);
-    
+
     try {
       return JSON.parse(responseText);
     } catch (e) {
-      console.error("DeepSeek JSON Parse Error", e);
-      throw new Error("Invalid JSON response from DeepSeek");
+      throw new AIParseError("Invalid JSON response from DeepSeek", 'deepseek', e);
     }
   }
 }

@@ -1,9 +1,8 @@
 
-
-
 import { Type } from "@google/genai";
 import { Asset, AssetType, Language, AIProvider, VoiceParseResult } from "../types";
 import { AIEngineFactory } from "./aiEngine";
+import { StorageService } from "./StorageService";
 
 export const RISK_CACHE_KEY = 'investflow_risk_cache';
 export const RISK_CACHE_TTL = 3600 * 1000; // 1 hour
@@ -26,6 +25,11 @@ export const generatePortfolioHash = (assets: Asset[]) => {
     .join('|');
 };
 
+interface AICacheData<T> {
+  hash: string;
+  data: T;
+}
+
 export const getPortfolioAnalysis = async (assets: Asset[], apiKey: string, provider: AIProvider, language: Language = 'en', forceRefresh: boolean = false) => {
   if (!apiKey) throw new Error("API Key is missing");
   if (assets.length === 0) return "";
@@ -33,18 +37,14 @@ export const getPortfolioAnalysis = async (assets: Asset[], apiKey: string, prov
   const currentHash = `${generatePortfolioHash(assets)}:${language}:${provider}`;
   const now = Date.now();
 
-  // 1. Check LocalStorage Cache
+  // 1. Check StorageService Cache
   if (!forceRefresh) {
-    try {
-      const cachedRaw = localStorage.getItem(ADVISOR_CACHE_KEY);
-      if (cachedRaw) {
-        const { hash, timestamp, data } = JSON.parse(cachedRaw);
-        if (hash === currentHash && (now - timestamp < ADVISOR_CACHE_TTL)) {
-          return data;
-        }
+    const cached = StorageService.getCache<AICacheData<string>>(ADVISOR_CACHE_KEY);
+    if (cached) {
+      const { timestamp, data: { hash, data } } = cached;
+      if (hash === currentHash && (now - timestamp < ADVISOR_CACHE_TTL)) {
+        return data;
       }
-    } catch (e) {
-      console.warn("PanassetLite: Advisor Cache parse error", e);
     }
   }
 
@@ -107,15 +107,10 @@ export const getPortfolioAnalysis = async (assets: Asset[], apiKey: string, prov
 
     const finalResult = textResult || (language === 'zh' ? "暂时无法生成分析报告。" : "Unable to generate analysis report.");
 
-    try {
-      localStorage.setItem(ADVISOR_CACHE_KEY, JSON.stringify({
-        hash: currentHash,
-        timestamp: Date.now(),
-        data: finalResult
-      }));
-    } catch (e) {
-      console.warn("PanassetLite: Failed to save advisor cache", e);
-    }
+    StorageService.saveCache<AICacheData<string>>(ADVISOR_CACHE_KEY, {
+      hash: currentHash,
+      data: finalResult
+    });
 
     return finalResult;
   })();
@@ -137,19 +132,17 @@ export const getRiskAssessment = async (assets: Asset[], apiKey: string, provide
   const now = Date.now();
 
   if (!forceRefresh) {
-    try {
-      const cachedRaw = localStorage.getItem(RISK_CACHE_KEY);
-      if (cachedRaw) {
-        const { hash, timestamp, data } = JSON.parse(cachedRaw);
-        if (hash === currentHash && (now - timestamp < RISK_CACHE_TTL)) {
-          return data;
-        }
+    const cached = StorageService.getCache<AICacheData<any>>(RISK_CACHE_KEY);
+    if (cached) {
+      const { timestamp, data: { hash, data } } = cached;
+      if (hash === currentHash && (now - timestamp < RISK_CACHE_TTL)) {
+        return data;
       }
-    } catch (e) {}
+    }
   }
 
   if (pendingRiskPromise && pendingRiskPromise.hash === currentHash && !forceRefresh) {
-     return pendingRiskPromise.promise;
+    return pendingRiskPromise.promise;
   }
 
   const apiCall = (async () => {
@@ -191,13 +184,10 @@ export const getRiskAssessment = async (assets: Asset[], apiKey: string, provide
     const engine = AIEngineFactory.create(provider, apiKey);
     const data = await engine.generateJSON(prompt, schema);
 
-    try {
-      localStorage.setItem(RISK_CACHE_KEY, JSON.stringify({
-        hash: currentHash,
-        timestamp: Date.now(),
-        data: data
-      }));
-    } catch (e) {}
+    StorageService.saveCache<AICacheData<any>>(RISK_CACHE_KEY, {
+      hash: currentHash,
+      data: data
+    });
 
     return data;
   })();
@@ -205,27 +195,26 @@ export const getRiskAssessment = async (assets: Asset[], apiKey: string, provide
   pendingRiskPromise = { hash: currentHash, promise: apiCall };
 
   try {
-      return await apiCall;
+    return await apiCall;
   } finally {
-      pendingRiskPromise = null;
+    pendingRiskPromise = null;
   }
 };
 
 export const parseVoiceCommand = async (
-    text: string, 
-    mode: 'ASSET' | 'TRANSACTION',
-    apiKey: string, 
-    provider: AIProvider,
-    existingContext: { symbol: string, name: string, id: string }[] = []
-  ): Promise<VoiceParseResult> => {
-    if (!apiKey) throw new Error("API Key is missing");
+  text: string,
+  mode: 'ASSET' | 'TRANSACTION',
+  apiKey: string,
+  provider: AIProvider,
+  existingContext: { symbol: string, name: string, id: string }[] = []
+): Promise<VoiceParseResult> => {
+  if (!apiKey) throw new Error("API Key is missing");
 
-    // Inject Current Date so LLM can resolve "Today", "Yesterday"
-    const now = new Date();
-    const today = now.toISOString().split('T')[0];
-    const fullTime = now.toISOString();
+  // Inject Current Date so LLM can resolve "Today", "Yesterday"
+  const now = new Date();
+  const fullTime = now.toISOString();
 
-    const prompt = `
+  const prompt = `
       Role: Financial Data Parser.
       Task: Parse user spoken input into structured JSON for an app called 'InvestFlow'.
       
@@ -254,20 +243,20 @@ export const parseVoiceCommand = async (
       Fields: symbol, name, type (enum: STOCK, CRYPTO, FUND, CASH, REAL_ESTATE, LIABILITY, OTHER), txType (enum: BUY, SELL, DIVIDEND), quantity (number), price (number), date (string), currency (string).
     `;
 
-    const schema = {
-      type: Type.OBJECT,
-      properties: {
-        symbol: { type: Type.STRING },
-        name: { type: Type.STRING },
-        type: { type: Type.STRING, enum: ["STOCK", "CRYPTO", "FUND", "CASH", "REAL_ESTATE", "LIABILITY", "OTHER"] },
-        txType: { type: Type.STRING, enum: ["BUY", "SELL", "DIVIDEND"] },
-        quantity: { type: Type.NUMBER },
-        price: { type: Type.NUMBER },
-        date: { type: Type.STRING },
-        currency: { type: Type.STRING }
-      }
-    };
+  const schema = {
+    type: Type.OBJECT,
+    properties: {
+      symbol: { type: Type.STRING },
+      name: { type: Type.STRING },
+      type: { type: Type.STRING, enum: ["STOCK", "CRYPTO", "FUND", "CASH", "REAL_ESTATE", "LIABILITY", "OTHER"] },
+      txType: { type: Type.STRING, enum: ["BUY", "SELL", "DIVIDEND"] },
+      quantity: { type: Type.NUMBER },
+      price: { type: Type.NUMBER },
+      date: { type: Type.STRING },
+      currency: { type: Type.STRING }
+    }
+  };
 
-    const engine = AIEngineFactory.create(provider, apiKey);
-    return await engine.generateJSON(prompt, schema);
+  const engine = AIEngineFactory.create(provider, apiKey);
+  return await engine.generateJSON(prompt, schema);
 };

@@ -27,31 +27,31 @@ export enum EntryMode {
 // Enhanced Transaction Types
 export enum TransactionType {
   // Market Actions
-  BUY = 'BUY',           
-  SELL = 'SELL',         
-  DIVIDEND = 'DIVIDEND', 
-  
+  BUY = 'BUY',
+  SELL = 'SELL',
+  DIVIDEND = 'DIVIDEND',
+
   // Cash/Flow Actions
-  DEPOSIT = 'DEPOSIT',       
-  WITHDRAWAL = 'WITHDRAWAL', 
-  
+  DEPOSIT = 'DEPOSIT',
+  WITHDRAWAL = 'WITHDRAWAL',
+
   // Liability Actions
   BORROW = 'BORROW',    // Increase Liability
   REPAY = 'REPAY',      // Decrease Liability
-  
+
   // Corrections
-  BALANCE_ADJUSTMENT = 'BALANCE_ADJUSTMENT' 
+  BALANCE_ADJUSTMENT = 'BALANCE_ADJUSTMENT'
 }
 
 // 1. Static Metadata (Stored in DB/LocalStorage)
 export interface AssetMetadata {
   id: string;
-  symbol: string; 
+  symbol: string;
   name: string;
   type: AssetType;
   currency: Currency;
   currentPrice: number; // Latest known market price (API or Manual)
-  lastUpdated?: number; 
+  lastUpdated?: number;
   dateAcquired?: string; // Display purpose only (ISO DateTime)
   isDeleted?: boolean;
 }
@@ -75,7 +75,7 @@ export interface Asset extends AssetMetadata {
   quantity: number;       // Computed: Sum(quantityChange)
   avgCost: number;        // Computed: Weighted Average Cost
   totalCost: number;      // Computed: quantity * avgCost
-  
+
   // UI Helpers
   currentValue: number;   // quantity * currentPrice
   pnl: number;            // Unrealized PnL
@@ -88,29 +88,29 @@ export interface PortfolioSummary {
   totalCost: number;
   totalPnL: number;
   totalPnLPercent: number;
-  dayPnL: number; 
+  dayPnL: number;
   dayPnLPercent: number;
 }
 
 export interface VoiceParseResult {
-  symbol?: string;      
+  symbol?: string;
   name?: string;
-  type?: AssetType;     
+  type?: AssetType;
   txType?: TransactionType;
   quantity?: number;
   price?: number;
-  date?: string;        
+  date?: string;
   currency?: Currency;
 }
 
 // --- Chat & Agent Types ---
 
-export type ActionType = 
-  | 'ADD_ASSET' 
-  | 'UPDATE_ASSET' 
-  | 'DELETE_ASSET' 
-  | 'ADD_TRANSACTION' 
-  | 'UPDATE_TRANSACTION' 
+export type ActionType =
+  | 'ADD_ASSET'
+  | 'UPDATE_ASSET'
+  | 'DELETE_ASSET'
+  | 'ADD_TRANSACTION'
+  | 'UPDATE_TRANSACTION'
   | 'DELETE_TRANSACTION'
   | 'BULK_ASSET_UPDATE'; // Added for bulk image processing
 
@@ -141,4 +141,18 @@ export interface ChatMessage {
   pendingAction?: PendingAction; // If the bot proposes an action
   isError?: boolean;
   image?: string; // Base64 encoded image
+}
+
+export interface ExchangeRates {
+  [key: string]: number;
+}
+
+export interface AppSettings {
+  baseCurrency: Currency;
+  isPrivacyMode: boolean;
+  geminiApiKey: string;
+  deepSeekApiKey: string;
+  aiProvider: AIProvider;
+  alphaVantageApiKey: string;
+  language: Language;
 }
