@@ -112,7 +112,8 @@ export type ActionType =
   | 'ADD_TRANSACTION'
   | 'UPDATE_TRANSACTION'
   | 'DELETE_TRANSACTION'
-  | 'BULK_ASSET_UPDATE'; // Added for bulk image processing
+  | 'BULK_ASSET_UPDATE' // Added for bulk image processing
+  | 'BATCH_DELETE_ASSET'; // Added for batch deletion
 
 export interface PendingAction {
   type: ActionType;
@@ -147,12 +148,45 @@ export interface ExchangeRates {
   [key: string]: number;
 }
 
+export type MarketDataProvider = 'alphavantage' | 'finnhub';
+
 export interface AppSettings {
   baseCurrency: Currency;
   isPrivacyMode: boolean;
   geminiApiKey: string;
   deepSeekApiKey: string;
   aiProvider: AIProvider;
+  marketDataProvider: MarketDataProvider;
   alphaVantageApiKey: string;
+  finnhubApiKey: string;
   language: Language;
+}
+
+// --- Error Handling ---
+
+export enum ErrorCategory {
+  API_KEY_MISSING = 'API_KEY_MISSING',
+  API_KEY_INVALID = 'API_KEY_INVALID',
+  RATE_LIMIT = 'RATE_LIMIT',
+  ACCESS_DENIED = 'ACCESS_DENIED',
+  NETWORK_ERROR = 'NETWORK_ERROR',
+  UNKNOWN = 'UNKNOWN'
+}
+
+export interface MarketDataError {
+  category: ErrorCategory;
+  provider: MarketDataProvider;
+  message: string;
+  suggestion?: string;
+}
+
+// --- Toast Notification System ---
+
+export type ToastType = 'error' | 'warning' | 'info' | 'success';
+
+export interface ToastMessage {
+  id: string;
+  type: ToastType;
+  message: string;
+  duration?: number; // in milliseconds, undefined means no auto-dismiss
 }

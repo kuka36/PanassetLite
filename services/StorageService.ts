@@ -20,7 +20,9 @@ const INITIAL_SETTINGS: AppSettings = {
     geminiApiKey: '', // Will be populated from env in Context if empty, but storage just stores what's saved
     deepSeekApiKey: '',
     aiProvider: 'gemini',
+    marketDataProvider: 'finnhub',
     alphaVantageApiKey: '',
+    finnhubApiKey: '',
     language: 'en', // Default, will be overridden by browser detection in Context if needed
 };
 

@@ -1,5 +1,5 @@
 
-import { AssetMetadata, AssetType, Currency, ExchangeRates } from '../types';
+import { AssetMetadata, AssetType, Currency, ExchangeRates, MarketDataProvider, MarketDataError, ErrorCategory } from '../types';
 import { StorageService } from './StorageService';
 
 const EXCHANGE_RATE_API = 'https://api.exchangerate-api.com/v4/latest/USD';
@@ -114,78 +114,157 @@ export const fetchCryptoPrices = async (assets: AssetMetadata[]): Promise<Record
 // --- 3. Stock Prices ---
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-export const fetchStockPrices = async (assets: AssetMetadata[], apiKey?: string): Promise<Record<string, StockPriceResult>> => {
+export interface MarketDataConfig {
+  provider: MarketDataProvider;
+  alphaVantageKey: string;
+  finnhubKey: string;
+}
+
+export const fetchStockPrices = async (assets: AssetMetadata[], config: MarketDataConfig): Promise<Record<string, StockPriceResult>> => {
   const stockAssets = assets.filter(a => a.type === AssetType.STOCK || a.type === AssetType.FUND);
   if (stockAssets.length === 0) return {};
 
   const cached = StorageService.getCache<Record<string, StockPriceResult>>(CACHE_STOCKS_KEY);
   const priceMap: Record<string, StockPriceResult> = { ...(cached?.data || {}) };
 
+  console.log('[MarketData] fetchStockPrices called:', {
+    provider: config.provider,
+    stockAssetsCount: stockAssets.length,
+    hasCachedData: !!cached,
+    cachedItemsCount: Object.keys(priceMap).length,
+    cacheTimestamp: cached?.timestamp,
+    cacheAge: cached ? `${Math.round((Date.now() - cached.timestamp) / 1000 / 60)}min` : 'N/A'
+  });
+
   const now = Date.now();
   const assetsToFetch: AssetMetadata[] = [];
+  const cacheHits: string[] = [];
+  const cacheMisses: string[] = [];
 
   for (const asset of stockAssets) {
     const cachedItem = priceMap[asset.id];
-    // Strict Cache Check: If data exists and is younger than TTL, skip fetch.
-    if (!cachedItem || !cachedItem.lastUpdated || (now - cachedItem.lastUpdated > STOCK_TTL)) {
+    // Finnhub is fast, but let's keep a reasonable TTL (e.g. 10 mins)
+    // Alpha Vantage needs longer TTL (45 mins)
+    const ttl = config.provider === 'alphavantage' ? STOCK_TTL : 10 * 60 * 1000;
+
+    if (!cachedItem || !cachedItem.lastUpdated || (now - cachedItem.lastUpdated > ttl)) {
       assetsToFetch.push(asset);
+      cacheMisses.push(`${asset.symbol}(${cachedItem?.lastUpdated ? `stale:${Math.round((now - cachedItem.lastUpdated) / 1000 / 60)}min` : 'no-cache'})`);
+    } else {
+      cacheHits.push(`${asset.symbol}(age:${Math.round((now - cachedItem.lastUpdated) / 1000 / 60)}min)`);
     }
   }
 
-  // If we have nothing to fetch, return cache immediately
+  console.log('[MarketData] Cache analysis:', {
+    hits: cacheHits,
+    misses: cacheMisses,
+    assetsToFetch: assetsToFetch.map(a => a.symbol),
+    ttl: config.provider === 'alphavantage' ? '45min' : '10min'
+  });
+
   if (assetsToFetch.length === 0) {
+    console.log('[MarketData] All prices served from cache ✓');
     return priceMap;
   }
 
-  // Cap queue to avoid endless fetching if user has 50 stocks
-  const limitedQueue = assetsToFetch.slice(0, 5);
   let dataUpdated = false;
 
-  if (!apiKey) {
-    console.warn("Alpha Vantage API Key is missing. Skipping stock price fetch.");
-    return priceMap;
-  }
+  if (config.provider === 'finnhub') {
+    if (!config.finnhubKey) {
+      throw {
+        category: ErrorCategory.API_KEY_MISSING,
+        provider: 'finnhub',
+        message: 'Finnhub API Key is missing'
+      } as MarketDataError;
+    }
+    const queue = assetsToFetch.slice(0, 10); // Finnhub allows more
+    for (const asset of queue) {
+      try {
+        let querySymbol = asset.symbol;
+        if (asset.currency === Currency.HKD && !querySymbol.includes('.')) querySymbol = `${querySymbol}.HK`;
+        else if (asset.currency === Currency.CNY && !querySymbol.includes('.')) querySymbol = querySymbol.startsWith('6') ? `${querySymbol}.SS` : `${querySymbol}.SZ`;
 
-  for (const asset of limitedQueue) {
-    try {
-      let querySymbol = asset.symbol;
-      if (asset.currency === Currency.HKD && !querySymbol.includes('.')) {
-        querySymbol = `${querySymbol}.HK`;
-      } else if (asset.currency === Currency.CNY && !querySymbol.includes('.')) {
-        querySymbol = querySymbol.startsWith('6') ? `${querySymbol}.SS` : `${querySymbol}.SZ`;
-      }
+        const res = await fetch(`https://finnhub.io/api/v1/quote?symbol=${querySymbol}&token=${config.finnhubKey}`);
+        if (!res.ok) {
+          if (res.status === 429) {
+            throw {
+              category: ErrorCategory.RATE_LIMIT,
+              provider: 'finnhub',
+              message: 'Finnhub rate limit exceeded'
+            } as MarketDataError;
+          }
+          if (res.status === 403 || res.status === 401) {
+            throw {
+              category: ErrorCategory.ACCESS_DENIED,
+              provider: 'finnhub',
+              message: 'Access denied or invalid API key'
+            } as MarketDataError;
+          }
+          continue;
+        }
+        const data = await res.json();
+        if (data.error) {
+          throw {
+            category: ErrorCategory.ACCESS_DENIED,
+            provider: 'finnhub',
+            message: data.error
+          } as MarketDataError;
+        }
+        if (data.c && data.c > 0) {
+          priceMap[asset.id] = { price: data.c, currency: detectCurrencyFromSymbol(querySymbol), lastUpdated: Date.now() };
+          dataUpdated = true;
+        }
+        await delay(100);
+      } catch (e) { console.warn(`Finnhub fetch failed for ${asset.symbol}`, e); }
+    }
+  } else {
+    // Alpha Vantage
+    if (!config.alphaVantageKey) {
+      throw {
+        category: ErrorCategory.API_KEY_MISSING,
+        provider: 'alphavantage',
+        message: 'Alpha Vantage API Key is missing'
+      } as MarketDataError;
+    }
+    const queue = assetsToFetch.slice(0, 5); // Strict limit
+    for (const asset of queue) {
+      try {
+        let querySymbol = asset.symbol;
+        if (asset.currency === Currency.HKD && !querySymbol.includes('.')) querySymbol = `${querySymbol}.HK`;
+        else if (asset.currency === Currency.CNY && !querySymbol.includes('.')) querySymbol = querySymbol.startsWith('6') ? `${querySymbol}.SS` : `${querySymbol}.SZ`;
 
-      const res = await fetch(`https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${querySymbol}&apikey=${apiKey}`);
-      const data = await res.json();
+        const res = await fetch(`https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${querySymbol}&apikey=${config.alphaVantageKey}`);
+        const data = await res.json();
+        if (data['Note'] || data['Information']) {
+          throw {
+            category: ErrorCategory.RATE_LIMIT,
+            provider: 'alphavantage',
+            message: 'Alpha Vantage rate limit exceeded'
+          } as MarketDataError;
+        }
 
-      // Circuit Breaker: If API Limit reached, stop immediately to save quota
-      if (data['Note'] || data['Information']) {
-        console.warn("Alpha Vantage Rate Limit Reached. Stopping fetch queue.");
-        break;
-      }
-
-      if (data['Global Quote'] && data['Global Quote']['05. price']) {
-        const price = parseFloat(data['Global Quote']['05. price']);
-        const detectedCurrency = detectCurrencyFromSymbol(data['Global Quote']['01. symbol'] || querySymbol);
-
-        priceMap[asset.id] = {
-          price,
-          currency: detectedCurrency,
-          lastUpdated: Date.now()
-        };
-        dataUpdated = true;
-      }
-
-      // OPTIMIZATION: Increased delay to 15s (4 calls/min) to be super safe for Free Tier
-      if (limitedQueue.length > 1) await delay(15000);
-
-    } catch (e) {
-      // console.error(`Failed to fetch stock ${asset.symbol}`, e);
+        if (data['Global Quote'] && data['Global Quote']['05. price']) {
+          priceMap[asset.id] = {
+            price: parseFloat(data['Global Quote']['05. price']),
+            currency: detectCurrencyFromSymbol(data['Global Quote']['01. symbol'] || querySymbol),
+            lastUpdated: Date.now()
+          };
+          dataUpdated = true;
+        }
+        if (queue.length > 1) await delay(15000); // 15s delay
+      } catch (e) { console.warn(`Alpha Vantage fetch failed for ${asset.symbol}`, e); }
     }
   }
 
   if (dataUpdated) {
+    console.log('[MarketData] Saving updated prices to cache:', {
+      updatedCount: assetsToFetch.length,
+      totalCachedItems: Object.keys(priceMap).length,
+      symbols: assetsToFetch.map(a => a.symbol)
+    });
     StorageService.saveCache(CACHE_STOCKS_KEY, priceMap);
+  } else {
+    console.log('[MarketData] No data updated, cache unchanged');
   }
 
   return priceMap;
@@ -193,7 +272,20 @@ export const fetchStockPrices = async (assets: AssetMetadata[], apiKey?: string)
 
 // --- 4. Historical Data ---
 
-export const fetchAssetHistory = async (asset: AssetMetadata, apiKey?: string): Promise<HistoricalDataPoint[]> => {
+export const fetchAssetHistory = async (
+  asset: AssetMetadata,
+  config: MarketDataConfig,
+  startDate?: Date
+): Promise<HistoricalDataPoint[]> => {
+  // Use provided startDate or default to 5 years ago
+  const historyStartDate = startDate || (() => {
+    const date = new Date();
+    date.setFullYear(date.getFullYear() - 5);
+    return date;
+  })();
+
+  const daysSinceStart = (Date.now() - historyStartDate.getTime()) / (1000 * 3600 * 24);
+
   // 1. Check Cache
   const cacheKey = `${CACHE_HISTORY_KEY}_${asset.id}`;
   const cached = StorageService.getCache<HistoricalDataPoint[]>(cacheKey);
@@ -201,7 +293,12 @@ export const fetchAssetHistory = async (asset: AssetMetadata, apiKey?: string): 
   // Strict 24 Hour TTL for History
   const isStale = cached ? (Date.now() - cached.timestamp) > HISTORY_TTL : true;
 
-  if (cached && cached.data.length > 0 && !isStale) {
+  // Smart Cache Check:
+  // If we have cached data, but it looks like "compact" data (approx 100 points)
+  // AND we need significantly more history (e.g. > 130 days), treat it as stale to force a re-fetch.
+  const isInsufficient = cached && cached.data.length >= 98 && cached.data.length <= 102 && daysSinceStart > 130;
+
+  if (cached && cached.data.length > 0 && !isStale && !isInsufficient) {
     return cached.data;
   }
 
@@ -209,9 +306,11 @@ export const fetchAssetHistory = async (asset: AssetMetadata, apiKey?: string): 
     let history: HistoricalDataPoint[] = [];
 
     if (asset.type === AssetType.CRYPTO) {
-      // CoinGecko Market Chart (Last 365 Days)
+      // CoinGecko Market Chart
+      // Use 'max' if older than 365 days, otherwise 365 is sufficient (and lighter)
+      const daysParam = daysSinceStart > 365 ? 'max' : '365';
       const id = CRYPTO_MAP[asset.symbol.toUpperCase()] || asset.name.toLowerCase().replace(/\s+/g, '-');
-      const res = await fetch(`${COINGECKO_HISTORY_API}/${id}/market_chart?vs_currency=usd&days=365&interval=daily`);
+      const res = await fetch(`${COINGECKO_HISTORY_API}/${id}/market_chart?vs_currency=usd&days=${daysParam}&interval=daily`);
       if (res.ok) {
         const data = await res.json();
         if (data.prices) {
@@ -221,28 +320,106 @@ export const fetchAssetHistory = async (asset: AssetMetadata, apiKey?: string): 
           }));
         }
       }
-    } else if ((asset.type === AssetType.STOCK || asset.type === AssetType.FUND) && apiKey) {
-      // Alpha Vantage Time Series Daily
+    } else if ((asset.type === AssetType.STOCK || asset.type === AssetType.FUND)) {
+
       let querySymbol = asset.symbol;
       if (asset.currency === Currency.HKD && !querySymbol.includes('.')) querySymbol = `${querySymbol}.HK`;
       else if (asset.currency === Currency.CNY && !querySymbol.includes('.')) querySymbol = querySymbol.startsWith('6') ? `${querySymbol}.SS` : `${querySymbol}.SZ`;
 
-      const res = await fetch(`https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=${querySymbol}&apikey=${apiKey}`);
-      const data = await res.json();
+      if (config.provider === 'finnhub' && config.finnhubKey) {
+        // Finnhub Stock Candles
+        const from = Math.floor(historyStartDate.getTime() / 1000);
+        const to = Math.floor(Date.now() / 1000);
 
-      // Circuit Breaker for History
-      if (data['Note'] || data['Information']) {
-        console.warn("Alpha Vantage Rate Limit Reached (History). Using Cache/Fallback.");
-        return cached?.data || [];
+        const res = await fetch(`https://finnhub.io/api/v1/stock/candle?symbol=${querySymbol}&resolution=D&from=${from}&to=${to}&token=${config.finnhubKey}`);
+
+        if (res.ok) {
+          const data = await res.json();
+          if (data.s === "ok" && data.c && data.t) {
+            history = data.t.map((timestamp: number, index: number) => ({
+              date: new Date(timestamp * 1000).toISOString().split('T')[0],
+              price: data.c[index]
+            }));
+          } else if (data.s === "no_data") {
+            // No data available, use cache or fallback
+            return cached?.data || [];
+          } else if (data.error) {
+            throw {
+              category: ErrorCategory.ACCESS_DENIED,
+              provider: 'finnhub',
+              message: data.error
+            } as MarketDataError;
+          }
+        } else if (res.status === 429) {
+          throw {
+            category: ErrorCategory.RATE_LIMIT,
+            provider: 'finnhub',
+            message: 'Finnhub rate limit exceeded (History)'
+          } as MarketDataError;
+        } else if (res.status === 403 || res.status === 401) {
+          throw {
+            category: ErrorCategory.ACCESS_DENIED,
+            provider: 'finnhub',
+            message: 'Access denied to historical data'
+          } as MarketDataError;
+        }
+      } else if (config.provider === 'alphavantage' && config.alphaVantageKey) {
+        // Alpha Vantage Time Series Daily
+        // Use 'compact' to avoid premium error (full is premium for daily series)
+        const outputSize = 'compact';
+
+        const res = await fetch(`https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=${querySymbol}&outputsize=${outputSize}&apikey=${config.alphaVantageKey}`);
+        const data = await res.json();
+
+        if (data['Note'] || data['Information']) {
+          throw {
+            category: ErrorCategory.RATE_LIMIT,
+            provider: 'alphavantage',
+            message: 'Alpha Vantage rate limit exceeded (History)'
+          } as MarketDataError;
+        }
+
+        if (data['Error Message']) {
+          throw {
+            category: ErrorCategory.ACCESS_DENIED,
+            provider: 'alphavantage',
+            message: 'Invalid API key or symbol not found'
+          } as MarketDataError;
+        }
+
+        if (data['Time Series (Daily)']) {
+          const series = data['Time Series (Daily)'];
+          history = Object.keys(series).map(date => ({
+            date: date,
+            price: parseFloat(series[date]['4. close'])
+          })).sort((a, b) => a.date.localeCompare(b.date)); // Sort ascending
+        }
+      }
+    }
+
+    // Filter history to save space (truncate data older than historyStartDate)
+    // But keep at least one point before historyStartDate if possible, to establish initial price
+    if (history.length > 0) {
+      const startDateStr = historyStartDate.toISOString().split('T')[0];
+      const filteredHistory = history.filter(p => p.date >= startDateStr);
+
+      // If we filtered everything out (e.g. historyStartDate is today), keep at least the last point
+      // Or if we cut off the start, maybe keep the point immediately preceding historyStartDate?
+      // For simplicity, just use the filtered list. If empty, fallback logic below handles it.
+      // Actually, if filteredHistory is empty but history wasn't, we should keep the last known point.
+
+      let finalHistory = filteredHistory;
+      if (finalHistory.length === 0 && history.length > 0) {
+        finalHistory = [history[history.length - 1]];
+      } else if (finalHistory.length > 0 && finalHistory[0].date > startDateStr) {
+        // Try to find the point just before
+        const firstIndex = history.findIndex(p => p.date === finalHistory[0].date);
+        if (firstIndex > 0) {
+          finalHistory.unshift(history[firstIndex - 1]);
+        }
       }
 
-      if (data['Time Series (Daily)']) {
-        const series = data['Time Series (Daily)'];
-        history = Object.keys(series).map(date => ({
-          date: date,
-          price: parseFloat(series[date]['4. close'])
-        })).sort((a, b) => a.date.localeCompare(b.date)); // Sort ascending
-      }
+      history = finalHistory;
     }
 
     // Fill gaps or fallback

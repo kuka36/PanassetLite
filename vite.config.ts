@@ -8,6 +8,30 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
 
   return {
+    build: {
+      minify: 'terser',
+      terserOptions: {
+        compress: {
+          drop_console: true,
+          drop_debugger: true,
+        },
+        format: {
+          comments: false,
+        },
+      },
+      rollupOptions: {
+        treeshake: true,
+        output: {
+          manualChunks: (id: string) => {
+            if (id.includes('node_modules')) {
+              if (id.includes('recharts')) return 'recharts'
+              if (id.includes('react-markdown')) return 'markdown'
+              return 'vendor'
+            }
+          },
+        },
+      },
+    },
     base: '/PanassetLite/', // Critical for GitHub Pages hosting
     server: {
       port: 3000,

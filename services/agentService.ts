@@ -31,9 +31,10 @@ const PROPOSE_ASSET_MUTATION: FunctionDeclaration = {
       assetId: { type: Type.STRING, description: "Asset ID (Required for UPDATE/DELETE). Use get_assets to find ID." },
       initialQuantity: { type: Type.NUMBER, description: "Initial quantity to hold immediately (for ADD only)." },
       price: { type: Type.NUMBER, description: "Price or Cost" },
-      assetType: { type: Type.STRING, enum: ["STOCK", "CRYPTO", "CASH", "REAL_ESTATE", "LIABILITY", "FUND"], description: "Asset Type (for ADD)" },
+      assetType: { type: Type.STRING, enum: ["STOCK", "CRYPTO", "CASH", "REAL_ESTATE", "LIABILITY", "FUND", "OTHER"], description: "Asset Type (for ADD)" },
       name: { type: Type.STRING, description: "Asset Name" },
-      currency: { type: Type.STRING, enum: ["USD", "CNY", "HKD"], description: "Currency of the asset." }
+      currency: { type: Type.STRING, enum: ["USD", "CNY", "HKD"], description: "Currency of the asset." },
+      dateAcquired: { type: Type.STRING, description: "Date acquired (ISO 8601 YYYY-MM-DD or YYYY-MM-DDTHH:mm:ss). Use if user specifies a past date." }
     },
     required: ["mutationType"]
   }
@@ -41,7 +42,7 @@ const PROPOSE_ASSET_MUTATION: FunctionDeclaration = {
 
 const PROPOSE_BULK_ASSET_UPDATE: FunctionDeclaration = {
   name: "propose_bulk_asset_update",
-  description: "Propose MULTIPLE asset additions or updates at once. Use this specifically when analyzing an IMAGE or SCREENSHOT containing a list of holdings.",
+  description: "Propose MULTIPLE asset additions or updates at once. Use this for analyzing IMAGES or for BATCH UPDATES (e.g. 'set all stocks to quantity 10').",
   parameters: {
     type: Type.OBJECT,
     properties: {
@@ -56,7 +57,8 @@ const PROPOSE_BULK_ASSET_UPDATE: FunctionDeclaration = {
             quantity: { type: Type.NUMBER, description: "Quantity held" },
             price: { type: Type.NUMBER, description: "Current Price or Cost Basis" },
             currency: { type: Type.STRING, enum: ["USD", "CNY", "HKD"], description: "Inferred currency" },
-            assetType: { type: Type.STRING, enum: ["STOCK", "CRYPTO", "CASH", "REAL_ESTATE", "LIABILITY", "FUND"], description: "Asset Type" }
+            assetType: { type: Type.STRING, enum: ["STOCK", "CRYPTO", "CASH", "REAL_ESTATE", "LIABILITY", "FUND", "OTHER"], description: "Asset Type" },
+            dateAcquired: { type: Type.STRING, description: "Date acquired if visible/known" }
           },
           required: ["symbol", "quantity"]
         }
@@ -85,6 +87,23 @@ const PROPOSE_TRANSACTION_MUTATION: FunctionDeclaration = {
   }
 };
 
+const PROPOSE_BATCH_DELETE: FunctionDeclaration = {
+  name: "propose_batch_delete",
+  description: "Propose to DELETE multiple assets at once based on criteria (e.g. 'delete all crypto', 'delete everything except Tesla').",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      assetIds: {
+        type: Type.ARRAY,
+        description: "List of Asset IDs to delete. Use get_assets to find IDs matching the user's criteria.",
+        items: { type: Type.STRING }
+      },
+      reason: { type: Type.STRING, description: "Reason for deletion (for summary)" }
+    },
+    required: ["assetIds"]
+  }
+};
+
 // --- Service Logic ---
 
 export class AgentService {
@@ -101,15 +120,15 @@ export class AgentService {
     userMessage: string,
     history: ChatMessage[],
     assets: Asset[],
-    transactions: Transaction[], 
+    transactions: Transaction[],
     baseCurrency: Currency,
     language: Language,
     image?: string
   ): Promise<{ text: string, action?: PendingAction }> {
-    
+
     if (!this.ai) {
       return {
-        text: language === 'zh' 
+        text: language === 'zh'
           ? "我需要 **Gemini API Key** 才能作为您的 AI 助手工作。\n\n请前往 **设置** 页面进行配置。"
           : "I need a **Gemini API Key** to function as your AI assistant. \n\nPlease go to **Settings** to configure it."
       };
@@ -120,8 +139,8 @@ export class AgentService {
       const today = now.toISOString().split('T')[0];
       const currentTime = now.toISOString();
 
-      const langInstruction = language === 'zh' 
-        ? "You MUST reply in Chinese (Simplified)." 
+      const langInstruction = language === 'zh'
+        ? "You MUST reply in Chinese (Simplified)."
         : "You MUST reply in English.";
 
       const systemInstruction = `
@@ -134,18 +153,48 @@ export class AgentService {
         **Capabilities:**
         1. **READ**: You can inspect the user's Assets and Transaction History using \`get_assets\` and \`get_transactions\`.
         2. **WRITE**: You can propose changes using \`propose_asset_mutation\` (single) or \`propose_transaction_mutation\` (trades).
-        3. **BULK IMPORT**: If the user provides an IMAGE/SCREENSHOT with multiple assets, use \`propose_bulk_asset_update\` to extract them all at once.
+        3. **BULK IMPORT**: If the user provides an IMAGE/SCREENSHOT, use \`propose_bulk_asset_update\` to extract items.
         
-        **Rules for Image Analysis (Bulk Import):**
-        - If an image is provided, act as an OCR extraction engine.
-        - Extract Symbol, Quantity, Price, and Asset Type.
-        - Infer Currency (CNY for numeric codes starting with 6/0/3, HKD for 5 digits, USD for Alpha codes).
-        - Return the data using \`propose_bulk_asset_update\`.
-        
-        **Important Rules for Asset Creation:**
-        - **Currency Inference**: When adding a new asset, you MUST infer the \`currency\` based on the symbol or name.
-        - If the user says "I bought 10 AAPL" and AAPL is NOT in \`get_assets\`, use \`propose_asset_mutation\` with \`initialQuantity=10\`.
-        - If the user says "I bought 10 AAPL" and AAPL IS in \`get_assets\`, use \`propose_transaction_mutation\` with the existing \`assetId\`.
+        **Universal Asset Logic:**
+        1.  **Scope**: **ANYTHING can be an asset.** You are NOT limited to financial documents.
+            -   **Physical Items**: Cars, watches, electronics, bags, wine, etc.
+            -   **Virtual Items**: Game skins, domain names, etc.
+            -   **Financial**: Stocks, crypto, cash, funds.
+
+        2.  **Symbol/ID Generation**:
+            -   **Financial**: Use the Ticker (e.g., AAPL, BTC).
+            -   **Physical/Other**: Generate a concise, logical ID (e.g., "ROLEX_SUB_DATE", "MACBOOK_PRO_M3", "VINTAGE_WINE_1990").
+
+        3.  **Asset Type Inference**:
+            -   Stocks/Crypto/Funds/Cash -> Use respective types.
+            -   Real Estate -> REAL_ESTATE.
+            -   Everything else (Cars, Watches, Electronics, Art) -> **OTHER**.
+
+        4.  **Quantity Rules**:
+            -   **Default**: If the user mentions buying/adding an item without specifying a quantity (e.g., "I bought a laptop", "Add a roller skate"), you MUST set quantity to 1.
+            -   **Count**: For images, count the items.
+
+        5.  **Price/Value**:
+            -   If a price is visible/stated, use it.
+            -   If NO price is stated, **ESTIMATE** the current market value based on your knowledge.
+
+        6.  **Currency Inference**:
+            -   Infer based on symbol, name, or context (e.g. RMB for Chinese items, USD for global tech).
+
+        **Tool Usage Rules:**
+        -   **Single Item (Text)**: Use \`propose_asset_mutation\` (ADD/UPDATE).
+        -   **Multiple Items (Image/Text)**: Use \`propose_bulk_asset_update\`.
+        -   **Transactions**: If the asset ALREADY exists (check \`get_assets\`), use \`propose_transaction_mutation\` instead of adding it again.
+
+
+        **TOOL CALLING RULES:**
+        - **DO NOT** use \`print()\`, \`console.log()\`, or any other output wrapper.
+        - **DO NOT** wrap the function call in a code block (e.g. \`\`\`python ... \`\`\`).
+        - **DO NOT** use \`default_api.\` or any other object prefix. Just call the function name directly.
+        - **CORRECT**: \`propose_bulk_asset_update(assets = [...])\`
+        - **INCORRECT**: \`print(propose_bulk_asset_update(...))\`
+        - **INCORRECT**: \`default_api.propose_bulk_asset_update(...)\`
+        - Ensure arguments match the JSON schema exactly.
       `;
 
       const geminiHistory: Content[] = history
@@ -172,144 +221,161 @@ export class AgentService {
         history: geminiHistory,
         config: {
           systemInstruction,
-          tools: [{ functionDeclarations: [GET_ASSETS_TOOL, GET_TRANSACTIONS_TOOL, PROPOSE_ASSET_MUTATION, PROPOSE_BULK_ASSET_UPDATE, PROPOSE_TRANSACTION_MUTATION] }],
+          tools: [{ functionDeclarations: [GET_ASSETS_TOOL, GET_TRANSACTIONS_TOOL, PROPOSE_ASSET_MUTATION, PROPOSE_BULK_ASSET_UPDATE, PROPOSE_TRANSACTION_MUTATION, PROPOSE_BATCH_DELETE] }],
         }
       });
 
       const currentParts: Part[] = [];
       if (image) {
-          const base64Data = image.split(',')[1];
-          const mimeType = image.split(';')[0].split(':')[1];
-          currentParts.push({ inlineData: { mimeType, data: base64Data } });
-          currentParts.push({ text: "Please analyze this image and list all asset holdings found. Use the bulk update tool." });
+        const base64Data = image.split(',')[1];
+        const mimeType = image.split(';')[0].split(':')[1];
+        currentParts.push({ inlineData: { mimeType, data: base64Data } });
+        currentParts.push({ text: "Please analyze this image and list all asset holdings found. Use the bulk update tool." });
       }
       const safeUserMessage = userMessage.trim();
       if (safeUserMessage) {
-          currentParts.push({ text: safeUserMessage });
+        currentParts.push({ text: safeUserMessage });
       } else if (currentParts.length === 0) {
-          currentParts.push({ text: "." });
+        currentParts.push({ text: "." });
       }
 
       let response = await chat.sendMessage({ message: currentParts });
-      
+
       const functionCalls = response.functionCalls;
-      
+
       if (functionCalls && functionCalls.length > 0) {
         const call = functionCalls[0];
-        
+
         // --- READ TOOLS ---
         if (call.name === 'get_assets') {
-           const result = { assets: assets.map(a => ({ id: a.id, symbol: a.symbol, name: a.name, qty: a.quantity, price: a.currentPrice })) };
-           response = await chat.sendMessage({ message: [{ functionResponse: { name: call.name, response: result } }] });
+          const result = { assets: assets.map(a => ({ id: a.id, symbol: a.symbol, name: a.name, qty: a.quantity, price: a.currentPrice })) };
+          response = await chat.sendMessage({ message: [{ functionResponse: { name: call.name, response: result } }] });
         }
         else if (call.name === 'get_transactions') {
-           const args = call.args as any;
-           let filtered = [...transactions];
-           if (args.symbol) {
-             const targetAsset = assets.find(a => a.symbol === args.symbol.toUpperCase());
-             if (targetAsset) filtered = filtered.filter(t => t.assetId === targetAsset.id);
-             else filtered = [];
-           }
-           filtered = filtered.sort((a,b) => b.date.localeCompare(a.date)).slice(0, args.limit || 10);
-           
-           const result = { 
-               transactions: filtered.map(t => {
-                   const a = assets.find(as => as.id === t.assetId);
-                   return { id: t.id, date: t.date, type: t.type, symbol: a?.symbol, qty: t.quantityChange, price: t.pricePerUnit };
-               }) 
-           };
-           response = await chat.sendMessage({ message: [{ functionResponse: { name: call.name, response: result } }] });
+          const args = call.args as any;
+          let filtered = [...transactions];
+          if (args.symbol) {
+            const targetAsset = assets.find(a => a.symbol === args.symbol.toUpperCase());
+            if (targetAsset) filtered = filtered.filter(t => t.assetId === targetAsset.id);
+            else filtered = [];
+          }
+          filtered = filtered.sort((a, b) => b.date.localeCompare(a.date)).slice(0, args.limit || 10);
+
+          const result = {
+            transactions: filtered.map(t => {
+              const a = assets.find(as => as.id === t.assetId);
+              return { id: t.id, date: t.date, type: t.type, symbol: a?.symbol, qty: t.quantityChange, price: t.pricePerUnit };
+            })
+          };
+          response = await chat.sendMessage({ message: [{ functionResponse: { name: call.name, response: result } }] });
         }
-        
+
         // --- MUTATION TOOLS ---
         const finalCalls = response.functionCalls;
         if (finalCalls && finalCalls.length > 0) {
-            const finalCall = finalCalls[0];
-            const args = finalCall.args as any;
+          const finalCall = finalCalls[0];
+          const args = finalCall.args as any;
 
-            if (finalCall.name === 'propose_asset_mutation') {
-                const typeMap: Record<string, ActionType> = {
-                    'ADD': 'ADD_ASSET',
-                    'UPDATE': 'UPDATE_ASSET',
-                    'DELETE': 'DELETE_ASSET'
-                };
-                const actionType = typeMap[args.mutationType];
-                
-                let displaySymbol = args.symbol;
-                if (!displaySymbol && args.assetId) {
-                    const existing = assets.find(a => a.id === args.assetId);
-                    if (existing) displaySymbol = existing.symbol;
-                }
-                const summary = `${args.mutationType} Asset: ${displaySymbol || args.assetId || 'Unknown'}`;
+          if (finalCall.name === 'propose_asset_mutation') {
+            const typeMap: Record<string, ActionType> = {
+              'ADD': 'ADD_ASSET',
+              'UPDATE': 'UPDATE_ASSET',
+              'DELETE': 'DELETE_ASSET'
+            };
+            const actionType = typeMap[args.mutationType];
 
-                return {
-                    text: "",
-                    action: {
-                        type: actionType,
-                        targetId: args.assetId,
-                        data: {
-                            symbol: args.symbol,
-                            name: args.name,
-                            quantity: args.initialQuantity,
-                            price: args.price,
-                            type: args.assetType as AssetType,
-                            currency: args.currency
-                        },
-                        summary
-                    }
-                };
+            let displaySymbol = args.symbol;
+            if (!displaySymbol && args.assetId) {
+              const existing = assets.find(a => a.id === args.assetId);
+              if (existing) displaySymbol = existing.symbol;
+            }
+            const summary = `${args.mutationType} Asset: ${displaySymbol || args.assetId || 'Unknown'}`;
+
+            return {
+              text: "",
+              action: {
+                type: actionType,
+                targetId: args.assetId,
+                data: {
+                  symbol: args.symbol,
+                  name: args.name,
+                  quantity: args.initialQuantity,
+                  price: args.price,
+                  type: args.assetType as AssetType,
+                  currency: args.currency,
+                  date: args.dateAcquired
+                },
+                summary
+              }
+            };
+          }
+
+          if (finalCall.name === 'propose_bulk_asset_update') {
+            const count = args.assets?.length || 0;
+            const summary = language === 'zh'
+              ? `从图片识别到 ${count} 个资产持仓`
+              : `Identified ${count} assets from image`;
+
+            return {
+              text: language === 'zh' ? "我从图片中识别到了以下资产，请确认是否导入：" : "I found the following assets in the image. Please confirm to import:",
+              action: {
+                type: 'BULK_ASSET_UPDATE',
+                data: {}, // Dummy data for interface
+                items: args.assets, // Array of items
+                summary
+              }
+            };
+          }
+
+          if (finalCall.name === 'propose_transaction_mutation') {
+            const typeMap: Record<string, ActionType> = {
+              'ADD': 'ADD_TRANSACTION',
+              'UPDATE': 'UPDATE_TRANSACTION',
+              'DELETE': 'DELETE_TRANSACTION'
+            };
+            const actionType = typeMap[args.mutationType];
+
+            let symbolStr = "Unknown";
+            if (args.assetId) {
+              const a = assets.find(as => as.id === args.assetId);
+              if (a) symbolStr = a.symbol;
             }
 
-            if (finalCall.name === 'propose_bulk_asset_update') {
-                const count = args.assets?.length || 0;
-                const summary = language === 'zh' 
-                  ? `从图片识别到 ${count} 个资产持仓` 
-                  : `Identified ${count} assets from image`;
-                
-                return {
-                    text: language === 'zh' ? "我从图片中识别到了以下资产，请确认是否导入：" : "I found the following assets in the image. Please confirm to import:",
-                    action: {
-                        type: 'BULK_ASSET_UPDATE',
-                        data: {}, // Dummy data for interface
-                        items: args.assets, // Array of items
-                        summary
-                    }
-                };
-            }
+            const summary = `${args.mutationType} Transaction: ${args.txType || ''} ${symbolStr}`;
 
-            if (finalCall.name === 'propose_transaction_mutation') {
-                const typeMap: Record<string, ActionType> = {
-                    'ADD': 'ADD_TRANSACTION',
-                    'UPDATE': 'UPDATE_TRANSACTION',
-                    'DELETE': 'DELETE_TRANSACTION'
-                };
-                const actionType = typeMap[args.mutationType];
-                
-                let symbolStr = "Unknown";
-                if (args.assetId) {
-                    const a = assets.find(as => as.id === args.assetId);
-                    if (a) symbolStr = a.symbol;
-                }
+            return {
+              text: "",
+              action: {
+                type: actionType,
+                targetId: args.transactionId,
+                data: {
+                  assetId: args.assetId,
+                  type: args.txType as TransactionType,
+                  quantity: args.quantity,
+                  price: args.price,
+                  date: args.date,
+                  fee: args.fee
+                },
+                summary
+              }
+            };
+          }
+          if (finalCall.name === 'propose_batch_delete') {
+            const count = args.assetIds?.length || 0;
+            const summary = language === 'zh'
+              ? `批量删除 ${count} 个资产: ${args.reason || ''}`
+              : `Batch delete ${count} assets: ${args.reason || ''}`;
 
-                const summary = `${args.mutationType} Transaction: ${args.txType || ''} ${symbolStr}`;
-                
-                return {
-                    text: "",
-                    action: {
-                        type: actionType,
-                        targetId: args.transactionId,
-                        data: {
-                            assetId: args.assetId,
-                            type: args.txType as TransactionType,
-                            quantity: args.quantity,
-                            price: args.price,
-                            date: args.date,
-                            fee: args.fee
-                        },
-                        summary
-                    }
-                };
-            }
+            return {
+              text: language === 'zh' ? `我建议删除以下 ${count} 个资产。请确认：` : `I propose deleting the following ${count} assets. Please confirm:`,
+              action: {
+                type: 'BATCH_DELETE_ASSET',
+                data: {},
+                items: args.assetIds.map((id: string) => ({ id })), // Store IDs in items
+                summary
+              }
+            };
+          }
         }
       }
 
@@ -318,8 +384,8 @@ export class AgentService {
     } catch (error: any) {
       console.error("Agent Error:", error);
       return {
-        text: language === 'zh' 
-          ? "抱歉，AI 暂时无法处理您的请求。" 
+        text: language === 'zh'
+          ? "抱歉，AI 暂时无法处理您的请求。"
           : "Sorry, I encountered an issue processing your request."
       };
     }

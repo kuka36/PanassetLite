@@ -1,10 +1,10 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import {
     AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Line
 } from 'recharts';
 import { Asset, Transaction, TransactionType, AssetType, Currency } from '../types';
 import { convertValue, fetchAssetHistory, HistoricalDataPoint } from '../services/marketData';
+import { calculateHistoryStartDate } from '../utils/historyUtils';
 import { ExchangeRates } from '../types';
 import { Calendar, TrendingUp, TrendingDown, MousePointer2, RefreshCw, AlertTriangle } from 'lucide-react';
 import { usePortfolio } from '../context/PortfolioContext';
@@ -59,7 +59,12 @@ export const NetWorthChart: React.FC<NetWorthChartProps> = ({
 
             setLoadingHistory(true);
             const map: Record<string, HistoricalDataPoint[]> = {};
-            const apiKey = settings.alphaVantageApiKey;
+
+            const config = {
+                provider: settings.marketDataProvider || 'finnhub',
+                alphaVantageKey: settings.alphaVantageApiKey,
+                finnhubKey: settings.finnhubApiKey
+            };
 
             const promises = assets.map(async (asset) => {
                 if (asset.type === AssetType.REAL_ESTATE || asset.type === AssetType.LIABILITY || asset.type === AssetType.OTHER || asset.type === AssetType.CASH) {
@@ -68,7 +73,13 @@ export const NetWorthChart: React.FC<NetWorthChartProps> = ({
 
                 if (!historyMap[asset.id] || historyMap[asset.id].length === 0) {
                     try {
-                        return { id: asset.id, data: await fetchAssetHistory(asset, apiKey) };
+                        // Calculate the appropriate start date using historyUtils
+                        const startDate = calculateHistoryStartDate(
+                            asset.id,
+                            asset.dateAcquired,
+                            transactions
+                        );
+                        return { id: asset.id, data: await fetchAssetHistory(asset, config, startDate) };
                     } catch (e) {
                         return { id: asset.id, data: [] };
                     }
@@ -86,7 +97,7 @@ export const NetWorthChart: React.FC<NetWorthChartProps> = ({
 
         loadData();
         return () => { isMounted = false; };
-    }, [assets.length, settings.alphaVantageApiKey]);
+    }, [assets.length, settings.marketDataProvider, settings.alphaVantageApiKey, settings.finnhubApiKey]);
 
     const formatCurrency = (val: number) => {
         if (isPrivacyMode) return '••••••';
@@ -305,7 +316,11 @@ export const NetWorthChart: React.FC<NetWorthChartProps> = ({
     };
 
     const hasStocks = assets.some(a => a.type === AssetType.STOCK || a.type === AssetType.FUND);
-    const missingKey = hasStocks && !settings.alphaVantageApiKey;
+    const provider = settings.marketDataProvider || 'finnhub';
+    const missingKey = hasStocks && (
+        (provider === 'alphavantage' && !settings.alphaVantageApiKey) ||
+        (provider === 'finnhub' && !settings.finnhubApiKey)
+    );
 
     return (
         <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden h-full flex flex-col">
@@ -326,8 +341,8 @@ export const NetWorthChart: React.FC<NetWorthChartProps> = ({
                             key={r}
                             onClick={() => setRange(r)}
                             className={`px-3 py-1 text-xs font-medium rounded-md transition-all whitespace-nowrap ${range === r
-                                    ? 'bg-white text-blue-600 shadow-sm'
-                                    : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'
+                                ? 'bg-white text-blue-600 shadow-sm'
+                                : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'
                                 }`}
                         >
                             {r}
@@ -339,7 +354,7 @@ export const NetWorthChart: React.FC<NetWorthChartProps> = ({
             {missingKey && !loadingHistory && hasStocks && (
                 <div className="bg-amber-50 px-4 py-2 text-[10px] text-amber-700 flex items-center justify-center gap-2 border-b border-amber-100">
                     <AlertTriangle size={12} />
-                    <span>For accurate stock history, please add Alpha Vantage API Key in Settings.</span>
+                    <span>{t('marketDataKeyMissing')}</span>
                 </div>
             )}
 

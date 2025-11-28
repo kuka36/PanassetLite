@@ -158,10 +158,10 @@ export const getRiskAssessment = async (assets: Asset[], apiKey: string, provide
       
       **PRIVACY RULE**: Do not mention specific monetary amounts in the 'analysis' text. Use percentages or general terms.
 
-      Classify assets:
-      - High Risk: Crypto
-      - Medium Risk: Stocks, Funds
-      - Low/Stable Risk: Cash, Real Estate
+      Classify assets by risk level:
+      - High Risk: Altcoins and volatile cryptocurrencies (excluding stablecoins and BTC/ETH)
+      - Medium Risk: Stocks, Funds, Major Cryptocurrencies (BTC, ETH)
+      - Low/Stable Risk: Cash, Real Estate, Stablecoins (USDT, USDC, DAI, BUSD, etc.)
       - Liability: Debt (increases overall risk profile if high)
       
       Return JSON with a riskScore (1-10) and a brief analysis in ${targetLanguage}.

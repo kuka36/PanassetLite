@@ -47,7 +47,9 @@ const INITIAL_SETTINGS: AppSettings = {
   geminiApiKey: process.env.GEMINI_API_KEY || process.env.API_KEY || '',
   deepSeekApiKey: '',
   aiProvider: 'gemini',
+  marketDataProvider: 'finnhub',
   alphaVantageApiKey: '',
+  finnhubApiKey: '',
   language: getBrowserLanguage(),
 };
 

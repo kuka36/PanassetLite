@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { usePortfolio } from '../context/PortfolioContext';
 import { getRiskAssessment } from '../services/geminiService';
 import { convertValue } from '../services/marketData';
+import { getAssetRiskLevel, RiskLevel } from '../services/riskUtils';
 import { AssetType } from '../types';
 import { PieChart as PieIcon } from 'lucide-react';
 import { NetWorthStructureChart } from './analytics/NetWorthStructureChart';
@@ -131,9 +132,10 @@ export const Analytics: React.FC = () => {
       const rawVal = a.quantity * a.currentPrice;
       const val = convertValue(rawVal, a.currency, settings.baseCurrency, exchangeRates);
 
-      if (a.type === AssetType.CRYPTO) high += val;
-      else if (a.type === AssetType.STOCK) med += val;
-      else if (a.type === AssetType.REAL_ESTATE) low += val;
+      // 使用细粒度的风险评估逻辑
+      const riskLevel = getAssetRiskLevel(a);
+      if (riskLevel === RiskLevel.HIGH) high += val;
+      else if (riskLevel === RiskLevel.MEDIUM) med += val;
       else low += val;
     });
 
