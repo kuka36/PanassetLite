@@ -14,7 +14,7 @@ export const zh = {
     allTime: "历史累计",
     grossValue: "资产总值 (折合)",
     outstandingDebt: "未偿还贷款与债务",
-    netWorthTrend: "净值趋势 (30天)",
+    netWorthTrend: "净值趋势",
     assetAllocation: "资产分布",
     topAsset: "最大持仓",
     hidden: "已隐藏",
@@ -25,6 +25,9 @@ export const zh = {
 
     assetsManagement: "资产管理",
     assetsSubtitle: "管理您的持仓并记录交易。",
+    showTrend: "展示净值趋势图",
+    trendModalSubtitle: "基于当前筛选结果的净值趋势分析",
+    searchAssets: "搜索资产...",
     addNewAsset: "添加新资产",
     portfolioHoldings: "持仓列表",
     noAssets: "暂无资产。点击“添加新资产”开始。",
@@ -66,10 +69,16 @@ export const zh = {
     costBasis: "单位成本 (USD计价)",
     avgCostUnit: "平均成本 / 单位",
     dateAcquired: "持仓开始时间",
+    dateRefreshed: "持仓刷新时间",
     autoFetch: "* 将根据代码自动获取实时价格。",
     autoFetchCash: "* 将自动获取实时汇率 (USD)。",
     saveChanges: "保存更改",
     addToPortfolio: "添加到投资组合",
+    adjustButton: "调整",
+    newCorrectQuantity: "新的正确数量",
+    enterActualQuantity: "输入实际数量",
+    adjustmentHint: "这将创建一个\"余额调整\"交易记录来修正您的持仓。",
+    confirmAdjustment: "确认调整",
 
     type_stock: "股票",
     type_crypto: "加密货币",
@@ -99,6 +108,7 @@ export const zh = {
     tx_BUY: "买入",
     tx_SELL: "卖出",
     tx_DIVIDEND: "股息",
+    tx_BALANCE_ADJUSTMENT: "余额调整",
     deleteTransaction: "删除交易",
     confirmDeleteTransaction: "您确定要删除这条交易记录吗？系统将尝试回滚该交易对您资产余额和成本的影响。",
 
@@ -203,5 +213,6 @@ export const zh = {
     error_network: "网络错误。请检查您的网络连接。",
     error_switch_provider: "考虑在设置中切换到 {provider}。",
     error_unknown: "获取市场数据时发生未知错误。",
+    finnhubFreePlanLimitation: "Finnhub 免费方案不支持历史K线数据。请升级方案或切换至 Alpha Vantage。",
 };
 

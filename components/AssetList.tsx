@@ -8,6 +8,7 @@ import { convertValue } from '../services/marketData';
 import { AssetRow } from './AssetRow';
 
 interface AssetListProps {
+  assets?: Asset[];
   onEdit?: (asset: Asset) => void;
   onTransaction?: (asset: Asset) => void;
 }
@@ -15,8 +16,9 @@ interface AssetListProps {
 type SortKey = 'symbol' | 'price' | 'cost' | 'quantity' | 'value' | 'pnl';
 type SortDirection = 'asc' | 'desc';
 
-export const AssetList: React.FC<AssetListProps> = ({ onEdit, onTransaction }) => {
-  const { assets, deleteAsset, settings, exchangeRates, t } = usePortfolio();
+export const AssetList: React.FC<AssetListProps> = ({ assets: propAssets, onEdit, onTransaction }) => {
+  const { assets: contextAssets, deleteAsset, settings, exchangeRates, t } = usePortfolio();
+  const assets = propAssets || contextAssets;
 
   // Sorting State
   const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: SortDirection }>({

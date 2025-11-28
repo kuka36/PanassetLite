@@ -173,6 +173,7 @@ export class AgentService {
         4.  **Quantity Rules**:
             -   **Default**: If the user mentions buying/adding an item without specifying a quantity (e.g., "I bought a laptop", "Add a roller skate"), you MUST set quantity to 1.
             -   **Count**: For images, count the items.
+            -   **Funds**: If you see a Total Value (Holding Amount) but cannot find the Number of Units (Quantity), set Quantity = Total Value and Price = 1.
 
         5.  **Price/Value**:
             -   If a price is visible/stated, use it.

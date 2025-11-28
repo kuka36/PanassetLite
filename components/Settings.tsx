@@ -67,6 +67,10 @@ export const Settings: React.FC = () => {
         const rows = transactions.map(tx => {
             const asset = assets.find(a => a.id === tx.assetId);
 
+            // Force asset_id and asset_symbol to be treated as text by prefixing with tab character
+            const assetIdAsText = `\t${tx.assetId}`;
+            const assetSymbolAsText = `\t${asset?.symbol || 'UNKNOWN'}`;
+
             return [
                 tx.id,
                 tx.date,
@@ -76,8 +80,8 @@ export const Settings: React.FC = () => {
                 tx.fee,
                 tx.total,
                 tx.note || '',
-                tx.assetId,
-                asset?.symbol || 'UNKNOWN',
+                assetIdAsText,
+                assetSymbolAsText,
                 asset?.name || 'Unknown Asset',
                 asset?.type || AssetType.OTHER,
                 asset?.currency || Currency.USD,
@@ -138,13 +142,24 @@ export const Settings: React.FC = () => {
                         return idx !== -1 ? vals[idx] : '';
                     };
 
-                    const assetId = getVal('asset_id');
+                    // Strip tab character prefix from asset_id if present (for text formatting in Excel)
+                    let assetId = getVal('asset_id');
+                    if (assetId.startsWith('\t')) {
+                        assetId = assetId.substring(1);
+                    }
+
                     if (!assetId) return;
+
+                    // Strip tab character prefix from asset_symbol if present
+                    let assetSymbol = getVal('asset_symbol') || 'UNKNOWN';
+                    if (assetSymbol.startsWith('\t')) {
+                        assetSymbol = assetSymbol.substring(1);
+                    }
 
                     if (!assetsMap.has(assetId)) {
                         assetsMap.set(assetId, {
                             id: assetId,
-                            symbol: getVal('asset_symbol') || 'UNKNOWN',
+                            symbol: assetSymbol,
                             name: getVal('asset_name') || 'Unknown',
                             type: (getVal('asset_type') as AssetType) || AssetType.OTHER,
                             currency: (getVal('asset_currency') as Currency) || Currency.USD,

@@ -440,8 +440,14 @@ export const fetchAssetHistory = async (
       ];
     }
 
-  } catch (e) {
+  } catch (e: any) {
     console.warn(`Failed to fetch history for ${asset.symbol}`, e);
+
+    // Rethrow specific market data errors to let the UI handle them
+    if (e?.category === ErrorCategory.ACCESS_DENIED || e?.category === ErrorCategory.RATE_LIMIT) {
+      throw e;
+    }
+
     return cached?.data || [];
   }
 };

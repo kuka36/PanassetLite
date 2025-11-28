@@ -16,7 +16,7 @@ export const en = {
     allTime: "All time",
     grossValue: "Gross value before debt",
     outstandingDebt: "Outstanding Loans & Debt",
-    netWorthTrend: "Net Worth Trend (30D)",
+    netWorthTrend: "Net Worth Trend",
     assetAllocation: "Asset Allocation",
     topAsset: "Top Asset",
     hidden: "Hidden",
@@ -28,6 +28,9 @@ export const en = {
     // Assets
     assetsManagement: "Assets Management",
     assetsSubtitle: "Manage holdings and record trades.",
+    showTrend: "Show Net Value Trend",
+    trendModalSubtitle: "Trend analysis based on current filtered assets",
+    searchAssets: "Search assets...",
     addNewAsset: "Add New Asset",
     portfolioHoldings: "Portfolio Holdings",
     noAssets: "No assets found. Click \"Add New Asset\" to start.",
@@ -70,10 +73,16 @@ export const en = {
     costBasis: "Avg Cost (USD Basis)",
     avgCostUnit: "Average Cost / Unit",
     dateAcquired: "Start Time",
+    dateRefreshed: "Refresh Time",
     autoFetch: "* Live prices will be fetched automatically based on ticker symbol.",
     autoFetchCash: "* Live exchange rates (USD) will be fetched automatically.",
     saveChanges: "Save Changes",
     addToPortfolio: "Add Asset to Portfolio",
+    adjustButton: "Adjust",
+    newCorrectQuantity: "New Correct Quantity",
+    enterActualQuantity: "Enter actual quantity",
+    adjustmentHint: "This will create a 'Balance Adjustment' transaction to fix your holdings.",
+    confirmAdjustment: "Confirm Adjustment",
 
     // Types
     type_stock: "Stock",
@@ -105,6 +114,7 @@ export const en = {
     tx_BUY: "Buy",
     tx_SELL: "Sell",
     tx_DIVIDEND: "Dividend",
+    tx_BALANCE_ADJUSTMENT: "Balance Adjustment",
     deleteTransaction: "Delete Transaction",
     confirmDeleteTransaction: "Are you sure you want to delete this transaction? This will attempt to reverse the effect on your asset balance and cost.",
 
@@ -212,5 +222,6 @@ export const en = {
     error_network: "Network error. Please check your internet connection.",
     error_switch_provider: "Consider switching to {provider} in Settings.",
     error_unknown: "An unexpected error occurred while fetching market data.",
+    finnhubFreePlanLimitation: "Finnhub Free Plan does not support historical candle data. Please upgrade or switch to Alpha Vantage.",
 };
 

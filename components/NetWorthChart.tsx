@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import {
     AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Line
 } from 'recharts';
-import { Asset, Transaction, TransactionType, AssetType, Currency } from '../types';
+import { Asset, Transaction, TransactionType, AssetType, Currency, ErrorCategory } from '../types';
 import { convertValue, fetchAssetHistory, HistoricalDataPoint } from '../services/marketData';
 import { calculateHistoryStartDate } from '../utils/historyUtils';
 import { ExchangeRates } from '../types';
@@ -16,6 +16,7 @@ interface NetWorthChartProps {
     exchangeRates: ExchangeRates;
     isPrivacyMode: boolean;
     t: (key: string) => string;
+    initialRange?: TimeRange;
 }
 
 type TimeRange = '1W' | '1M' | '3M' | '6M' | '1Y' | 'ALL';
@@ -45,12 +46,14 @@ export const NetWorthChart: React.FC<NetWorthChartProps> = ({
     baseCurrency,
     exchangeRates,
     isPrivacyMode,
-    t
+    t,
+    initialRange = '1M'
 }) => {
     const { settings } = usePortfolio();
-    const [range, setRange] = useState<TimeRange>('1M');
+    const [range, setRange] = useState<TimeRange>(initialRange);
     const [historyMap, setHistoryMap] = useState<Record<string, HistoricalDataPoint[]>>({});
     const [loadingHistory, setLoadingHistory] = useState(false);
+    const [finnhubError, setFinnhubError] = useState(false);
 
     useEffect(() => {
         let isMounted = true;
@@ -80,7 +83,10 @@ export const NetWorthChart: React.FC<NetWorthChartProps> = ({
                             transactions
                         );
                         return { id: asset.id, data: await fetchAssetHistory(asset, config, startDate) };
-                    } catch (e) {
+                    } catch (e: any) {
+                        if (config.provider === 'finnhub' && e?.category === ErrorCategory.ACCESS_DENIED) {
+                            setFinnhubError(true);
+                        }
                         return { id: asset.id, data: [] };
                     }
                 }
@@ -355,6 +361,13 @@ export const NetWorthChart: React.FC<NetWorthChartProps> = ({
                 <div className="bg-amber-50 px-4 py-2 text-[10px] text-amber-700 flex items-center justify-center gap-2 border-b border-amber-100">
                     <AlertTriangle size={12} />
                     <span>{t('marketDataKeyMissing')}</span>
+                </div>
+            )}
+
+            {!missingKey && finnhubError && !loadingHistory && hasStocks && (
+                <div className="bg-amber-50 px-4 py-2 text-[10px] text-amber-700 flex items-center justify-center gap-2 border-b border-amber-100">
+                    <AlertTriangle size={12} />
+                    <span>{t('finnhubFreePlanLimitation')}</span>
                 </div>
             )}
 
