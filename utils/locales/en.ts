@@ -39,6 +39,7 @@ export const en = {
     currentPrice: "Price",
     avgCost: "Cost",
     holdings: "Holdings",
+    recentReturn: "Recent Annualized Return",
     value: "Value",
     statusPnL: "Status / P&L",
     confirmDelete: "Are you sure you want to delete {symbol}? This action cannot be undone.",
@@ -95,6 +96,7 @@ export const en = {
 
     // Transactions
     recordTransaction: "Record Transaction",
+    editTransaction: "Edit Transaction",
     transactionHistory: "Transaction History",
     historySubtitle: "View and filter your investment activity.",
     exportCSV: "Export CSV",
@@ -104,6 +106,7 @@ export const en = {
     fees: "Fees",
     totalEstimate: "Total Estimate",
     total: "Total",
+    autoCalculated: "Auto-calculated based on Quantity, Price, and Fee.",
     type: "Type",
     allAssets: "All Assets",
     allTypes: "All Types",

@@ -11,10 +11,11 @@ interface AssetRowProps {
     onEdit?: (asset: Asset) => void;
     onTransaction?: (asset: Asset) => void;
     onDelete?: (id: string, symbol: string) => void;
+    recentReturn?: number | null;
     t: (key: string) => string;
 }
 
-export const AssetRow: React.FC<AssetRowProps> = ({ asset, settings, exchangeRates, onEdit, onTransaction, onDelete, t }) => {
+export const AssetRow: React.FC<AssetRowProps> = ({ asset, settings, exchangeRates, onEdit, onTransaction, onDelete, recentReturn, t }) => {
     const { updateAssetPrice } = usePortfolio();
     const [updatingId, setUpdatingId] = useState<string | null>(null);
     const [newValuation, setNewValuation] = useState('');
@@ -202,6 +203,17 @@ export const AssetRow: React.FC<AssetRowProps> = ({ asset, settings, exchangeRat
                         : asset.quantity.toLocaleString()
                     }
                 </div>
+            </td>
+
+            {/* Desktop: Recent Return (New Column) */}
+            <td className="hidden md:table-cell py-4 text-right pr-4">
+                {recentReturn !== undefined && recentReturn !== null ? (
+                    <div className={`font-medium ${recentReturn > 0 ? 'text-green-600' : recentReturn < 0 ? 'text-red-500' : 'text-slate-500'}`}>
+                        {recentReturn > 0 ? '+' : ''}{(recentReturn * 100).toFixed(2)}%
+                    </div>
+                ) : (
+                    <span className="text-slate-300">-</span>
+                )}
             </td>
 
             {/* Desktop: Value */}

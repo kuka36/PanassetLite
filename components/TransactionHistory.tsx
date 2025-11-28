@@ -4,7 +4,9 @@ import { usePortfolio } from '../context/PortfolioContext';
 import { Card } from './ui/Card';
 import { ConfirmModal } from './ui/ConfirmModal';
 import { TransactionType, Currency } from '../types';
-import { Filter, ArrowDownLeft, ArrowUpRight, DollarSign, Trash2, ArrowRightLeft, CreditCard, RefreshCw, ChevronDown, ChevronUp, Calendar, Hash } from 'lucide-react';
+import { Filter, ArrowDownLeft, ArrowUpRight, DollarSign, Trash2, ArrowRightLeft, CreditCard, RefreshCw, ChevronDown, ChevronUp, Calendar, Hash, Edit3 } from 'lucide-react';
+import { EditTransactionModal } from './EditTransactionModal';
+import { Combobox } from './ui/Combobox';
 
 export const TransactionHistory: React.FC = () => {
     const { transactions, assets, deleteTransaction, settings, t } = usePortfolio();
@@ -18,6 +20,7 @@ export const TransactionHistory: React.FC = () => {
 
     // Delete Confirmation State
     const [deleteId, setDeleteId] = useState<string | null>(null);
+    const [editingTransaction, setEditingTransaction] = useState<any | null>(null);
 
     // Helper to find asset info (handle deleted assets gracefully)
     const getAssetInfo = (assetId: string) => {
@@ -123,19 +126,15 @@ export const TransactionHistory: React.FC = () => {
                 <div className={`${isFilterOpen ? 'grid' : 'hidden'} md:grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6 pb-6 border-b border-slate-100 animate-fade-in`}>
                     <div>
                         <label className="block text-xs font-medium text-slate-500 uppercase mb-1">{t('asset')}</label>
-                        <div className="relative">
-                            <select
-                                value={selectedAssetId}
-                                onChange={(e) => setSelectedAssetId(e.target.value)}
-                                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none appearance-none"
-                            >
-                                <option value="all">{t('allAssets')}</option>
-                                {availableAssets.map(a => (
-                                    <option key={a.id} value={a.id}>{a.symbol} - {a.name}</option>
-                                ))}
-                            </select>
-                            <Filter className="absolute right-3 top-3 text-slate-400 pointer-events-none" size={16} />
-                        </div>
+                        <Combobox
+                            options={[
+                                { value: 'all', label: t('allAssets') },
+                                ...availableAssets.map(a => ({ value: a.id, label: `${a.symbol} - ${a.name}` }))
+                            ]}
+                            value={selectedAssetId}
+                            onChange={setSelectedAssetId}
+                            placeholder={t('selectAssetPlaceholder')}
+                        />
                     </div>
 
                     <div>
@@ -207,6 +206,14 @@ export const TransactionHistory: React.FC = () => {
                                     className="absolute top-3 right-3 p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
                                 >
                                     <Trash2 size={16} />
+                                </button>
+
+                                {/* Edit Action (Top Right - Left of Delete) */}
+                                <button
+                                    onClick={() => setEditingTransaction(tx)}
+                                    className="absolute top-3 right-10 p-1.5 text-slate-300 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-colors"
+                                >
+                                    <Edit3 size={16} />
                                 </button>
 
                                 <div className="flex justify-between items-start mb-2 pr-8">
@@ -328,6 +335,13 @@ export const TransactionHistory: React.FC = () => {
                                         </td>
                                         <td className="py-4 text-right pr-2">
                                             <button
+                                                onClick={() => setEditingTransaction(tx)}
+                                                className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors mr-1"
+                                                title={t('editTransaction')}
+                                            >
+                                                <Edit3 size={16} />
+                                            </button>
+                                            <button
                                                 onClick={() => setDeleteId(tx.id)}
                                                 className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                                                 title={t('deleteTransaction')}
@@ -358,6 +372,12 @@ export const TransactionHistory: React.FC = () => {
                 message={t('confirmDeleteTransaction')}
                 confirmText={t('delete')}
                 isDanger
+            />
+
+            <EditTransactionModal
+                isOpen={!!editingTransaction}
+                onClose={() => setEditingTransaction(null)}
+                transaction={editingTransaction}
             />
         </div>
     );

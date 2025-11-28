@@ -36,6 +36,7 @@ export const zh = {
     currentPrice: "现价",
     avgCost: "成本",
     holdings: "持仓",
+    recentReturn: "最近年化收益率",
     value: "市值",
     statusPnL: "状态 / 盈亏",
     confirmDelete: "您确定要删除 {symbol} 吗？此操作无法撤销。",
@@ -89,6 +90,7 @@ export const zh = {
     type_other: "自定义资产",
 
     recordTransaction: "记录交易",
+    editTransaction: "编辑交易",
     transactionHistory: "交易历史",
     historySubtitle: "查看与筛选您的投资活动。",
     exportCSV: "导出 CSV",
@@ -98,6 +100,7 @@ export const zh = {
     fees: "手续费",
     totalEstimate: "预估总额",
     total: "总额",
+    autoCalculated: "根据数量、单价和手续费自动计算。",
     type: "类型",
     allAssets: "所有资产",
     allTypes: "所有类型",

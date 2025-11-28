@@ -13,11 +13,11 @@ interface AssetListProps {
   onTransaction?: (asset: Asset) => void;
 }
 
-type SortKey = 'symbol' | 'price' | 'cost' | 'quantity' | 'value' | 'pnl';
+type SortKey = 'symbol' | 'price' | 'cost' | 'quantity' | 'value' | 'pnl' | 'recentReturn';
 type SortDirection = 'asc' | 'desc';
 
 export const AssetList: React.FC<AssetListProps> = ({ assets: propAssets, onEdit, onTransaction }) => {
-  const { assets: contextAssets, deleteAsset, settings, exchangeRates, t } = usePortfolio();
+  const { assets: contextAssets, transactions, deleteAsset, settings, exchangeRates, t } = usePortfolio();
   const assets = propAssets || contextAssets;
 
   // Sorting State
@@ -28,6 +28,36 @@ export const AssetList: React.FC<AssetListProps> = ({ assets: propAssets, onEdit
 
   // Delete Confirmation State
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; symbol: string } | null>(null);
+
+  // Helper to calculate recent annualized return based on last 2 transactions' quantity
+  const getRecentReturn = (assetId: string) => {
+    const assetTxs = transactions
+      .filter(t => t.assetId === assetId)
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    if (assetTxs.length < 2) return null;
+
+    const t1 = assetTxs[0]; // Latest transaction
+    const t2 = assetTxs[1]; // Second latest transaction
+
+    // Find the current asset to get current holdings
+    const currentAsset = assets.find(a => a.id === assetId);
+    if (!currentAsset || currentAsset.quantity === 0) return null;
+
+    // Calculate quantity difference between the two transactions
+    const quantityDiff = t1.quantityChange;
+
+    // Calculate time difference in days
+    const timeDiff = Math.abs(new Date(t1.date).getTime() - new Date(t2.date).getTime());
+    const daysDiff = timeDiff / (1000 * 60 * 60 * 24);
+
+    if (daysDiff === 0) return 0;
+
+    // Calculate annualized return: (quantity_diff / current_holdings) / days_diff * 365
+    const annualizedReturn = (quantityDiff / currentAsset.quantity) / daysDiff * 365;
+
+    return annualizedReturn;
+  };
 
   // Sort Logic
   const sortedAssets = useMemo(() => {
@@ -67,6 +97,10 @@ export const AssetList: React.FC<AssetListProps> = ({ assets: propAssets, onEdit
           aValue = getPnl(a);
           bValue = getPnl(b);
           break;
+        case 'recentReturn':
+          aValue = getRecentReturn(a.id) || -Infinity; // Push nulls to bottom
+          bValue = getRecentReturn(b.id) || -Infinity;
+          break;
         default:
           return 0;
       }
@@ -76,7 +110,7 @@ export const AssetList: React.FC<AssetListProps> = ({ assets: propAssets, onEdit
       return 0;
     });
     return sorted;
-  }, [assets, sortConfig, settings.baseCurrency, exchangeRates]);
+  }, [assets, transactions, sortConfig, settings.baseCurrency, exchangeRates]);
 
   const handleSort = (key: SortKey) => {
     setSortConfig(current => ({
@@ -140,6 +174,7 @@ export const AssetList: React.FC<AssetListProps> = ({ assets: propAssets, onEdit
                 <SortableHeader label={t('currentPrice')} sortKey="price" className="hidden md:table-cell" />
                 <SortableHeader label={t('avgCost')} sortKey="cost" className="hidden md:table-cell" />
                 <SortableHeader label={t('holdings')} sortKey="quantity" className="hidden md:table-cell" />
+                <SortableHeader label={t('recentReturn')} sortKey="recentReturn" alignRight className="hidden md:table-cell" />
                 <SortableHeader label={t('value')} sortKey="value" alignRight className="hidden md:table-cell" />
 
                 {/* P&L (Always Visible) */}
@@ -159,12 +194,13 @@ export const AssetList: React.FC<AssetListProps> = ({ assets: propAssets, onEdit
                   onEdit={onEdit}
                   onTransaction={onTransaction}
                   onDelete={(id, symbol) => setDeleteTarget({ id, symbol })}
+                  recentReturn={getRecentReturn(asset.id)}
                   t={t}
                 />
               ))}
               {sortedAssets.length === 0 && (
                 <tr>
-                  <td colSpan={onEdit ? 7 : 6} className="text-center py-8 text-slate-400 italic">
+                  <td colSpan={onEdit ? 8 : 7} className="text-center py-8 text-slate-400 italic">
                     {t('noAssets')}
                   </td>
                 </tr>
