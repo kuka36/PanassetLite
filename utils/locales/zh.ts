@@ -92,6 +92,7 @@ export const zh = {
     recordTransaction: "记录交易",
     editTransaction: "编辑交易",
     transactionHistory: "交易历史",
+    relatedTransactions: "相关交易",
     historySubtitle: "查看与筛选您的投资活动。",
     exportCSV: "导出 CSV",
     action: "操作",

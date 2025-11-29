@@ -6,6 +6,7 @@ import { ArrowUp, ArrowDown } from 'lucide-react';
 import { Asset, AssetType } from '../types';
 import { convertValue } from '../services/marketData';
 import { AssetRow } from './AssetRow';
+import { AssetTransactionTable } from './AssetTransactionTable';
 
 interface AssetListProps {
   assets?: Asset[];
@@ -209,6 +210,12 @@ export const AssetList: React.FC<AssetListProps> = ({ assets: propAssets, onEdit
           </table>
         </div>
       </Card>
+
+      {/* Transaction History Table */}
+      <AssetTransactionTable
+        assetIds={sortedAssets.map(asset => asset.id)}
+        title={t('relatedTransactions')}
+      />
 
       <ConfirmModal
         isOpen={!!deleteTarget}

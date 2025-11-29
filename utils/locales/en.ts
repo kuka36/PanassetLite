@@ -98,6 +98,7 @@ export const en = {
     recordTransaction: "Record Transaction",
     editTransaction: "Edit Transaction",
     transactionHistory: "Transaction History",
+    relatedTransactions: "Related Transactions",
     historySubtitle: "View and filter your investment activity.",
     exportCSV: "Export CSV",
     action: "Action",
