@@ -47,6 +47,7 @@ export const zh = {
     manual: "手动",
     liveData: "价格通过 API 自动获取",
     manualValuation: "手动设置的估值",
+    manualPrice: "手动定价",
     lastUpdated: "最后更新",
     dataStale: "数据更新失败或已过期 >30分",
     offline: "离线",

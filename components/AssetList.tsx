@@ -143,45 +143,18 @@ export const AssetList: React.FC<AssetListProps> = ({ assets: propAssets, onEdit
   return (
     <>
       <Card title={t('portfolioHoldings')} className="animate-slide-up">
-        <div className="overflow-x-auto">
+        {/* Desktop Table View */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="text-xs text-slate-400 uppercase border-b border-slate-100">
-                {/* 1. Asset (Always Visible) */}
                 <SortableHeader label={t('asset')} sortKey="symbol" />
-
-                {/* 2. Mobile: Holdings & Value (Combined) - Hidden on Desktop */}
-                <th
-                  className="md:hidden pb-3 text-right pr-2 font-medium cursor-pointer"
-                  onClick={() => handleSort('value')}
-                >
-                  <div className="flex flex-col items-end gap-0.5">
-                    <span className="flex items-center gap-1 text-slate-500">{t('value')} {sortConfig.key === 'value' && renderSortIcon('value')}</span>
-                    {/* Removed Avg Cost label for cleaner look */}
-                  </div>
-                </th>
-
-                {/* 3. Mobile: Price & Cost (Combined) - Hidden on Desktop */}
-                <th
-                  className="md:hidden pb-3 text-right pr-2 font-medium cursor-pointer"
-                  onClick={() => handleSort('price')}
-                >
-                  <div className="flex flex-col items-end gap-0.5">
-                    <span className="flex items-center gap-1 text-slate-500">{t('currentPrice')} {sortConfig.key === 'price' && renderSortIcon('price')}</span>
-                  </div>
-                </th>
-
-                {/* Desktop Columns (Hidden on Mobile) */}
-                <SortableHeader label={t('currentPrice')} sortKey="price" className="hidden md:table-cell" />
-                <SortableHeader label={t('avgCost')} sortKey="cost" className="hidden md:table-cell" />
-                <SortableHeader label={t('holdings')} sortKey="quantity" className="hidden md:table-cell" />
-                <SortableHeader label={t('recentReturn')} sortKey="recentReturn" alignRight className="hidden md:table-cell" />
-                <SortableHeader label={t('value')} sortKey="value" alignRight className="hidden md:table-cell" />
-
-                {/* P&L (Always Visible) */}
+                <SortableHeader label={t('currentPrice')} sortKey="price" />
+                <SortableHeader label={t('avgCost')} sortKey="cost" />
+                <SortableHeader label={t('holdings')} sortKey="quantity" />
+                <SortableHeader label={t('recentReturn')} sortKey="recentReturn" alignRight />
+                <SortableHeader label={t('value')} sortKey="value" alignRight />
                 <SortableHeader label={t('statusPnL')} sortKey="pnl" alignRight />
-
-                {/* Actions */}
                 {(onEdit || onTransaction) && <th className="pb-3 font-medium text-right pr-2">{t('actions')}</th>}
               </tr>
             </thead>
@@ -208,6 +181,28 @@ export const AssetList: React.FC<AssetListProps> = ({ assets: propAssets, onEdit
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile Card View */}
+        <div className="md:hidden">
+          {sortedAssets.map((asset) => (
+            <AssetRow
+              key={asset.id}
+              asset={asset}
+              settings={settings}
+              exchangeRates={exchangeRates}
+              onEdit={onEdit}
+              onTransaction={onTransaction}
+              onDelete={(id, symbol) => setDeleteTarget({ id, symbol })}
+              recentReturn={getRecentReturn(asset.id)}
+              t={t}
+            />
+          ))}
+          {sortedAssets.length === 0 && (
+            <div className="text-center py-8 text-slate-400 italic">
+              {t('noAssets')}
+            </div>
+          )}
         </div>
       </Card>
 

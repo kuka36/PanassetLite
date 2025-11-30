@@ -87,53 +87,179 @@ export const AssetRow: React.FC<AssetRowProps> = ({ asset, settings, exchangeRat
     const isLive = isLiveMarketData(asset.type);
     const isStale = isAssetStale(asset);
 
-    return (
-        <tr className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors group">
+    // Mobile Card Layout
+    const MobileCard = () => (
+        <div className="md:hidden p-4 border-b border-slate-100 hover:bg-slate-50/50 transition-colors">
+            {/* Header: Asset Info */}
+            <div className="flex items-start justify-between mb-3">
+                <div className="flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm shrink-0 ${getTypeColor(asset.type)}`}>
+                        {asset.symbol.substring(0, 1)}
+                    </div>
+                    <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                            <div className="font-bold text-slate-800 text-base">{asset.symbol}</div>
+                            <span className="text-[10px] px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded">{asset.currency}</span>
+                        </div>
+                        <div className="text-xs text-slate-400 truncate max-w-[180px]">{asset.name}</div>
+                    </div>
+                </div>
+                {/* Live/Manual Indicator */}
+                <div className="flex items-center gap-1 shrink-0">
+                    {isLive ? (
+                        isStale ? (
+                            <span className="text-[10px] text-amber-600 flex items-center gap-1 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-100">
+                                <WifiOff size={10} />
+                            </span>
+                        ) : (
+                            <span className="text-[10px] text-green-600 flex items-center gap-1 bg-green-50 px-1.5 py-0.5 rounded border border-green-100">
+                                <Wifi size={10} />
+                            </span>
+                        )
+                    ) : (
+                        <span className="text-[10px] text-slate-400 flex items-center gap-1 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
+                            <PenTool size={10} />
+                        </span>
+                    )}
+                </div>
+            </div>
 
+            {/* Metrics Grid: 2 columns */}
+            <div className="grid grid-cols-2 gap-3 mb-3">
+                {/* Current Price */}
+                <div>
+                    <div className="text-[10px] text-slate-400 uppercase mb-1">{t('currentPrice')}</div>
+                    <div className="font-semibold text-slate-700">
+                        {symbol}{asset.currentPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
+                    </div>
+                </div>
+
+                {/* Average Cost */}
+                <div>
+                    <div className="text-[10px] text-slate-400 uppercase mb-1">{t('avgCost')}</div>
+                    <div className="font-semibold text-slate-700">
+                        {settings.isPrivacyMode
+                            ? '••••••'
+                            : `${symbol}${asset.avgCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}`
+                        }
+                    </div>
+                </div>
+
+                {/* Holdings */}
+                <div>
+                    <div className="text-[10px] text-slate-400 uppercase mb-1">{t('holdings')}</div>
+                    <div className="font-semibold text-slate-700">
+                        {settings.isPrivacyMode
+                            ? '••••••'
+                            : asset.quantity.toLocaleString(undefined, { maximumFractionDigits: 4 })
+                        }
+                    </div>
+                </div>
+
+                {/* Current Value */}
+                <div>
+                    <div className="text-[10px] text-slate-400 uppercase mb-1">{t('value')}</div>
+                    <div className={`font-bold ${isLiability ? 'text-red-700' : 'text-slate-800'}`}>
+                        {settings.isPrivacyMode
+                            ? '••••••'
+                            : `${isLiability ? '-' : ''}${baseCurrencySymbol}${baseValue.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 1 })}`
+                        }
+                    </div>
+                </div>
+
+                {/* Recent Return */}
+                <div>
+                    <div className="text-[10px] text-slate-400 uppercase mb-1">{t('recentReturn')}</div>
+                    {recentReturn !== undefined && recentReturn !== null ? (
+                        <div className={`font-semibold ${recentReturn > 0 ? 'text-green-600' : recentReturn < 0 ? 'text-red-500' : 'text-slate-500'}`}>
+                            {recentReturn > 0 ? '+' : ''}{(recentReturn * 100).toFixed(2)}%
+                        </div>
+                    ) : (
+                        <span className="text-slate-300 font-medium">-</span>
+                    )}
+                </div>
+
+                {/* P&L */}
+                <div>
+                    <div className="text-[10px] text-slate-400 uppercase mb-1">{t('statusPnL')}</div>
+                    {isManual && !pnl ? (
+                        <div className="text-xs font-medium text-slate-500">
+                            {formatLastUpdated(asset.lastUpdated)}
+                        </div>
+                    ) : (
+                        settings.isPrivacyMode ? (
+                            <span className="text-slate-400 font-bold tracking-widest">••••••</span>
+                        ) : (
+                            <div>
+                                <div className={`flex items-center gap-1 font-semibold ${pnl >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                                    {pnl >= 0 ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
+                                    {Math.abs(pnlPercent).toFixed(2)}%
+                                </div>
+                                <div className={`text-xs ${pnl >= 0 ? 'text-green-600/70' : 'text-red-500/70'}`}>
+                                    {pnl >= 0 ? '+' : '-'}{symbol}{Math.abs(pnl).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                                </div>
+                            </div>
+                        )
+                    )}
+                </div>
+            </div>
+
+            {/* Actions */}
+            {(onEdit || onTransaction) && (
+                <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                    {onTransaction && (
+                        <button
+                            onClick={() => onTransaction(asset)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                        >
+                            <ArrowRightLeft size={16} />
+                            <span>{t('recordTransaction')}</span>
+                        </button>
+                    )}
+                    {onEdit && (
+                        <button
+                            onClick={() => onEdit(asset)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                        >
+                            <Pencil size={16} />
+                            <span>{t('editDetails')}</span>
+                        </button>
+                    )}
+                    {onDelete && (
+                        <button
+                            onClick={() => onDelete(asset.id, asset.symbol)}
+                            className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            title={t('delete')}
+                        >
+                            <Trash2 size={16} />
+                        </button>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+
+    // Desktop Table Row Layout
+    const DesktopRow = () => (
+        <tr className="hidden md:table-row border-b border-slate-50 hover:bg-slate-50/50 transition-colors group">
             {/* 1. Asset Info */}
             <td className="py-4 pl-2">
-                <div className="flex items-center gap-2 md:gap-3">
-                    <div className={`w-8 h-8 md:w-10 md:h-10 rounded-full flex items-center justify-center font-bold text-xs shrink-0 ${getTypeColor(asset.type)}`}>
+                <div className="flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-xs shrink-0 ${getTypeColor(asset.type)}`}>
                         {asset.symbol.substring(0, 1)}
                     </div>
                     <div className="min-w-0">
                         <div className="flex items-center gap-1">
-                            <div className="font-semibold text-slate-800 truncate max-w-[80px] md:max-w-none">{asset.symbol}</div>
-                            <span className="hidden md:inline-block text-[10px] px-1 py-0.5 bg-slate-100 text-slate-500 rounded">{asset.currency}</span>
+                            <div className="font-semibold text-slate-800">{asset.symbol}</div>
+                            <span className="text-[10px] px-1 py-0.5 bg-slate-100 text-slate-500 rounded">{asset.currency}</span>
                         </div>
-                        <div className="text-xs text-slate-400 truncate max-w-[90px] md:max-w-[120px]">{asset.name}</div>
+                        <div className="text-xs text-slate-400 truncate max-w-[120px]">{asset.name}</div>
                     </div>
                 </div>
             </td>
 
-            {/* 2. Mobile: Holdings & Value */}
-            <td className="md:hidden py-4 text-right pr-2">
-                <div className={`font-bold text-sm ${isLiability ? 'text-red-700' : 'text-slate-800'}`}>
-                    {settings.isPrivacyMode
-                        ? '••••••'
-                        : `${isLiability ? '-' : ''}${baseCurrencySymbol}${baseValue.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 1 })}`
-                    }
-                </div>
-                <div className="text-xs text-slate-500 mt-0.5">
-                    {settings.isPrivacyMode
-                        ? '••••••'
-                        : asset.quantity.toLocaleString(undefined, { maximumFractionDigits: 4 })
-                    }
-                </div>
-            </td>
-
-            {/* 3. Mobile: Price & Cost */}
-            <td className="md:hidden py-4 text-right pr-2">
-                <div className="font-medium text-sm text-slate-700">
-                    {symbol}{asset.currentPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </div>
-                <div className="text-xs text-slate-400 mt-0.5">
-                    {settings.isPrivacyMode ? '••••••' : `${symbol}${asset.avgCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-                </div>
-            </td>
-
             {/* Desktop: Price */}
-            <td className="hidden md:table-cell py-4">
+            <td className="py-4">
                 {isUpdating ? (
                     <div className="flex items-center gap-1">
                         <span className="text-slate-400 text-xs">{symbol}</span>
@@ -186,7 +312,7 @@ export const AssetRow: React.FC<AssetRowProps> = ({ asset, settings, exchangeRat
             </td>
 
             {/* Desktop: Cost */}
-            <td className="hidden md:table-cell py-4">
+            <td className="py-4">
                 <div className="font-medium text-slate-700">
                     {settings.isPrivacyMode
                         ? '••••••'
@@ -196,7 +322,7 @@ export const AssetRow: React.FC<AssetRowProps> = ({ asset, settings, exchangeRat
             </td>
 
             {/* Desktop: Quantity */}
-            <td className="hidden md:table-cell py-4">
+            <td className="py-4">
                 <div className="font-medium text-slate-700">
                     {settings.isPrivacyMode
                         ? '••••••'
@@ -205,8 +331,8 @@ export const AssetRow: React.FC<AssetRowProps> = ({ asset, settings, exchangeRat
                 </div>
             </td>
 
-            {/* Desktop: Recent Return (New Column) */}
-            <td className="hidden md:table-cell py-4 text-right pr-4">
+            {/* Desktop: Recent Return */}
+            <td className="py-4 text-right pr-4">
                 {recentReturn !== undefined && recentReturn !== null ? (
                     <div className={`font-medium ${recentReturn > 0 ? 'text-green-600' : recentReturn < 0 ? 'text-red-500' : 'text-slate-500'}`}>
                         {recentReturn > 0 ? '+' : ''}{(recentReturn * 100).toFixed(2)}%
@@ -217,19 +343,19 @@ export const AssetRow: React.FC<AssetRowProps> = ({ asset, settings, exchangeRat
             </td>
 
             {/* Desktop: Value */}
-            <td className={`hidden md:table-cell py-4 text-right pr-2 font-bold ${isLiability ? 'text-red-700' : 'text-slate-800'}`}>
+            <td className={`py-4 text-right pr-2 font-bold ${isLiability ? 'text-red-700' : 'text-slate-800'}`}>
                 {settings.isPrivacyMode
                     ? '••••••'
                     : `${isLiability ? '-' : ''}${baseCurrencySymbol}${baseValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
                 }
             </td>
 
-            {/* P&L - Always Visible */}
+            {/* P&L */}
             <td className="py-4 text-right pr-2">
                 {isManual && !pnl ? (
                     <div className="text-right">
                         <div className="text-xs font-medium text-slate-500 bg-slate-100 inline-block px-2 py-0.5 rounded-md">
-                            {t('lastUpdated')}<span className="hidden md:inline">: {formatLastUpdated(asset.lastUpdated)}</span>
+                            {t('lastUpdated')}: {formatLastUpdated(asset.lastUpdated)}
                         </div>
                     </div>
                 ) : (
@@ -251,10 +377,10 @@ export const AssetRow: React.FC<AssetRowProps> = ({ asset, settings, exchangeRat
                 )}
             </td>
 
-            {/* Actions - Always Visible but potentially tight on mobile */}
+            {/* Actions */}
             {(onEdit || onTransaction) && (
                 <td className="py-4 text-right pr-2">
-                    <div className="flex items-center justify-end gap-1 md:gap-2">
+                    <div className="flex items-center justify-end gap-2">
                         {onTransaction && (
                             <button
                                 onClick={() => onTransaction(asset)}
@@ -286,5 +412,13 @@ export const AssetRow: React.FC<AssetRowProps> = ({ asset, settings, exchangeRat
                 </td>
             )}
         </tr>
+    );
+
+    // Render mobile card or desktop row based on screen size
+    return (
+        <>
+            <MobileCard />
+            <DesktopRow />
+        </>
     );
 };

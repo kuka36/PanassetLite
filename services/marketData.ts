@@ -11,6 +11,7 @@ const CACHE_RATES_KEY = 'investflow_rates';
 const CACHE_CRYPTO_KEY = 'investflow_crypto_prices';
 const CACHE_STOCKS_KEY = 'investflow_stock_prices';
 const CACHE_HISTORY_KEY = 'investflow_asset_history';
+const CACHE_FAILURES_KEY = 'investflow_api_failures';
 
 // Cache Duration (ms)
 // OPTIMIZATION: Increased TTL to reduce API calls
@@ -18,6 +19,7 @@ const RATES_TTL = 24 * 3600 * 1000;
 const CRYPTO_TTL = 10 * 60 * 1000;
 const STOCK_TTL = 45 * 60 * 1000; // 45 Minutes (Strict caching for Alpha Vantage)
 const HISTORY_TTL = 24 * 3600 * 1000; // 24 Hours (Daily history doesn't change often)
+const FAILURE_TTL = 30 * 60 * 1000; // 30 Minutes (Don't retry failed assets too soon)
 
 // Simple Crypto Mapping
 const CRYPTO_MAP: Record<string, string> = {
@@ -33,6 +35,12 @@ const CRYPTO_MAP: Record<string, string> = {
   'MATIC': 'matic-network',
   'LINK': 'chainlink'
 };
+
+export const KNOWN_MANUAL_SYMBOLS = [
+  'ARBITRAGE_NEW_USER',
+  'CSI300ETF_C',
+  'ZHOUZHOUBAO_FUND'
+];
 
 export interface StockPriceResult {
   price: number;
@@ -51,6 +59,116 @@ export const detectCurrencyFromSymbol = (symbol: string): Currency => {
   if (upper.endsWith('.HK')) return Currency.HKD;
   return Currency.USD;
 };
+
+// --- Throttler Implementation ---
+
+class APIThrottler {
+  private queue: Array<() => Promise<any>> = [];
+  private processing = false;
+  private lastRequestTime = 0;
+  private minInterval: number;
+  private timestamps: number[] = []; // For window-based throttling (AV)
+  private windowSize: number;
+  private maxRequestsInWindow: number;
+
+  constructor(minInterval: number, maxRequestsInWindow: number = Infinity, windowSize: number = 0) {
+    this.minInterval = minInterval;
+    this.maxRequestsInWindow = maxRequestsInWindow;
+    this.windowSize = windowSize;
+  }
+
+  async add<T>(fn: () => Promise<T>): Promise<T> {
+    return new Promise((resolve, reject) => {
+      this.queue.push(async () => {
+        try {
+          const result = await fn();
+          resolve(result);
+        } catch (e) {
+          reject(e);
+        }
+      });
+      this.process();
+    });
+  }
+
+  private async process() {
+    if (this.processing) return;
+    this.processing = true;
+
+    while (this.queue.length > 0) {
+      const now = Date.now();
+      let waitTime = 0;
+
+      // 1. Check Min Interval
+      const timeSinceLast = now - this.lastRequestTime;
+      if (timeSinceLast < this.minInterval) {
+        waitTime = Math.max(waitTime, this.minInterval - timeSinceLast);
+      }
+
+      // 2. Check Window (for Alpha Vantage)
+      if (this.maxRequestsInWindow < Infinity && this.timestamps.length >= this.maxRequestsInWindow) {
+        // Clean up old timestamps
+        this.timestamps = this.timestamps.filter(t => now - t < this.windowSize);
+
+        if (this.timestamps.length >= this.maxRequestsInWindow) {
+          // Still full, wait until the oldest one expires
+          const oldest = this.timestamps[0];
+          const timeUntilExpiry = this.windowSize - (now - oldest);
+          waitTime = Math.max(waitTime, timeUntilExpiry + 100); // +100ms buffer
+        }
+      }
+
+      if (waitTime > 0) {
+        await new Promise(r => setTimeout(r, waitTime));
+        continue; // Re-evaluate time after waiting
+      }
+
+      // Execute
+      const task = this.queue.shift();
+      if (task) {
+        this.lastRequestTime = Date.now();
+        this.timestamps.push(this.lastRequestTime);
+        await task();
+      }
+    }
+
+    this.processing = false;
+  }
+}
+
+// Throttlers
+// Alpha Vantage: 5 requests per minute. We set window to 65s to be safe.
+const avThrottler = new APIThrottler(2000, 5, 65000);
+// CoinGecko: 1 request per 1.5s to avoid 429
+const cgThrottler = new APIThrottler(1500);
+// Finnhub: Generous limit (e.g. 3/sec)
+const finnhubThrottler = new APIThrottler(300);
+
+// --- Failure Cache Helpers ---
+
+interface FailureRecord {
+  timestamp: number;
+  reason: string;
+}
+
+const checkFailureCache = (assetId: string): FailureRecord | null => {
+  const cache = StorageService.getCache<Record<string, FailureRecord>>(CACHE_FAILURES_KEY);
+  if (!cache || !cache.data) return null;
+
+  const record = cache.data[assetId];
+  if (record && (Date.now() - record.timestamp < FAILURE_TTL)) {
+    return record;
+  }
+  return null;
+};
+
+const saveFailureCache = (assetId: string, reason: string) => {
+  const cache = StorageService.getCache<Record<string, FailureRecord>>(CACHE_FAILURES_KEY);
+  const data = cache?.data || {};
+  data[assetId] = { timestamp: Date.now(), reason };
+  StorageService.saveCache(CACHE_FAILURES_KEY, data);
+};
+
 
 // --- 1. Exchange Rates ---
 export const fetchExchangeRates = async (): Promise<ExchangeRates> => {
@@ -73,7 +191,11 @@ export const fetchExchangeRates = async (): Promise<ExchangeRates> => {
 
 // --- 2. Crypto Prices ---
 export const fetchCryptoPrices = async (assets: AssetMetadata[]): Promise<Record<string, number>> => {
-  const cryptoAssets = assets.filter(a => a.type === AssetType.CRYPTO);
+  const cryptoAssets = assets.filter(a =>
+    a.type === AssetType.CRYPTO &&
+    !a.isManualPrice &&
+    !KNOWN_MANUAL_SYMBOLS.includes(a.symbol)
+  );
   if (cryptoAssets.length === 0) return {};
 
   const cached = StorageService.getCache<Record<string, number>>(CACHE_CRYPTO_KEY);
@@ -121,7 +243,11 @@ export interface MarketDataConfig {
 }
 
 export const fetchStockPrices = async (assets: AssetMetadata[], config: MarketDataConfig): Promise<Record<string, StockPriceResult>> => {
-  const stockAssets = assets.filter(a => a.type === AssetType.STOCK || a.type === AssetType.FUND);
+  const stockAssets = assets.filter(a =>
+    (a.type === AssetType.STOCK || a.type === AssetType.FUND) &&
+    !a.isManualPrice &&
+    !KNOWN_MANUAL_SYMBOLS.includes(a.symbol)
+  );
   if (stockAssets.length === 0) return {};
 
   const cached = StorageService.getCache<Record<string, StockPriceResult>>(CACHE_STOCKS_KEY);
@@ -286,6 +412,17 @@ export const fetchAssetHistory = async (
 
   const daysSinceStart = (Date.now() - historyStartDate.getTime()) / (1000 * 3600 * 24);
 
+  // 0. Check Manual Assets
+  if (asset.isManualPrice || KNOWN_MANUAL_SYMBOLS.includes(asset.symbol)) {
+    const today = new Date().toISOString().split('T')[0];
+    const lastYear = new Date();
+    lastYear.setFullYear(lastYear.getFullYear() - 1);
+    return [
+      { date: lastYear.toISOString().split('T')[0], price: asset.currentPrice },
+      { date: today, price: asset.currentPrice }
+    ];
+  }
+
   // 1. Check Cache
   const cacheKey = `${CACHE_HISTORY_KEY}_${asset.id}`;
   const cached = StorageService.getCache<HistoricalDataPoint[]>(cacheKey);
@@ -302,6 +439,13 @@ export const fetchAssetHistory = async (
     return cached.data;
   }
 
+  // 2. Check Failure Cache
+  const failure = checkFailureCache(asset.id);
+  if (failure) {
+    console.log(`[MarketData] Skipping fetch for ${asset.symbol} due to recent failure: ${failure.reason}`);
+    return cached?.data || [];
+  }
+
   try {
     let history: HistoricalDataPoint[] = [];
 
@@ -310,16 +454,23 @@ export const fetchAssetHistory = async (
       // Use 'max' if older than 365 days, otherwise 365 is sufficient (and lighter)
       const daysParam = daysSinceStart > 365 ? 'max' : '365';
       const id = CRYPTO_MAP[asset.symbol.toUpperCase()] || asset.name.toLowerCase().replace(/\s+/g, '-');
-      const res = await fetch(`${COINGECKO_HISTORY_API}/${id}/market_chart?vs_currency=usd&days=${daysParam}&interval=daily`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.prices) {
-          history = data.prices.map((item: any) => ({
-            date: new Date(item[0]).toISOString().split('T')[0],
-            price: item[1]
-          }));
+
+      await cgThrottler.add(async () => {
+        const res = await fetch(`${COINGECKO_HISTORY_API}/${id}/market_chart?vs_currency=usd&days=${daysParam}&interval=daily`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.prices) {
+            history = data.prices.map((item: any) => ({
+              date: new Date(item[0]).toISOString().split('T')[0],
+              price: item[1]
+            }));
+          }
+        } else {
+          if (res.status === 404) saveFailureCache(asset.id, 'Not Found');
+          if (res.status === 429) throw { category: ErrorCategory.RATE_LIMIT, provider: 'coingecko' };
         }
-      }
+      });
+
     } else if ((asset.type === AssetType.STOCK || asset.type === AssetType.FUND)) {
 
       let querySymbol = asset.symbol;
@@ -331,69 +482,76 @@ export const fetchAssetHistory = async (
         const from = Math.floor(historyStartDate.getTime() / 1000);
         const to = Math.floor(Date.now() / 1000);
 
-        const res = await fetch(`https://finnhub.io/api/v1/stock/candle?symbol=${querySymbol}&resolution=D&from=${from}&to=${to}&token=${config.finnhubKey}`);
+        await finnhubThrottler.add(async () => {
+          const res = await fetch(`https://finnhub.io/api/v1/stock/candle?symbol=${querySymbol}&resolution=D&from=${from}&to=${to}&token=${config.finnhubKey}`);
 
-        if (res.ok) {
-          const data = await res.json();
-          if (data.s === "ok" && data.c && data.t) {
-            history = data.t.map((timestamp: number, index: number) => ({
-              date: new Date(timestamp * 1000).toISOString().split('T')[0],
-              price: data.c[index]
-            }));
-          } else if (data.s === "no_data") {
-            // No data available, use cache or fallback
-            return cached?.data || [];
-          } else if (data.error) {
+          if (res.ok) {
+            const data = await res.json();
+            if (data.s === "ok" && data.c && data.t) {
+              history = data.t.map((timestamp: number, index: number) => ({
+                date: new Date(timestamp * 1000).toISOString().split('T')[0],
+                price: data.c[index]
+              }));
+            } else if (data.s === "no_data") {
+              // No data available, use cache or fallback
+              // Don't cache failure here, might just be no data for range
+            } else if (data.error) {
+              saveFailureCache(asset.id, data.error);
+              throw {
+                category: ErrorCategory.ACCESS_DENIED,
+                provider: 'finnhub',
+                message: data.error
+              } as MarketDataError;
+            }
+          } else if (res.status === 429) {
+            throw {
+              category: ErrorCategory.RATE_LIMIT,
+              provider: 'finnhub',
+              message: 'Finnhub rate limit exceeded (History)'
+            } as MarketDataError;
+          } else if (res.status === 403 || res.status === 401) {
+            saveFailureCache(asset.id, 'Access Denied');
             throw {
               category: ErrorCategory.ACCESS_DENIED,
               provider: 'finnhub',
-              message: data.error
+              message: 'Access denied to historical data'
             } as MarketDataError;
           }
-        } else if (res.status === 429) {
-          throw {
-            category: ErrorCategory.RATE_LIMIT,
-            provider: 'finnhub',
-            message: 'Finnhub rate limit exceeded (History)'
-          } as MarketDataError;
-        } else if (res.status === 403 || res.status === 401) {
-          throw {
-            category: ErrorCategory.ACCESS_DENIED,
-            provider: 'finnhub',
-            message: 'Access denied to historical data'
-          } as MarketDataError;
-        }
+        });
       } else if (config.provider === 'alphavantage' && config.alphaVantageKey) {
         // Alpha Vantage Time Series Daily
         // Use 'compact' to avoid premium error (full is premium for daily series)
         const outputSize = 'compact';
 
-        const res = await fetch(`https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=${querySymbol}&outputsize=${outputSize}&apikey=${config.alphaVantageKey}`);
-        const data = await res.json();
+        await avThrottler.add(async () => {
+          const res = await fetch(`https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=${querySymbol}&outputsize=${outputSize}&apikey=${config.alphaVantageKey}`);
+          const data = await res.json();
 
-        if (data['Note'] || data['Information']) {
-          throw {
-            category: ErrorCategory.RATE_LIMIT,
-            provider: 'alphavantage',
-            message: 'Alpha Vantage rate limit exceeded (History)'
-          } as MarketDataError;
-        }
+          if (data['Note'] || data['Information']) {
+            throw {
+              category: ErrorCategory.RATE_LIMIT,
+              provider: 'alphavantage',
+              message: 'Alpha Vantage rate limit exceeded (History)'
+            } as MarketDataError;
+          }
 
-        if (data['Error Message']) {
-          throw {
-            category: ErrorCategory.ACCESS_DENIED,
-            provider: 'alphavantage',
-            message: 'Invalid API key or symbol not found'
-          } as MarketDataError;
-        }
+          if (data['Error Message']) {
+            saveFailureCache(asset.id, 'Invalid Symbol');
+            throw {
+              category: ErrorCategory.ACCESS_DENIED,
+              provider: 'alphavantage',
+              message: 'Invalid API key or symbol not found'
+            } as MarketDataError;
+          }
 
-        if (data['Time Series (Daily)']) {
-          const series = data['Time Series (Daily)'];
-          history = Object.keys(series).map(date => ({
-            date: date,
-            price: parseFloat(series[date]['4. close'])
-          })).sort((a, b) => a.date.localeCompare(b.date)); // Sort ascending
-        }
+          if (data['Time Series (Daily)']) {
+            const series = data['Time Series (Daily)'];
+            history = Object.keys(series).map(date => ({
+              date: date,
+              price: parseFloat(series[date]['4. close'])
+            })).sort((a, b) => a.date.localeCompare(b.date)); // Sort ascending
+          }
+        });
       }
     }
 

@@ -76,7 +76,7 @@ export const useMarketData = (
                     newPrice = stockData[meta.id].price;
                     newCurrency = stockData[meta.id].currency;
                     timestamp = stockData[meta.id].lastUpdated || Date.now();
-                } else if (meta.type === AssetType.CASH) {
+                } else if (meta.type === AssetType.CASH && !meta.isManualPrice) {
                     const rate = rates[meta.symbol];
                     if (rate && rate > 0) {
                         newPrice = 1 / rate;

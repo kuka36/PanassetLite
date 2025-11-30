@@ -54,6 +54,7 @@ export interface AssetMetadata {
   lastUpdated?: number;
   dateAcquired?: string; // Display purpose only (ISO DateTime)
   isDeleted?: boolean;
+  isManualPrice?: boolean; // If true, do not fetch market data
 }
 
 // 2. The Source of Truth (Stored in DB/LocalStorage)

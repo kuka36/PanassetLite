@@ -50,6 +50,7 @@ export const en = {
     manual: "Manual",
     liveData: "Data fetched automatically from API",
     manualValuation: "Valuation set manually",
+    manualPrice: "Manual Price",
     lastUpdated: "Last Updated",
     dataStale: "Update failed or data delayed > 30m",
     offline: "Offline",

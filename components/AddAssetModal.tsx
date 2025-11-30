@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Asset, AssetType, Currency, VoiceParseResult, TransactionType, AssetMetadata } from '../types';
+import { KNOWN_MANUAL_SYMBOLS } from '../services/marketData';
 import { usePortfolio } from '../context/PortfolioContext';
 import { VoiceInput } from './ui/VoiceInput';
 import { X, Save, TrendingUp, Bitcoin, PieChart, Building, Banknote, CreditCard, Box, Calendar, PenLine } from 'lucide-react';
@@ -29,6 +30,7 @@ export const AddAssetModal: React.FC<Props> = ({ isOpen, onClose, initialAsset }
     const [currentVal, setCurrentVal] = useState(''); // For manual assets
     const [currency, setCurrency] = useState<Currency>(Currency.USD);
     const [dateAcquired, setDateAcquired] = useState('');
+    const [isManual, setIsManual] = useState(false);
 
     // Balance Correction State
     const [showAdjustment, setShowAdjustment] = useState(false);
@@ -56,6 +58,7 @@ export const AddAssetModal: React.FC<Props> = ({ isOpen, onClose, initialAsset }
                 setCurrentVal(initialAsset.currentPrice.toString());
                 setCurrency(initialAsset.currency);
                 setDateAcquired(initialAsset.dateAcquired || getLocalISOString(new Date()));
+                setIsManual(!!initialAsset.isManualPrice || KNOWN_MANUAL_SYMBOLS.includes(initialAsset.symbol));
                 setStep(2);
                 setShowAdjustment(false);
             } else {
@@ -69,6 +72,7 @@ export const AddAssetModal: React.FC<Props> = ({ isOpen, onClose, initialAsset }
                 setCurrentVal('');
                 setCurrency(Currency.USD);
                 setDateAcquired(getLocalISOString(new Date()));
+                setIsManual(false);
                 setShowAdjustment(false);
             }
         }
@@ -95,6 +99,8 @@ export const AddAssetModal: React.FC<Props> = ({ isOpen, onClose, initialAsset }
 
     const isStrictManualAsset = (t: AssetType) =>
         t === AssetType.REAL_ESTATE || t === AssetType.LIABILITY || t === AssetType.OTHER;
+
+    const shouldShowManualPriceInput = isStrictManualAsset(type) || isManual;
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -129,7 +135,7 @@ export const AddAssetModal: React.FC<Props> = ({ isOpen, onClose, initialAsset }
         let currentPriceNum = parseFloat(currentVal);
 
         // Logic for Manual/Market prices
-        if (isStrictManualAsset(type)) {
+        if (shouldShowManualPriceInput) {
             if (isNaN(costNum) && !isNaN(currentPriceNum)) costNum = currentPriceNum;
             if (isNaN(currentPriceNum) && !isNaN(costNum)) currentPriceNum = costNum;
         } else {
@@ -145,16 +151,17 @@ export const AddAssetModal: React.FC<Props> = ({ isOpen, onClose, initialAsset }
             name: name || symbol.toUpperCase(),
             type,
             currentPrice: currentPriceNum || 0,
-            currency: isStrictManualAsset(type) ? currency : Currency.USD,
+            currency: currency,
             lastUpdated: Date.now(),
-            dateAcquired
+            dateAcquired,
+            isManualPrice: isManual
         };
 
         if (initialAsset) {
             // Edit: Update Metadata Only
-            if (!isStrictManualAsset(type)) {
+            if (!shouldShowManualPriceInput) {
                 assetMeta.currentPrice = initialAsset.currentPrice;
-                assetMeta.currency = initialAsset.currency;
+                // assetMeta.currency = initialAsset.currency; // Allow currency edit
             }
             editAsset(assetMeta);
         } else {
@@ -249,6 +256,17 @@ export const AddAssetModal: React.FC<Props> = ({ isOpen, onClose, initialAsset }
                             <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 space-y-4">
                                 <div className="flex justify-between items-center">
                                     <h3 className="text-sm font-semibold text-slate-700">{t('valuationHoldings')}</h3>
+                                    {!isStrictManualAsset(type) && (
+                                        <label className="flex items-center gap-2 text-xs text-slate-500 cursor-pointer select-none hover:text-blue-600 transition-colors">
+                                            <input
+                                                type="checkbox"
+                                                checked={isManual}
+                                                onChange={e => setIsManual(e.target.checked)}
+                                                className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 w-3.5 h-3.5"
+                                            />
+                                            {t('manualPrice')}
+                                        </label>
+                                    )}
                                 </div>
 
                                 {showAdjustment && (
@@ -314,30 +332,52 @@ export const AddAssetModal: React.FC<Props> = ({ isOpen, onClose, initialAsset }
                                     </div>
 
                                     {/* Logic: Strict Manual Assets show "Current Price". Market Assets show Avg Cost. */}
-                                    {isStrictManualAsset(type) ? (
+                                    {shouldShowManualPriceInput ? (
                                         <div>
                                             <label className="block text-xs font-medium text-slate-500 uppercase mb-1">
                                                 {t('unitPrice')}
                                             </label>
-                                            <input
-                                                type="number" step="any"
-                                                placeholder="0.00"
-                                                value={currentVal} onChange={e => setCurrentVal(e.target.value)}
-                                                className="w-full p-2.5 bg-white border border-slate-200 rounded-lg outline-none"
-                                            />
+                                            <div className="flex gap-2">
+                                                <select
+                                                    value={currency}
+                                                    onChange={e => setCurrency(e.target.value as Currency)}
+                                                    className="w-24 p-2.5 bg-white border border-slate-200 rounded-lg outline-none text-sm"
+                                                >
+                                                    {Object.values(Currency).map(c => (
+                                                        <option key={c} value={c}>{c}</option>
+                                                    ))}
+                                                </select>
+                                                <input
+                                                    type="number" step="any"
+                                                    placeholder="0.00"
+                                                    value={currentVal} onChange={e => setCurrentVal(e.target.value)}
+                                                    className="flex-1 p-2.5 bg-white border border-slate-200 rounded-lg outline-none"
+                                                />
+                                            </div>
                                         </div>
                                     ) : (
                                         <div>
                                             <label className="block text-xs font-medium text-slate-500 uppercase mb-1">
                                                 {type === AssetType.CASH ? t('costBasis') : t('avgCostUnit')}
                                             </label>
-                                            <input
-                                                type="number" step="any"
-                                                placeholder="0.00"
-                                                value={cost} onChange={e => setCost(e.target.value)}
-                                                disabled={!!initialAsset}
-                                                className="w-full p-2.5 bg-white border border-slate-200 rounded-lg outline-none disabled:bg-slate-100 disabled:text-slate-500"
-                                            />
+                                            <div className="flex gap-2">
+                                                <select
+                                                    value={currency}
+                                                    onChange={e => setCurrency(e.target.value as Currency)}
+                                                    className="w-24 p-2.5 bg-white border border-slate-200 rounded-lg outline-none text-sm"
+                                                >
+                                                    {Object.values(Currency).map(c => (
+                                                        <option key={c} value={c}>{c}</option>
+                                                    ))}
+                                                </select>
+                                                <input
+                                                    type="number" step="any"
+                                                    placeholder="0.00"
+                                                    value={cost} onChange={e => setCost(e.target.value)}
+                                                    disabled={!!initialAsset}
+                                                    className="flex-1 p-2.5 bg-white border border-slate-200 rounded-lg outline-none disabled:bg-slate-100 disabled:text-slate-500"
+                                                />
+                                            </div>
                                         </div>
                                     )}
                                 </div>

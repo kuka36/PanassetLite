@@ -8,7 +8,10 @@ interface LogoProps {
     subTitle?: string;
 }
 
-export const Logo: React.FC<LogoProps> = ({className = "", collapsed = false, title, subTitle}) => {
+export const Logo: React.FC<LogoProps> = ({ className = "", collapsed = false, title, subTitle }) => {
+    const gradientId = React.useId();
+    const uniqueGradientId = `cyber-gradient-${gradientId}`;
+
     if (collapsed) {
         return (
             <img
@@ -17,17 +20,17 @@ export const Logo: React.FC<LogoProps> = ({className = "", collapsed = false, ti
                 className={className}
                 width={32}
                 height={32}
-                style={{objectFit: 'contain'}}
+                style={{ objectFit: 'contain' }}
             />
         );
     }
 
     return (
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 32" width="180" height="32">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 32" width="180" height="32" className={className}>
             <defs>
-                <linearGradient id="cyber-gradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                    <stop offset="0%" stopColor="#17EAD9"/>
-                    <stop offset="100%" stopColor="#6078EA"/>
+                <linearGradient id={uniqueGradientId} x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stopColor="#17EAD9" />
+                    <stop offset="100%" stopColor="#6078EA" />
                 </linearGradient>
             </defs>
             <text
@@ -36,7 +39,7 @@ export const Logo: React.FC<LogoProps> = ({className = "", collapsed = false, ti
                 fontFamily="'Inter', sans-serif"
                 fontWeight="700"
                 fontSize="18"
-                fill="url(#cyber-gradient)"
+                fill={`url(#${uniqueGradientId})`}
                 letterSpacing="-0.02em"
             >
                 {title}.{subTitle}
