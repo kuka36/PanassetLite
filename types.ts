@@ -116,6 +116,17 @@ export type ActionType =
   | 'BULK_ASSET_UPDATE' // Added for bulk image processing
   | 'BATCH_DELETE_ASSET'; // Added for batch deletion
 
+export interface BulkAssetItem {
+  id?: string;
+  symbol?: string;
+  name?: string;
+  quantity?: number | string;
+  price?: number | string;
+  assetType?: AssetType;
+  currency?: Currency | string;
+  dateAcquired?: string;
+}
+
 export interface PendingAction {
   type: ActionType;
   targetId?: string; // For Update/Delete operations
@@ -130,7 +141,7 @@ export interface PendingAction {
     assetId?: string; // For Transactions
     currency?: Currency | string; // ADDED: Allow agent to specify currency
   };
-  items?: any[]; // Added for BULK_ASSET_UPDATE to hold multiple items
+  items?: BulkAssetItem[]; // Added for BULK_ASSET_UPDATE to hold multiple items
   summary: string; // Human readable summary
   status?: 'pending' | 'executed'; // ADDED: To track state without removing the object
 }

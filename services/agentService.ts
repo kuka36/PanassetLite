@@ -3,62 +3,91 @@ import { Asset, ChatMessage, Currency, PendingAction, TransactionType, AssetType
 
 // --- Tool Definitions ---
 
-const GET_ASSETS_TOOL: FunctionDeclaration = {
-  name: "get_assets",
-  description: "Read current portfolio holdings/assets. Returns list of assets with ids, symbols, quantities, etc.",
+const GET_PORTFOLIO_STATE_TOOL: FunctionDeclaration = {
+  name: "get_portfolio_state",
+  description: "Get the current state of the portfolio. Returns total value, summary stats, and a list of all assets with their current holdings/prices.",
 };
 
-const GET_TRANSACTIONS_TOOL: FunctionDeclaration = {
-  name: "get_transactions",
-  description: "Read transaction history. Supports filtering by symbol or type. Returns list of transactions with ids, dates, prices.",
+const GET_ASSET_DETAILS_TOOL: FunctionDeclaration = {
+  name: "get_asset_details",
+  description: "Get detailed information about a specific asset. Returns metadata, current computed state, and recent transaction history.",
   parameters: {
     type: Type.OBJECT,
     properties: {
-      symbol: { type: Type.STRING, description: "Filter by asset symbol (e.g. AAPL)" },
-      limit: { type: Type.NUMBER, description: "Limit number of results (default 10)" }
+      symbolOrId: { type: Type.STRING, description: "The symbol (e.g., AAPL) or ID of the asset." }
+    },
+    required: ["symbolOrId"]
+  }
+};
+
+const SEARCH_TRANSACTIONS_TOOL: FunctionDeclaration = {
+  name: "search_transactions",
+  description: "Search transaction history. Filter by date range, type, or symbol.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      symbol: { type: Type.STRING, description: "Filter by asset symbol" },
+      startDate: { type: Type.STRING, description: "Start date (ISO 8601)" },
+      endDate: { type: Type.STRING, description: "End date (ISO 8601)" },
+      limit: { type: Type.NUMBER, description: "Max results (default 20)" }
     }
   }
 };
 
-const PROPOSE_ASSET_MUTATION: FunctionDeclaration = {
-  name: "propose_asset_mutation",
-  description: "Propose to Add, Update, or Delete a single Asset Metadata. Use this for precise single edits.",
+const PROPOSE_ADD_ASSET: FunctionDeclaration = {
+  name: "propose_add_asset",
+  description: "Propose adding a NEW asset to the portfolio. If the asset already exists, use propose_transaction instead.",
   parameters: {
     type: Type.OBJECT,
     properties: {
-      mutationType: { type: Type.STRING, enum: ["ADD", "UPDATE", "DELETE"], description: "Type of change" },
-      symbol: { type: Type.STRING, description: "Asset Symbol (Required for ADD)" },
-      assetId: { type: Type.STRING, description: "Asset ID (Required for UPDATE/DELETE). Use get_assets to find ID." },
-      initialQuantity: { type: Type.NUMBER, description: "Initial quantity to hold immediately (for ADD only)." },
-      price: { type: Type.NUMBER, description: "Price or Cost" },
-      assetType: { type: Type.STRING, enum: ["STOCK", "CRYPTO", "CASH", "REAL_ESTATE", "LIABILITY", "FUND", "OTHER"], description: "Asset Type (for ADD)" },
+      symbol: { type: Type.STRING, description: "Asset Symbol (e.g. AAPL, BTC)" },
       name: { type: Type.STRING, description: "Asset Name" },
-      currency: { type: Type.STRING, enum: ["USD", "CNY", "HKD"], description: "Currency of the asset." },
-      dateAcquired: { type: Type.STRING, description: "Date acquired (ISO 8601 YYYY-MM-DD or YYYY-MM-DDTHH:mm:ss). Use if user specifies a past date." }
+      assetType: { type: Type.STRING, enum: ["STOCK", "CRYPTO", "CASH", "REAL_ESTATE", "LIABILITY", "FUND", "OTHER"], description: "Asset Type" },
+      currency: { type: Type.STRING, enum: ["USD", "CNY", "HKD"], description: "Currency" },
+      initialQuantity: { type: Type.NUMBER, description: "Initial quantity held (will create an initial transaction)." },
+      price: { type: Type.NUMBER, description: "Current Price or Cost Basis" },
+      dateAcquired: { type: Type.STRING, description: "Date acquired (ISO 8601)" }
     },
-    required: ["mutationType"]
+    required: ["symbol", "assetType"]
+  }
+};
+
+const PROPOSE_UPDATE_METADATA: FunctionDeclaration = {
+  name: "propose_update_metadata",
+  description: "Propose updating the METADATA (name, type, currency, price) of an existing asset. CANNOT change quantity (use transaction for that).",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      assetId: { type: Type.STRING, description: "Asset ID" },
+      name: { type: Type.STRING, description: "New Name" },
+      symbol: { type: Type.STRING, description: "New Symbol" },
+      assetType: { type: Type.STRING, enum: ["STOCK", "CRYPTO", "CASH", "REAL_ESTATE", "LIABILITY", "FUND", "OTHER"], description: "New Type" },
+      currency: { type: Type.STRING, enum: ["USD", "CNY", "HKD"], description: "New Currency" },
+      currentPrice: { type: Type.NUMBER, description: "Update current market price (does not affect quantity)" }
+    },
+    required: ["assetId"]
   }
 };
 
 const PROPOSE_BULK_ASSET_UPDATE: FunctionDeclaration = {
   name: "propose_bulk_asset_update",
-  description: "Propose MULTIPLE asset additions or updates at once. Use this for analyzing IMAGES or for BATCH UPDATES (e.g. 'set all stocks to quantity 10').",
+  description: "Propose MULTIPLE asset additions or updates at once. Use this for analyzing IMAGES or for BATCH UPDATES.",
   parameters: {
     type: Type.OBJECT,
     properties: {
       assets: {
         type: Type.ARRAY,
-        description: "List of assets identified from the image.",
+        description: "List of assets identified.",
         items: {
           type: Type.OBJECT,
           properties: {
-            symbol: { type: Type.STRING, description: "Ticker Symbol (e.g. AAPL, 00700)" },
+            symbol: { type: Type.STRING, description: "Ticker Symbol" },
             name: { type: Type.STRING, description: "Asset Name" },
             quantity: { type: Type.NUMBER, description: "Quantity held" },
-            price: { type: Type.NUMBER, description: "Current Price or Cost Basis" },
-            currency: { type: Type.STRING, enum: ["USD", "CNY", "HKD"], description: "Inferred currency" },
-            assetType: { type: Type.STRING, enum: ["STOCK", "CRYPTO", "CASH", "REAL_ESTATE", "LIABILITY", "FUND", "OTHER"], description: "Asset Type" },
-            dateAcquired: { type: Type.STRING, description: "Date acquired if visible/known" }
+            price: { type: Type.NUMBER, description: "Price/Cost" },
+            currency: { type: Type.STRING, enum: ["USD", "CNY", "HKD"] },
+            assetType: { type: Type.STRING, enum: ["STOCK", "CRYPTO", "CASH", "REAL_ESTATE", "LIABILITY", "FUND", "OTHER"] },
+            dateAcquired: { type: Type.STRING }
           },
           required: ["symbol", "quantity"]
         }
@@ -68,20 +97,21 @@ const PROPOSE_BULK_ASSET_UPDATE: FunctionDeclaration = {
   }
 };
 
-const PROPOSE_TRANSACTION_MUTATION: FunctionDeclaration = {
-  name: "propose_transaction_mutation",
-  description: "Propose to Add (Record), Update, or Delete a Transaction. Use this for adding trades to EXISTING assets.",
+const PROPOSE_TRANSACTION: FunctionDeclaration = {
+  name: "propose_transaction",
+  description: "Propose to Add, Update, or Delete a Transaction. This is the ONLY way to change the quantity of an existing asset.",
   parameters: {
     type: Type.OBJECT,
     properties: {
       mutationType: { type: Type.STRING, enum: ["ADD", "UPDATE", "DELETE"], description: "Type of change" },
-      transactionId: { type: Type.STRING, description: "Transaction ID (Required for UPDATE/DELETE). Use get_transactions to find ID." },
-      assetId: { type: Type.STRING, description: "Asset ID (Required for ADD). Use get_assets to find ID." },
-      txType: { type: Type.STRING, enum: ["BUY", "SELL", "DIVIDEND", "DEPOSIT", "WITHDRAWAL", "BORROW", "REPAY"], description: "Transaction Type" },
-      quantity: { type: Type.NUMBER, description: "Quantity" },
+      transactionId: { type: Type.STRING, description: "Transaction ID (Required for UPDATE/DELETE)" },
+      assetId: { type: Type.STRING, description: "Asset ID (Required for ADD)" },
+      txType: { type: Type.STRING, enum: ["BUY", "SELL", "DIVIDEND", "DEPOSIT", "WITHDRAWAL", "BORROW", "REPAY", "BALANCE_ADJUSTMENT"], description: "Transaction Type" },
+      quantity: { type: Type.NUMBER, description: "Quantity involved" },
       price: { type: Type.NUMBER, description: "Price per unit" },
-      date: { type: Type.STRING, description: "ISO 8601 Date Time string (YYYY-MM-DDTHH:mm:ss)" },
-      fee: { type: Type.NUMBER, description: "Transaction fees" }
+      date: { type: Type.STRING, description: "ISO 8601 Date Time" },
+      fee: { type: Type.NUMBER, description: "Fees" },
+      note: { type: Type.STRING, description: "Optional note" }
     },
     required: ["mutationType"]
   }
@@ -89,16 +119,15 @@ const PROPOSE_TRANSACTION_MUTATION: FunctionDeclaration = {
 
 const PROPOSE_BATCH_DELETE: FunctionDeclaration = {
   name: "propose_batch_delete",
-  description: "Propose to DELETE multiple assets at once based on criteria (e.g. 'delete all crypto', 'delete everything except Tesla').",
+  description: "Propose to DELETE multiple assets at once.",
   parameters: {
     type: Type.OBJECT,
     properties: {
       assetIds: {
         type: Type.ARRAY,
-        description: "List of Asset IDs to delete. Use get_assets to find IDs matching the user's criteria.",
         items: { type: Type.STRING }
       },
-      reason: { type: Type.STRING, description: "Reason for deletion (for summary)" }
+      reason: { type: Type.STRING }
     },
     required: ["assetIds"]
   }
@@ -151,50 +180,35 @@ export class AgentService {
         ${langInstruction}
         
         **Capabilities:**
-        1. **READ**: You can inspect the user's Assets and Transaction History using \`get_assets\` and \`get_transactions\`.
-        2. **WRITE**: You can propose changes using \`propose_asset_mutation\` (single) or \`propose_transaction_mutation\` (trades).
-        3. **BULK IMPORT**: If the user provides an IMAGE/SCREENSHOT, use \`propose_bulk_asset_update\` to extract items.
+        1. **READ**: Use \`get_portfolio_state\` to see all assets. Use \`get_asset_details\` to investigate specific assets and their history.
+        2. **WRITE**: 
+           - **NEW Assets**: Use \`propose_add_asset\`.
+           - **EXISTING Assets**: 
+             - To change Quantity/Cost -> Use \`propose_transaction\`.
+             - To change Name/Type/Price -> Use \`propose_update_metadata\`.
+        3. **BULK IMPORT**: If the user provides an IMAGE, use \`propose_bulk_asset_update\`.
         
         **Universal Asset Logic:**
-        1.  **Scope**: **ANYTHING can be an asset.** You are NOT limited to financial documents.
-            -   **Physical Items**: Cars, watches, electronics, bags, wine, etc.
-            -   **Virtual Items**: Game skins, domain names, etc.
-            -   **Financial**: Stocks, crypto, cash, funds.
-
-        2.  **Symbol/ID Generation**:
-            -   **Financial**: Use the Ticker (e.g., AAPL, BTC).
-            -   **Physical/Other**: Generate a concise, logical ID (e.g., "ROLEX_SUB_DATE", "MACBOOK_PRO_M3", "VINTAGE_WINE_1990").
-
-        3.  **Asset Type Inference**:
-            -   Stocks/Crypto/Funds/Cash -> Use respective types.
-            -   Real Estate -> REAL_ESTATE.
-            -   Everything else (Cars, Watches, Electronics, Art) -> **OTHER**.
-
+        1.  **Scope**: **ANYTHING can be an asset.**
+        2.  **Symbol/ID**: Financial = Ticker; Physical = Concise ID.
+        3.  **Asset Type**: Infer best match.
         4.  **Quantity Rules**:
-            -   **Default**: If the user mentions buying/adding an item without specifying a quantity (e.g., "I bought a laptop", "Add a roller skate"), you MUST set quantity to 1.
-            -   **Count**: For images, count the items.
-            -   **Funds**: If you see a Total Value (Holding Amount) but cannot find the Number of Units (Quantity), set Quantity = Total Value and Price = 1.
-
-        5.  **Price/Value**:
-            -   If a price is visible/stated, use it.
-            -   If NO price is stated, **ESTIMATE** the current market value based on your knowledge.
-
-        6.  **Currency Inference**:
-            -   Infer based on symbol, name, or context (e.g. RMB for Chinese items, USD for global tech).
+            -   **Default**: 1 if unspecified.
+            -   **Funds**: If only Total Value known, Qty = Total Value, Price = 1.
+        5.  **Price/Value**: Estimate if unknown.
+        6.  **Currency**: Infer from context.
 
         **Tool Usage Rules:**
-        -   **Single Item (Text)**: Use \`propose_asset_mutation\` (ADD/UPDATE).
-        -   **Multiple Items (Image/Text)**: Use \`propose_bulk_asset_update\`.
-        -   **Transactions**: If the asset ALREADY exists (check \`get_assets\`), use \`propose_transaction_mutation\` instead of adding it again.
-
+        -   **Single Source of Truth**: The ONLY way to change an asset's quantity is via a TRANSACTION.
+        -   **Adding**: \`propose_add_asset\` creates the asset AND an initial transaction.
+        -   **Updating**: 
+            -   If user says "I bought 5 more", use \`propose_transaction(ADD, type=BUY...)\`.
+            -   If user says "Update price to 100", use \`propose_update_metadata\`.
+            -   If user says "I actually have 10, not 5" (correction), use \`propose_transaction(ADD, type=BALANCE_ADJUSTMENT...)\`.
 
         **TOOL CALLING RULES:**
-        - **DO NOT** use \`print()\`, \`console.log()\`, or any other output wrapper.
+        - **DO NOT** use \`print()\`, \`console.log()\`.
         - **DO NOT** wrap the function call in a code block (e.g. \`\`\`python ... \`\`\`).
-        - **DO NOT** use \`default_api.\` or any other object prefix. Just call the function name directly.
-        - **CORRECT**: \`propose_bulk_asset_update(assets = [...])\`
-        - **INCORRECT**: \`print(propose_bulk_asset_update(...))\`
-        - **INCORRECT**: \`default_api.propose_bulk_asset_update(...)\`
         - Ensure arguments match the JSON schema exactly.
       `;
 
@@ -222,7 +236,7 @@ export class AgentService {
         history: geminiHistory,
         config: {
           systemInstruction,
-          tools: [{ functionDeclarations: [GET_ASSETS_TOOL, GET_TRANSACTIONS_TOOL, PROPOSE_ASSET_MUTATION, PROPOSE_BULK_ASSET_UPDATE, PROPOSE_TRANSACTION_MUTATION, PROPOSE_BATCH_DELETE] }],
+          tools: [{ functionDeclarations: [GET_PORTFOLIO_STATE_TOOL, GET_ASSET_DETAILS_TOOL, SEARCH_TRANSACTIONS_TOOL, PROPOSE_ADD_ASSET, PROPOSE_UPDATE_METADATA, PROPOSE_BULK_ASSET_UPDATE, PROPOSE_TRANSACTION, PROPOSE_BATCH_DELETE] }],
         }
       });
 
@@ -248,24 +262,103 @@ export class AgentService {
         const call = functionCalls[0];
 
         // --- READ TOOLS ---
-        if (call.name === 'get_assets') {
-          const result = { assets: assets.map(a => ({ id: a.id, symbol: a.symbol, name: a.name, qty: a.quantity, price: a.currentPrice })) };
+        // --- READ TOOLS ---
+        if (call.name === 'get_portfolio_state') {
+          const totalValue = assets.reduce((sum, a) => sum + a.currentValue, 0);
+          const totalCost = assets.reduce((sum, a) => sum + a.totalCost, 0);
+          const result = {
+            summary: {
+              totalValue,
+              totalCost,
+              totalPnL: totalValue - totalCost,
+              assetCount: assets.length
+            },
+            assets: assets.map(a => ({
+              id: a.id,
+              symbol: a.symbol,
+              name: a.name,
+              type: a.type,
+              qty: a.quantity,
+              price: a.currentPrice,
+              value: a.currentValue,
+              currency: a.currency
+            }))
+          };
           response = await chat.sendMessage({ message: [{ functionResponse: { name: call.name, response: result } }] });
         }
-        else if (call.name === 'get_transactions') {
+        else if (call.name === 'get_asset_details') {
+          const args = call.args as any;
+          const query = (args.symbolOrId || "").toUpperCase();
+          const asset = assets.find(a => a.id === query || a.symbol === query);
+
+          if (!asset) {
+            response = await chat.sendMessage({ message: [{ functionResponse: { name: call.name, response: { error: "Asset not found" } } }] });
+          } else {
+            const assetTxs = transactions
+              .filter(t => t.assetId === asset.id)
+              .sort((a, b) => b.date.localeCompare(a.date))
+              .slice(0, 20); // Last 20 transactions
+            const result = {
+              metadata: {
+                id: asset.id,
+                symbol: asset.symbol,
+                name: asset.name,
+                type: asset.type,
+                currency: asset.currency,
+                currentPrice: asset.currentPrice
+              },
+              computed: {
+                quantity: asset.quantity,
+                avgCost: asset.avgCost,
+                totalCost: asset.totalCost,
+                currentValue: asset.currentValue,
+                pnl: asset.pnl,
+                pnlPercent: asset.pnlPercent
+              },
+              recentTransactions: assetTxs.map(t => ({
+                id: t.id,
+                date: t.date,
+                type: t.type,
+                qtyChange: t.quantityChange,
+                price: t.pricePerUnit,
+                total: t.total,
+                note: t.note
+              }))
+            };
+            response = await chat.sendMessage({ message: [{ functionResponse: { name: call.name, response: result } }] });
+          }
+        }
+        else if (call.name === 'search_transactions') {
           const args = call.args as any;
           let filtered = [...transactions];
+
           if (args.symbol) {
             const targetAsset = assets.find(a => a.symbol === args.symbol.toUpperCase());
             if (targetAsset) filtered = filtered.filter(t => t.assetId === targetAsset.id);
             else filtered = [];
           }
-          filtered = filtered.sort((a, b) => b.date.localeCompare(a.date)).slice(0, args.limit || 10);
+
+          if (args.startDate) {
+            filtered = filtered.filter(t => t.date >= args.startDate);
+          }
+          if (args.endDate) {
+            filtered = filtered.filter(t => t.date <= args.endDate);
+          }
+
+          filtered = filtered.sort((a, b) => b.date.localeCompare(a.date)).slice(0, args.limit || 20);
 
           const result = {
             transactions: filtered.map(t => {
               const a = assets.find(as => as.id === t.assetId);
-              return { id: t.id, date: t.date, type: t.type, symbol: a?.symbol, qty: t.quantityChange, price: t.pricePerUnit };
+              return {
+                id: t.id,
+                date: t.date,
+                type: t.type,
+                symbol: a?.symbol,
+                qty: t.quantityChange,
+                price: t.pricePerUnit,
+                total: t.total
+              };
             })
           };
           response = await chat.sendMessage({ message: [{ functionResponse: { name: call.name, response: result } }] });
@@ -277,26 +370,12 @@ export class AgentService {
           const finalCall = finalCalls[0];
           const args = finalCall.args as any;
 
-          if (finalCall.name === 'propose_asset_mutation') {
-            const typeMap: Record<string, ActionType> = {
-              'ADD': 'ADD_ASSET',
-              'UPDATE': 'UPDATE_ASSET',
-              'DELETE': 'DELETE_ASSET'
-            };
-            const actionType = typeMap[args.mutationType];
-
-            let displaySymbol = args.symbol;
-            if (!displaySymbol && args.assetId) {
-              const existing = assets.find(a => a.id === args.assetId);
-              if (existing) displaySymbol = existing.symbol;
-            }
-            const summary = `${args.mutationType} Asset: ${displaySymbol || args.assetId || 'Unknown'}`;
-
+          if (finalCall.name === 'propose_add_asset') {
+            const summary = `Add New Asset: ${args.symbol}`;
             return {
               text: "",
               action: {
-                type: actionType,
-                targetId: args.assetId,
+                type: 'ADD_ASSET',
                 data: {
                   symbol: args.symbol,
                   name: args.name,
@@ -305,6 +384,30 @@ export class AgentService {
                   type: args.assetType as AssetType,
                   currency: args.currency,
                   date: args.dateAcquired
+                },
+                summary
+              }
+            };
+          }
+
+          if (finalCall.name === 'propose_update_metadata') {
+            let displaySymbol = args.assetId;
+            const existing = assets.find(a => a.id === args.assetId);
+            if (existing) displaySymbol = existing.symbol;
+
+            const summary = `Update Metadata: ${displaySymbol}`;
+            return {
+              text: "",
+              action: {
+                type: 'UPDATE_ASSET', // Reusing existing type, but data will be limited
+                targetId: args.assetId,
+                data: {
+                  symbol: args.symbol,
+                  name: args.name,
+                  type: args.assetType as AssetType,
+                  currency: args.currency,
+                  price: args.currentPrice
+                  // NO quantity here
                 },
                 summary
               }
@@ -328,7 +431,7 @@ export class AgentService {
             };
           }
 
-          if (finalCall.name === 'propose_transaction_mutation') {
+          if (finalCall.name === 'propose_transaction') {
             const typeMap: Record<string, ActionType> = {
               'ADD': 'ADD_TRANSACTION',
               'UPDATE': 'UPDATE_TRANSACTION',
