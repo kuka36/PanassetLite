@@ -2,10 +2,11 @@ import React, { useState, useEffect, useMemo } from 'react';
 import {
     AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Line
 } from 'recharts';
-import { Asset, Transaction, TransactionType, AssetType, Currency, ErrorCategory } from '../types';
+import { Asset, Transaction, TransactionType, AssetType, Currency } from '../types/domain';
+import { ErrorCategory } from '../types/api';
 import { convertValue, fetchAssetHistory, HistoricalDataPoint } from '../services/marketData';
 import { calculateHistoryStartDate } from '../utils/historyUtils';
-import { ExchangeRates } from '../types';
+import { ExchangeRates } from '../types/store';
 import { Calendar, TrendingUp, TrendingDown, MousePointer2, RefreshCw, AlertTriangle } from 'lucide-react';
 import { usePortfolio } from '../context/PortfolioContext';
 

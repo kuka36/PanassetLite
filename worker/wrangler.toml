@@ -1,0 +1,7 @@
+name = "panassetlite-analytics"
+main = "analytics.js"
+compatibility_date = "2024-01-01"
+
+[[kv_namespaces]]
+binding = "KV"
+id = "c453b00d764c4bf7b0bc0ac4bf03986d"

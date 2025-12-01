@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Asset, AppSettings } from '../types';
+import { Asset } from '../types/domain';
+import { AppSettings } from '../types/store';
 import { getPortfolioAnalysis, generatePortfolioHash, ADVISOR_CACHE_KEY, ADVISOR_CACHE_TTL } from '../services/geminiService';
 import { StorageService } from '../services/StorageService';
 
@@ -42,7 +43,8 @@ export const useAIAdvisor = (assets: Asset[], settings: AppSettings) => {
     }, [assets, analysis, settings.language, settings.aiProvider]);
 
     const analyze = async () => {
-        const apiKey = settings.aiProvider === 'deepseek' ? settings.deepSeekApiKey : settings.geminiApiKey;
+        const apiKeyMap = { gemini: settings.geminiApiKey, deepseek: settings.deepSeekApiKey, qwen: settings.qwenApiKey };
+        const apiKey = apiKeyMap[settings.aiProvider];
 
         if (!apiKey) {
             throw new Error('API Key is missing');

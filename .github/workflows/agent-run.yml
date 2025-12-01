@@ -1,0 +1,109 @@
+name: Agent Run
+
+on:
+  issues:
+    types: [labeled]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  run-agent:
+    if: github.event.label.name == 'ai-task'
+    runs-on: ubuntu-latest
+    env:
+      ISSUE_NUMBER: ${{ github.event.issue.number }}
+      ISSUE_TITLE: ${{ github.event.issue.title }}
+      ISSUE_BODY: ${{ github.event.issue.body }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      API_KEY: ${{ secrets.ALPHAVANTAGE_API_KEY }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute branch slug
+        id: slug
+        run: |
+          slug=$(echo "$ISSUE_TITLE" | tr '[:upper:]' '[:lower:]' \
+            | sed -E 's/[^a-z0-9]+/-/g; s/^-+|-+$//g' | cut -c1-40)
+          [ -z "$slug" ] && slug="task"
+          branch="ai/${ISSUE_NUMBER}-${slug}"
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+
+      - name: Acknowledge on issue
+        run: |
+          gh issue comment "$ISSUE_NUMBER" --body \
+            ":robot: Agent run started on branch \`${{ steps.slug.outputs.branch }}\` ([run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}))."
+
+      - name: Run agent in devcontainer
+        id: agent
+        uses: devcontainers/ci@v0.3
+        with:
+          imageName: panassetlite-agent
+          push: never
+          env: |
+            OPENAI_API_KEY
+            GEMINI_API_KEY
+            API_KEY
+            GH_TOKEN
+            ISSUE_NUMBER
+            ISSUE_TITLE
+            ISSUE_BODY
+          runCmd: |
+            set -euo pipefail
+            git config --global user.email "agent@panassetlite.local"
+            git config --global user.name "PanassetLite Agent"
+            git checkout -b "${{ steps.slug.outputs.branch }}"
+
+            printf '# Issue #%s: %s\n\n%s\n' "$ISSUE_NUMBER" "$ISSUE_TITLE" "$ISSUE_BODY" > /tmp/task.md
+
+            codex exec \
+              --full-auto \
+              --instructions .agent/harness/rules/panasset-instructions.md \
+              "$(cat /tmp/task.md)"
+
+            npm run build 2>&1 | tee /tmp/build.log
+
+            if [ -z "$(git status --porcelain)" ]; then
+              echo "::error::Agent produced no changes."
+              exit 2
+            fi
+
+            git add -A
+            git commit -m "feat: address issue #${ISSUE_NUMBER}
+
+Closes #${ISSUE_NUMBER}
+
+Co-Authored-By: Codex Agent <agent@panassetlite.local>" || true
+
+      - name: Report build failure
+        if: failure() && steps.agent.conclusion == 'failure'
+        run: |
+          body=":x: Agent run failed. See [logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})."
+          gh issue comment "$ISSUE_NUMBER" --body "$body"
+
+      - name: Push branch
+        if: success()
+        run: git push origin "${{ steps.slug.outputs.branch }}"
+
+      - name: Open PR
+        if: success()
+        run: |
+          {
+            cat .agent/harness/PULL_REQUEST_TEMPLATE.md
+            printf '\n\n---\nCloses #%s\n' "$ISSUE_NUMBER"
+          } > /tmp/pr-body.md
+
+          gh pr create \
+            --base main \
+            --head "${{ steps.slug.outputs.branch }}" \
+            --title "${ISSUE_TITLE}" \
+            --body-file /tmp/pr-body.md \
+            --label ai-generated

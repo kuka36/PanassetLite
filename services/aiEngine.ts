@@ -33,7 +33,7 @@ export class GeminiEngine implements IAIEngine {
   async generateText(prompt: string): Promise<string> {
     try {
       const response = await this.ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3-flash-preview',
         contents: prompt,
       });
       return response.text || "";
@@ -54,7 +54,7 @@ export class GeminiEngine implements IAIEngine {
 
     try {
       const response = await this.ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3-flash-preview',
         contents: prompt,
         config: config
       });
@@ -127,12 +127,77 @@ export class DeepSeekEngine implements IAIEngine {
   }
 }
 
+// 4. Concrete Strategy: Qwen (OpenAI Compatible)
+export class QwenEngine implements IAIEngine {
+  private apiKey: string;
+  private baseUrl = 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions';
+
+  constructor(apiKey: string) {
+    this.apiKey = apiKey;
+  }
+
+  private async callAPI(messages: any[], tools?: any[]): Promise<any> {
+    try {
+      const body: any = {
+        model: "qwen-plus",
+        messages: messages,
+        stream: false
+      };
+
+      if (tools) {
+        body.tools = tools;
+      }
+
+      const response = await fetch(this.baseUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.apiKey}`
+        },
+        body: JSON.stringify(body)
+      });
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        const msg = errData.error?.message || response.statusText;
+        throw new AIError(`Qwen API Error: ${msg}`, 'qwen');
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (e) {
+      if (e instanceof AIError) throw e;
+      throw new AIError("Qwen Network/API Error", 'qwen', e);
+    }
+  }
+
+  async generateText(prompt: string): Promise<string> {
+    const data = await this.callAPI([{ role: "user", content: prompt }]);
+    return data.choices?.[0]?.message?.content || '';
+  }
+
+  async generateJSON<T = any>(prompt: string, _schema?: any): Promise<T> {
+    const data = await this.callAPI([{ role: "user", content: prompt }]);
+    const content = data.choices?.[0]?.message?.content || '';
+
+    try {
+      const jsonMatch = content.match(/```json\n([\s\S]*?)\n```/) || content.match(/```\n([\s\S]*?)\n```/);
+      const jsonStr = jsonMatch ? jsonMatch[1] : content;
+      return JSON.parse(jsonStr);
+    } catch (e) {
+      throw new AIParseError("Invalid JSON response from Qwen", 'qwen', e);
+    }
+  }
+}
+
 // 4. Factory
 export class AIEngineFactory {
   static create(provider: string, apiKey: string): IAIEngine {
     switch (provider) {
       case 'deepseek':
         return new DeepSeekEngine(apiKey);
+      case 'qwen':
+        return new QwenEngine(apiKey);
       case 'gemini':
       default:
         return new GeminiEngine(apiKey);

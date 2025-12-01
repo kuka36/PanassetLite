@@ -5,7 +5,7 @@
  * 原则：单一职责、可扩展、易测试
  */
 
-import { AssetMetadata, AssetType } from '../types';
+import { AssetMetadata, AssetType } from '../types/domain';
 
 /**
  * 风险等级枚举

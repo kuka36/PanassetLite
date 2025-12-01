@@ -1,13 +1,15 @@
 
 import { Type } from "@google/genai";
-import { Asset, AssetType, Language, AIProvider, VoiceParseResult } from "../types";
+import { Asset, AssetType, VoiceParseResult } from "../types/domain";
+import { Language, AIProvider } from "../types/store";
 import { AIEngineFactory } from "./aiEngine";
 import { StorageService } from "./StorageService";
+import { isManualValuation as checkIsManual } from "../utils/assetUtils";
 
-export const RISK_CACHE_KEY = 'investflow_risk_cache';
+export const RISK_CACHE_KEY = 'panasset_risk_cache';
 export const RISK_CACHE_TTL = 3600 * 1000; // 1 hour
 
-export const ADVISOR_CACHE_KEY = 'investflow_advisor_cache';
+export const ADVISOR_CACHE_KEY = 'panasset_advisor_cache';
 export const ADVISOR_CACHE_TTL = 24 * 3600 * 1000; // 24 hours
 
 // In-memory promise cache to prevent simultaneous duplicate calls
@@ -17,8 +19,7 @@ let pendingAdvisorPromise: { hash: string, promise: Promise<string> } | null = n
 export const generatePortfolioHash = (assets: Asset[]) => {
   return assets
     .map(a => {
-      const isManualValuation = a.type === AssetType.REAL_ESTATE || a.type === AssetType.LIABILITY || a.type === AssetType.OTHER;
-      const pricePart = isManualValuation ? `:${a.currentPrice}` : '';
+      const pricePart = checkIsManual(a.type) ? `:${a.currentPrice}` : '';
       return `${a.symbol}:${a.quantity}:${a.type}${pricePart}`;
     })
     .sort()
@@ -65,40 +66,40 @@ export const getPortfolioAnalysis = async (assets: Asset[], apiKey: string, prov
 
     // Optimized System Prompt
     const prompt = `
-    You are the Chief Investment Officer (CIO) for 'PanassetLite' (盘资产·轻), a private wealth management platform.
+    你现在是“盘资产·轻”(PanassetLite) 私人财富管理平台的首席投资官 (CIO)。
 
-    **User Portfolio Snapshot (For Analysis Only):**
+    **用户投资组合概览 (仅供分析使用):**
     ${JSON.stringify(portfolioSummary)}
 
-    **Financial Context:**
-    - **Net Worth** = Total Assets - Total Liabilities.
-    - **Liquid Assets**: Stocks, Crypto, Cash, Funds.
-    - **Illiquid Assets**: Real Estate (Low volatility, hard to sell).
-    - **Liabilities**: Loans, Mortgages (Negative impact on Net Worth).
+    **财务背景知识:**
+    - **净资产** = 总资产 - 总负债。
+    - **流动资产**: 股票、加密货币、现金、基金。
+    - **非流动资产**: 房地产 (波动性低，难以变现)。
+    - **负债**: 贷款、抵押贷款 (对净资产有负面影响)。
 
-    **STRICT PRIVACY & OUTPUT RULES:**
-    1. **NO ABSOLUTE NUMBERS:** You are generating a report for a privacy-focused dashboard. **DO NOT** output any specific monetary values (e.g., do NOT write "$10,000", "72,361 RMB", or "1.5 BTC") in the final report.
-    2. **USE RATIOS & PERCENTAGES:** Instead of numbers, use percentages (%), ratios, and qualitative terms (e.g., "healthy buffer", "significant portion", "minor allocation").
-    3. **LANGUAGE:** The output must be in **${targetLanguage}**.
+    **严格的隐私和输出规则:**
+    1. **禁止出现绝对数值:** 你正在为一个注重隐私的仪表盘生成报告。**严禁**在最终报告中输出任何具体的货币金额 (例如：不要写 “$10,000”、“72,361 RMB” 或 “1.5 BTC”)。
+    2. **使用比例和百分比:** 使用百分比 (%)、比例和定性描述 (如 “健康的缓冲”、“占比较大部分”、“少量配置”) 来代替具体数字。
+    3. **语言:** 输出必须使用 **${targetLanguage}**。
 
-    **Task:**
-    Generate a strategic wealth analysis report. Use Markdown.
+    **任务:**
+    生成一份战略性的财富分析报告。使用 Markdown 格式。
 
-    **Structure:**
-    1.  **Wealth Health Check**:
-        - Analyze the **Net Worth** structure (Asset vs Liability mix) using percentages only.
-        - Assess **Debt-to-Asset Ratio**. (Liabilities > 30% is caution).
-        - Assess **Liquidity**. Are they over-leveraged or too illiquid?
+    **结构:**
+    1.  **财富健康状况检查**:
+        - 仅使用百分比分析 **净资产** 结构 (资产与负债的比例)。
+        - 评估 **资产负债率** (负债 > 30% 为警戒线)。
+        - 评估 **流动性**。是否存在过度杠杆或流动性不足的问题？
 
-    2.  **Risk & Allocation**:
-        - Evaluate exposure to High Volatility (Crypto) vs Stable Assets (Real Estate/Cash) based on portfolio weight.
-        - Comment on concentration risk (e.g., "Allocated heavily in a single asset").
+    2.  **风险与配置**:
+        - 根据投资组合权重，评估高波动性资产 (加密货币) 与稳健资产 (房地产/现金) 的风险敞口。
+        - 对集中度风险进行评论 (例如：“在单一资产上配置过重”)。
 
-    3.  **Strategic Recommendations**:
-        - Provide 3 specific, actionable steps to optimize the portfolio based on the asset mix.
+    3.  **战略建议**:
+        - 根据资产组合，提供 3 个具体且可操作的步骤来优化投资组合。
 
-    **Tone:** Professional, insightful, objective, and encouraging.
-    **Length:** Concise (~300 words).
+    **语气:** 专业、深刻、客观且具有鼓舞性。
+    **字数:** 简洁 (约 300 字)。
     `;
 
     // Strategy Pattern usage:
@@ -154,19 +155,19 @@ export const getRiskAssessment = async (assets: Asset[], apiKey: string, provide
     const targetLanguage = language === 'zh' ? 'Chinese' : 'English';
 
     const prompt = `
-      Analyze the risk profile of this portfolio: ${JSON.stringify(portfolioSummary)}.
+      分析此投资组合的风险概况: ${JSON.stringify(portfolioSummary)}。
       
-      **PRIVACY RULE**: Do not mention specific monetary amounts in the 'analysis' text. Use percentages or general terms.
+      **隐私规则**: 不要在“分析”文本中提到具体的金额。使用百分比或通用术语。
 
-      Classify assets by risk level:
-      - High Risk: Altcoins and volatile cryptocurrencies (excluding stablecoins and BTC/ETH)
-      - Medium Risk: Stocks, Funds, Major Cryptocurrencies (BTC, ETH)
-      - Low/Stable Risk: Cash, Real Estate, Stablecoins (USDT, USDC, DAI, BUSD, etc.)
-      - Liability: Debt (increases overall risk profile if high)
+      按风险等级对资产进行分类：
+      - 高风险：山寨币和波动较大的加密货币（不包括稳定币和 BTC/ETH）
+      - 中风险：股票、基金、主流加密货币（BTC, ETH）
+      - 低/稳健风险：现金、房地产、稳定币（USDT, USDC, DAI, BUSD 等）
+      - 负债：债务（如果占比高，会增加整体风险概况）
       
-      Return JSON with a riskScore (1-10) and a brief analysis in ${targetLanguage}.
+      返回 JSON 格式，包含 riskScore (1-10) 和一段使用 ${targetLanguage} 编写的简短分析。
       
-      The JSON keys must be: "riskScore", "riskLevel", "analysis".
+      JSON 的键必须是: "riskScore", "riskLevel", "analysis"。
     `;
 
     // Define Schema (Mainly for Gemini, but serves as documentation for DeepSeek too)
@@ -215,32 +216,32 @@ export const parseVoiceCommand = async (
   const fullTime = now.toISOString();
 
   const prompt = `
-      Role: Financial Data Parser.
-      Task: Parse user spoken input into structured JSON for an app called 'InvestFlow'.
+      角色: 金融数据解析器。
+      任务: 将用户的语音输入解析为名为 'PanassetLite' 的应用程序的结构化 JSON。
       
-      Time Context: 
-      - Current Reference Date/Time: ${fullTime}.
-      - Use this date to correctly resolve relative time terms like "today", "yesterday", "last friday", "5 minutes ago".
+      时间背景: 
+      - 当前参考日期/时间: ${fullTime}。
+      - 使用此日期正确解析相对时间术语，如“今天”、“昨天”、“上周五”、“5 分钟前”。
 
-      User Input: "${text}"
+      用户输入: "${text}"
       
-      Context Mode: ${mode}
-      Existing Assets: ${JSON.stringify(existingContext.map(a => `${a.symbol} (${a.name})`))}
+      上下文模式: ${mode}
+      现有资产: ${JSON.stringify(existingContext.map(a => `${a.symbol} (${a.name})`))}
 
-      Instructions:
-      1. Extract 'symbol', 'quantity', 'price', 'date' (YYYY-MM-DDTHH:mm:ss is preferred if specific time mentioned, else YYYY-MM-DD), 'currency'.
-      2. **INTELLIGENT MAPPING**:
-         - **Symbols**: Use your broad financial knowledge to map spoken company names or asset classes to standard Ticker Symbols (e.g. "Nvidia" -> "NVDA", "Gold" -> "GOLD", "Maotai" -> "600519.SS"). 
-         - **Manual Assets**: For Real Estate or unique items, generate a logical, concise uppercase ID (e.g. "APT_NY", "ROLEX_SUB").
-         - **Currencies**: Map spoken currency names (e.g. "RMB", "Bucks", "Yuan") to standard ISO 4217 codes (CNY, USD, HKD, etc.).
-      3. **TRANSACTION MODE**:
-         - If mode is TRANSACTION, map the input to one of the Existing Assets if possible.
-         - Determine 'txType' (BUY, SELL, DIVIDEND). Default to BUY if ambiguous.
-      4. **ASSET MODE**:
-         - Determine 'type' (STOCK, CRYPTO, FUND, CASH, REAL_ESTATE, LIABILITY, OTHER).
+      说明:
+      1. 提取 'symbol' (代码), 'quantity' (数量), 'price' (价格), 'date' (日期，首选 YYYY-MM-DDTHH:mm:ss，否则为 YYYY-MM-DD), 'currency' (货币)。
+      2. **智能映射**:
+         - **代码 (Symbols)**: 利用你广泛的金融知识将口头表达的公司名称或资产类别映射到标准股票代码 (例如 "英伟达" -> "NVDA", "黄金" -> "GOLD", "茅台" -> "600519.SS")。
+         - **手动资产**: 对于房地产或独特物品，生成一个逻辑清晰、简洁的大写 ID (例如 "APT_NY", "ROLEX_SUB")。
+         - **货币**: 将口语化的货币名称 (如 "人民币", "美金", "元") 映射到标准 ISO 4217 代码 (CNY, USD, HKD 等)。
+      3. **交易模式 (TRANSACTION MODE)**:
+         - 如果模式是 TRANSACTION，尽可能将输入映射到现有资产之一。
+         - 确定 'txType' (交易类型: BUY, SELL, DIVIDEND)。如果含糊不清，默认为 BUY。
+      4. **资产模式 (ASSET MODE)**:
+         - 确定 'type' (类型: STOCK, CRYPTO, FUND, CASH, REAL_ESTATE, LIABILITY, OTHER)。
       
-      Return STRICT JSON. No markdown formatting.
-      Fields: symbol, name, type (enum: STOCK, CRYPTO, FUND, CASH, REAL_ESTATE, LIABILITY, OTHER), txType (enum: BUY, SELL, DIVIDEND), quantity (number), price (number), date (string), currency (string).
+      返回严格的 JSON。不要使用 Markdown 格式。
+      字段: symbol, name, type (枚举: STOCK, CRYPTO, FUND, CASH, REAL_ESTATE, LIABILITY, OTHER), txType (枚举: BUY, SELL, DIVIDEND), quantity (数字), price (数字), date (字符串), currency (字符串)。
     `;
 
   const schema = {

@@ -10,7 +10,7 @@
 ![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript)
 ![TailwindCSS](https://img.shields.io/badge/Tailwind-38B2AC?style=for-the-badge&logo=tailwind-css)
 
-**一款人由工智能驱动动、Local-First 保证主权数据和强大的可视化功能的现代个人金融系统。**
+**一款由人工智能驱动、Local-First 保证主权数据和强大的可视化功能的现代个人金融系统。**
 <br/>
 ---
 
@@ -57,7 +57,7 @@
 *   **Frontend**: React 19, TypeScript, Vite
 *   **Styling**: Tailwind CSS, Lucide Icons
 *   **Visualization**: Recharts
-*   **AI Integration**: Google Gemini API, DeepSeek API
+*   **AI Integration**: Google Gemini API, DeepSeek API, Alibaba Qwen API
 *   **Market Data**: Alpha Vantage API, CoinGecko API
 
 ---
@@ -97,6 +97,7 @@
 1.  **AI 智能顾问**:
     *   **Google Gemini API Key**: ([申请链接](https://aistudio.google.com/app/apikey))
     *   **DeepSeek API Key**: ([申请链接](https://platform.deepseek.com/api_keys))
+    *   **Qwen API Key**: 通义千问 API Key ([申请链接](https://bailian.console.aliyun.com/?#/api-key))
 2.  **Alpha Vantage API Key**: 用于美股/港股实时价格。 ([申请链接](https://www.alphavantage.co/support/#api-key))
 
 *注：若不配置 API Key，应用仍可完美支持手动记账与资产统计功能。*

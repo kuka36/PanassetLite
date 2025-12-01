@@ -1,4 +1,4 @@
-import { AssetMetadata, Transaction } from '../types';
+import { AssetMetadata, Transaction } from '../types/domain';
 
 /**
  * Calculate the optimal start date for fetching historical data.

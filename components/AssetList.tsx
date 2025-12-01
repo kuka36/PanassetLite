@@ -3,7 +3,7 @@ import { usePortfolio } from '../context/PortfolioContext';
 import { Card } from './ui/Card';
 import { ConfirmModal } from './ui/ConfirmModal';
 import { ArrowUp, ArrowDown } from 'lucide-react';
-import { Asset, AssetType } from '../types';
+import { Asset, AssetType, TransactionType, PerformanceMetrics } from '../types/domain';
 import { convertValue } from '../services/marketData';
 import { AssetRow } from './AssetRow';
 import { AssetTransactionTable } from './AssetTransactionTable';
@@ -12,12 +12,13 @@ interface AssetListProps {
   assets?: Asset[];
   onEdit?: (asset: Asset) => void;
   onTransaction?: (asset: Asset) => void;
+  onSymbolClick?: (symbol: string) => void;
 }
 
 type SortKey = 'symbol' | 'price' | 'cost' | 'quantity' | 'value' | 'pnl' | 'recentReturn';
 type SortDirection = 'asc' | 'desc';
 
-export const AssetList: React.FC<AssetListProps> = ({ assets: propAssets, onEdit, onTransaction }) => {
+export const AssetList: React.FC<AssetListProps> = ({ assets: propAssets, onEdit, onTransaction, onSymbolClick }) => {
   const { assets: contextAssets, transactions, deleteAsset, settings, exchangeRates, t } = usePortfolio();
   const assets = propAssets || contextAssets;
 
@@ -30,34 +31,134 @@ export const AssetList: React.FC<AssetListProps> = ({ assets: propAssets, onEdit
   // Delete Confirmation State
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; symbol: string } | null>(null);
 
-  // Helper to calculate recent annualized return based on last 2 transactions' quantity
-  const getRecentReturn = (assetId: string) => {
+  // Helper to calculate performance metrics
+  const getRecentReturn = (assetId: string): PerformanceMetrics | null => {
     const assetTxs = transactions
       .filter(t => t.assetId === assetId)
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-    if (assetTxs.length < 2) return null;
+    if (assetTxs.length === 0) return null;
 
-    const t1 = assetTxs[0]; // Latest transaction
-    const t2 = assetTxs[1]; // Second latest transaction
-
-    // Find the current asset to get current holdings
+    // Find the current asset to get current holdings and PnL
     const currentAsset = assets.find(a => a.id === assetId);
     if (!currentAsset || currentAsset.quantity === 0) return null;
 
-    // Calculate quantity difference between the two transactions
-    const quantityDiff = t1.quantityChange;
+    // --- 1. Cumulative Performance (CAGR) ---
+    let cumulative: number | null = null;
+    const totalProfit = currentAsset.pnl + (currentAsset.realizedPnL || 0);
+    const costBasis = currentAsset.totalCost;
 
-    // Calculate time difference in days
-    const timeDiff = Math.abs(new Date(t1.date).getTime() - new Date(t2.date).getTime());
-    const daysDiff = timeDiff / (1000 * 60 * 60 * 24);
+    if (costBasis > 0) {
+      const totalReturnRate = totalProfit / costBasis;
+      const firstTx = assetTxs[0];
+      const startTime = new Date(firstTx.date).getTime();
+      const now = Date.now();
+      const daysDiff = (now - startTime) / (1000 * 60 * 60 * 24);
 
-    if (daysDiff === 0) return 0;
+      if (daysDiff < 1) {
+        cumulative = totalReturnRate;
+      } else {
+        const safeReturnRate = Math.max(totalReturnRate, -0.999);
+        cumulative = Math.pow(1 + safeReturnRate, 365 / daysDiff) - 1;
+      }
+    }
 
-    // Calculate annualized return: (quantity_diff / current_holdings) / days_diff * 365
-    const annualizedReturn = (quantityDiff / currentAsset.quantity) / daysDiff * 365;
+    // --- 2. Interval Performance (Since Last Sync & Period Perf) ---
+    // We strictly use Value-based calculation: (EndValue - NetFlows) / StartValue - 1
+    // This supports both "Price Growth" and "Quantity Growth (Zero Cost)" scenarios.
 
-    return annualizedReturn;
+    let sinceLastSync: number | null = null;
+    let lastPeriod: number | null = null;
+
+    // A. Reconstruct Historical Quantities for Adjustments
+    // We walk backwards from current state to find what the quantity was at the time of each adjustment.
+    interface AnnotatedAdjustment {
+      tx: typeof assetTxs[0];
+      snapshotQty: number; // Qty AFTER this adjustment
+      snapshotValue: number;
+    }
+
+    const adjustments: AnnotatedAdjustment[] = [];
+
+    // Transactions sorted Ascending (Old -> New) for proper replay
+    // We calculate "Post-Tx Quantity" for every transaction to know the state at that point in time.
+    let accQty = 0;
+    const txWithSnapshots = assetTxs.map(tx => {
+      accQty += tx.quantityChange;
+      return { ...tx, postTxQty: accQty };
+    });
+
+    // Now filter for adjustments (Descending order of time)
+    const rawAdjustments = txWithSnapshots
+      .filter(t => t.type === TransactionType.BALANCE_ADJUSTMENT && t.pricePerUnit > 0)
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    // Helper: Calculate Net External Flows (Buys/Sells) between two dates
+    // Start Date (Exclusive), End Date (Inclusive)
+    const calculateFlows = (startIso: string, endIso: string) => {
+      const start = new Date(startIso).getTime();
+      const end = new Date(endIso).getTime();
+
+      let flow = 0;
+      assetTxs.forEach(t => {
+        const time = new Date(t.date).getTime();
+        if (time > start && time <= end) {
+          if (t.type === TransactionType.BUY || t.type === TransactionType.DEPOSIT) {
+            flow += t.total;
+          } else if (t.type === TransactionType.SELL || t.type === TransactionType.WITHDRAWAL) {
+            flow -= t.total; // Proceeds reduce the basis
+          }
+        }
+      });
+      return flow;
+    };
+
+    // B. Calculate Metrics using Value Ratio
+
+    // Formula: (EndValue - StartValue - Flows) / (StartValue + CapitalInjections)
+    // We only add Flows to denominator if they are positive (Capital Injections). Withdrawals (Negative Flows) do not reduce the historical basis for ROI.
+    // Enhanced: Supports Annualization
+    const calculateReturn = (startVal: number, endVal: number, flow: number, days: number) => {
+      const profit = endVal - startVal - flow;
+      const basis = startVal + Math.max(flow, 0);
+      if (basis <= 0) return 0;
+
+      const totalReturn = profit / basis;
+
+      // Annualize if held for more than 1 day
+      if (days < 1) return totalReturn;
+
+      const safeReturn = Math.max(totalReturn, -0.999);
+      return Math.pow(1 + safeReturn, 365 / days) - 1;
+    };
+
+    // 1. Since Last Sync
+    if (rawAdjustments.length > 0) {
+      const latestInfo = rawAdjustments[0];
+      const startValue = latestInfo.postTxQty * latestInfo.pricePerUnit;
+      const endValue = currentAsset.quantity * currentAsset.currentPrice;
+      const flows = calculateFlows(latestInfo.date, new Date().toISOString());
+
+      const daysDiff = (Date.now() - new Date(latestInfo.date).getTime()) / (1000 * 60 * 60 * 24);
+      sinceLastSync = calculateReturn(startValue, endValue, flows, daysDiff);
+    }
+
+    // 2. Last Period (Between 2nd Last and Last)
+    if (rawAdjustments.length >= 2) {
+      const latest = rawAdjustments[0];
+      const prev = rawAdjustments[1]; // Older
+
+      const startValue = prev.postTxQty * prev.pricePerUnit;
+      const endValue = latest.postTxQty * latest.pricePerUnit; // Value AT the time of Latest Adjustment
+
+      // Flows between Prev (Exclusive) and Latest (Inclusive)
+      const flows = calculateFlows(prev.date, latest.date);
+
+      const daysDiff = (new Date(latest.date).getTime() - new Date(prev.date).getTime()) / (1000 * 60 * 60 * 24);
+      lastPeriod = calculateReturn(startValue, endValue, flows, daysDiff);
+    }
+
+    return { cumulative, sinceLastSync, lastPeriod };
   };
 
   // Sort Logic
@@ -99,8 +200,11 @@ export const AssetList: React.FC<AssetListProps> = ({ assets: propAssets, onEdit
           bValue = getPnl(b);
           break;
         case 'recentReturn':
-          aValue = getRecentReturn(a.id) || -Infinity; // Push nulls to bottom
-          bValue = getRecentReturn(b.id) || -Infinity;
+          // Sort by cumulative
+          const perfA = getRecentReturn(a.id);
+          const perfB = getRecentReturn(b.id);
+          aValue = perfA?.cumulative ?? -Infinity;
+          bValue = perfB?.cumulative ?? -Infinity;
           break;
         default:
           return 0;
@@ -154,7 +258,6 @@ export const AssetList: React.FC<AssetListProps> = ({ assets: propAssets, onEdit
                 <SortableHeader label={t('holdings')} sortKey="quantity" />
                 <SortableHeader label={t('recentReturn')} sortKey="recentReturn" alignRight />
                 <SortableHeader label={t('value')} sortKey="value" alignRight />
-                <SortableHeader label={t('statusPnL')} sortKey="pnl" alignRight />
                 {(onEdit || onTransaction) && <th className="pb-3 font-medium text-right pr-2">{t('actions')}</th>}
               </tr>
             </thead>
@@ -168,13 +271,14 @@ export const AssetList: React.FC<AssetListProps> = ({ assets: propAssets, onEdit
                   onEdit={onEdit}
                   onTransaction={onTransaction}
                   onDelete={(id, symbol) => setDeleteTarget({ id, symbol })}
-                  recentReturn={getRecentReturn(asset.id)}
+                  performance={getRecentReturn(asset.id)}
+                  onSymbolClick={onSymbolClick}
                   t={t}
                 />
               ))}
               {sortedAssets.length === 0 && (
                 <tr>
-                  <td colSpan={onEdit ? 8 : 7} className="text-center py-8 text-slate-400 italic">
+                  <td colSpan={onEdit ? 7 : 6} className="text-center py-8 text-slate-400 italic">
                     {t('noAssets')}
                   </td>
                 </tr>
@@ -194,7 +298,8 @@ export const AssetList: React.FC<AssetListProps> = ({ assets: propAssets, onEdit
               onEdit={onEdit}
               onTransaction={onTransaction}
               onDelete={(id, symbol) => setDeleteTarget({ id, symbol })}
-              recentReturn={getRecentReturn(asset.id)}
+              performance={getRecentReturn(asset.id)}
+              onSymbolClick={onSymbolClick}
               t={t}
             />
           ))}

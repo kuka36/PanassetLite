@@ -3,7 +3,7 @@ import React, { useState, useMemo } from 'react';
 import { usePortfolio } from '../context/PortfolioContext';
 import { Card } from './ui/Card';
 import { ConfirmModal } from './ui/ConfirmModal';
-import { TransactionType, Currency } from '../types';
+import { TransactionType, Currency } from '../types/domain';
 import { Filter, ArrowDownLeft, ArrowUpRight, DollarSign, Trash2, ArrowRightLeft, CreditCard, RefreshCw, ChevronDown, ChevronUp, Calendar, Hash, Edit3 } from 'lucide-react';
 import { EditTransactionModal } from './EditTransactionModal';
 import { Combobox } from './ui/Combobox';

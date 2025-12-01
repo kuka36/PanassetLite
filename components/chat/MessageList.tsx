@@ -1,7 +1,8 @@
 import React, { useRef, useEffect } from 'react';
 import { User, Sparkles, CheckCircle2, ListChecks, AlertCircle, Check } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
-import { ChatMessage, PendingAction, Language, BulkAssetItem } from '../../types';
+import { ChatMessage } from '../../types/ui';
+import { PendingAction, Language, BulkAssetItem } from '../../types/store';
 import { ConfirmationTable } from '../ConfirmationTable';
 
 interface MessageListProps {
@@ -10,7 +11,6 @@ interface MessageListProps {
     language: Language;
     onUpdatePendingAction: (msgId: string, newItems: BulkAssetItem[]) => void;
     onConfirmAction: (msgId: string, action: PendingAction) => void;
-    isResizing: boolean;
 }
 
 export const MessageList: React.FC<MessageListProps> = ({
@@ -19,7 +19,6 @@ export const MessageList: React.FC<MessageListProps> = ({
     language,
     onUpdatePendingAction,
     onConfirmAction,
-    isResizing
 }) => {
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -38,7 +37,7 @@ export const MessageList: React.FC<MessageListProps> = ({
     };
 
     return (
-        <div className={`flex-1 overflow-y-auto p-4 space-y-6 bg-slate-50 scroll-smooth ${isResizing ? 'pointer-events-auto' : ''}`}>
+        <div className="flex-1 overflow-y-auto p-4 space-y-6 bg-slate-50 scroll-smooth">
             {messages.map((msg) => (
                 <div key={msg.id} className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
                     <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 shadow-sm ${msg.role === 'user' ? 'bg-slate-200 text-slate-500' : 'bg-indigo-100 text-indigo-600'
@@ -84,6 +83,7 @@ export const MessageList: React.FC<MessageListProps> = ({
                                         <ConfirmationTable
                                             items={msg.pendingAction.items}
                                             onUpdate={(newItems) => onUpdatePendingAction(msg.id, newItems)}
+                                            language={language}
                                         />
                                     </div>
                                 )}
@@ -91,14 +91,32 @@ export const MessageList: React.FC<MessageListProps> = ({
                                 {msg.pendingAction.type !== 'BULK_ASSET_UPDATE' && (
                                     <div className="pl-6 mb-3">
                                         <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs bg-white/50 p-2 rounded-lg border border-indigo-100">
-                                            {Object.entries(msg.pendingAction.data).map(([k, v]) => (
-                                                v !== undefined && v !== null && k !== 'assetId' && k !== 'targetId' ? (
+                                            {Object.entries(msg.pendingAction.data).map(([k, v]) => {
+                                                if (v === undefined || v === null || k === 'assetId' || k === 'targetId') return null;
+                                                
+                                                let label = k;
+                                                if (language === 'zh') {
+                                                    const labels: Record<string, string> = {
+                                                        'symbol': '代码',
+                                                        'name': '名称',
+                                                        'quantity': '数量',
+                                                        'price': '成本价',
+                                                        'currentPrice': '现价',
+                                                        'type': '类型',
+                                                        'date': '日期',
+                                                        'currency': '币种',
+                                                        'fee': '手续费'
+                                                    };
+                                                    label = labels[k] || k;
+                                                }
+
+                                                return (
                                                     <React.Fragment key={k}>
-                                                        <span className="text-slate-500 font-medium capitalize">{k}:</span>
+                                                        <span className="text-slate-500 font-medium capitalize">{label}:</span>
                                                         <span className="text-slate-800 text-right truncate font-mono">{v.toString()}</span>
                                                     </React.Fragment>
-                                                ) : null
-                                            ))}
+                                                );
+                                            })}
                                         </div>
                                     </div>
                                 )}

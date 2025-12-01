@@ -1,17 +1,22 @@
-import { useState, useRef, useEffect } from 'react';
-import { AssetMetadata, AssetType, Currency, AppSettings, MarketDataError, ErrorCategory } from '../types';
+import { useState, useRef, useEffect, Dispatch } from 'react';
+import { AssetMetadata, AssetType, Currency } from '../types/domain';
+import { AppSettings } from '../types/store';
+import { MarketDataError, ErrorCategory } from '../types/api';
 import { fetchExchangeRates, fetchCryptoPrices, fetchStockPrices } from '../services/marketData';
 import { toastService } from '../services/toastService';
 import { translations } from '../utils/i18n';
+import { PortfolioAction } from '../context/portfolioReducer';
 
 export const useMarketData = (
     assetMetas: AssetMetadata[],
-    setAssetMetas: React.Dispatch<React.SetStateAction<AssetMetadata[]>>,
+    dispatch: Dispatch<PortfolioAction>,
     settings: AppSettings
 ) => {
     const [exchangeRates, setExchangeRates] = useState<Record<string, number>>({ USD: 1, CNY: 7.2, HKD: 7.8 });
     const [isRefreshing, setIsRefreshing] = useState(false);
     const settingsRef = useRef(settings);
+    const pendingAssetsRef = useRef<Map<string, AssetMetadata>>(new Map());
+    const refreshTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
     useEffect(() => { settingsRef.current = settings; }, [settings]);
 
@@ -35,16 +40,8 @@ export const useMarketData = (
         }
     };
 
-    const refreshPrices = async (assetsOverride?: AssetMetadata[]) => {
-        console.log('[useMarketData] refreshPrices called:', {
-            isOverride: !!assetsOverride,
-            targetAssetsCount: assetsOverride?.length || assetMetas.length,
-            provider: settingsRef.current.marketDataProvider,
-            stackTrace: new Error().stack?.split('\\n').slice(2, 5).join('\\n')
-        });
+    const performRefresh = async (targetAssets: AssetMetadata[]) => {
         setIsRefreshing(true);
-        const targetAssets = assetsOverride || assetMetas;
-
         try {
             const rates = await fetchExchangeRates();
             setExchangeRates(rates);
@@ -56,38 +53,38 @@ export const useMarketData = (
                     alphaVantageKey: settingsRef.current.alphaVantageApiKey,
                     finnhubKey: settingsRef.current.finnhubApiKey
                 }).catch((error: MarketDataError) => {
-                    // Show error notification
                     toastService.showError(getErrorMessage(error));
-                    // Return empty object to continue with other data
                     return {};
                 })
             ]);
 
-            setAssetMetas(prev => prev.map(meta => {
-                let newPrice = meta.currentPrice;
-                let newCurrency = meta.currency;
-                let timestamp = meta.lastUpdated;
+            dispatch({
+                type: 'UPDATE_METAS',
+                payload: (prev: AssetMetadata[]) => prev.map(meta => {
+                    let newPrice = meta.currentPrice;
+                    let newCurrency = meta.currency;
+                    let timestamp = meta.lastUpdated;
 
-                if (meta.type === AssetType.CRYPTO && cryptoPrices[meta.id]) {
-                    newPrice = cryptoPrices[meta.id];
-                    newCurrency = Currency.USD;
-                    timestamp = Date.now();
-                } else if ((meta.type === AssetType.STOCK || meta.type === AssetType.FUND) && stockData[meta.id]) {
-                    newPrice = stockData[meta.id].price;
-                    newCurrency = stockData[meta.id].currency;
-                    timestamp = stockData[meta.id].lastUpdated || Date.now();
-                } else if (meta.type === AssetType.CASH && !meta.isManualPrice) {
-                    const rate = rates[meta.symbol];
-                    if (rate && rate > 0) {
-                        newPrice = 1 / rate;
+                    if (meta.type === AssetType.CRYPTO && cryptoPrices[meta.id]) {
+                        newPrice = cryptoPrices[meta.id];
                         newCurrency = Currency.USD;
                         timestamp = Date.now();
+                    } else if ((meta.type === AssetType.STOCK || meta.type === AssetType.FUND) && stockData[meta.id]) {
+                        newPrice = stockData[meta.id].price;
+                        newCurrency = stockData[meta.id].currency;
+                        timestamp = stockData[meta.id].lastUpdated || Date.now();
+                    } else if (meta.type === AssetType.CASH && !meta.isManualPrice) {
+                        const rate = rates[meta.symbol];
+                        if (rate && rate > 0) {
+                            newPrice = 1 / rate;
+                            newCurrency = Currency.USD;
+                            timestamp = Date.now();
+                        }
                     }
-                }
 
-                return { ...meta, currentPrice: newPrice, currency: newCurrency, lastUpdated: timestamp };
-            }));
-
+                    return { ...meta, currentPrice: newPrice, currency: newCurrency, lastUpdated: timestamp };
+                })
+            });
         } catch (error) {
             console.error("Failed to refresh prices:", error);
             if ((error as MarketDataError).category) {
@@ -98,6 +95,35 @@ export const useMarketData = (
         } finally {
             setIsRefreshing(false);
         }
+    };
+
+    const refreshPrices = async (assetsOverride?: AssetMetadata[]) => {
+        // If assetsOverride is provided, add them to the pending set
+        if (assetsOverride) {
+            assetsOverride.forEach(a => pendingAssetsRef.current.set(a.id, a));
+        } else {
+            // If no override, it means refresh all. We can clear pending and just refresh all.
+            pendingAssetsRef.current.clear();
+            assetMetas.forEach(a => pendingAssetsRef.current.set(a.id, a));
+        }
+
+        // Debounce the refresh call to batch multiple calls (e.g. from bulk entry)
+        if (refreshTimeoutRef.current) {
+            clearTimeout(refreshTimeoutRef.current);
+        }
+
+        return new Promise<void>((resolve) => {
+            refreshTimeoutRef.current = setTimeout(async () => {
+                const targetAssets = Array.from(pendingAssetsRef.current.values());
+                pendingAssetsRef.current.clear();
+                
+                if (targetAssets.length > 0) {
+                    await performRefresh(targetAssets);
+                }
+                refreshTimeoutRef.current = null;
+                resolve();
+            }, 100); // 100ms debounce
+        });
     };
 
     return { exchangeRates, isRefreshing, refreshPrices };

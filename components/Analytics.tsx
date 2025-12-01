@@ -3,10 +3,11 @@ import { usePortfolio } from '../context/PortfolioContext';
 import { getRiskAssessment } from '../services/geminiService';
 import { convertValue } from '../services/marketData';
 import { getAssetRiskLevel, RiskLevel } from '../services/riskUtils';
-import { AssetType } from '../types';
+import { AssetType } from '../types/domain';
 import { PieChart as PieIcon } from 'lucide-react';
 import { NetWorthStructureChart } from './analytics/NetWorthStructureChart';
 import { AssetAllocationChart } from './analytics/AssetAllocationChart';
+import { CurrencyDistributionChart } from './analytics/CurrencyDistributionChart';
 import { RiskAnalysisChart } from './analytics/RiskAnalysisChart';
 import { PerformanceCharts } from './analytics/PerformanceCharts';
 
@@ -37,7 +38,8 @@ export const Analytics: React.FC = () => {
   const handleRefreshRisk = async () => {
     if (assets.length === 0) return;
 
-    const apiKey = settings.aiProvider === 'deepseek' ? settings.deepSeekApiKey : settings.geminiApiKey;
+    const apiKeyMap = { gemini: settings.geminiApiKey, deepseek: settings.deepSeekApiKey, qwen: settings.qwenApiKey };
+    const apiKey = apiKeyMap[settings.aiProvider];
 
     if (!apiKey) {
       setRiskError(true);
@@ -70,6 +72,21 @@ export const Analytics: React.FC = () => {
       .map(([name, value]) => ({ name: t(`type_${name.toLowerCase()}`), value }))
       .sort((a, b) => b.value - a.value);
   }, [assets, settings.baseCurrency, exchangeRates, t]);
+
+  // 按币种分类的资产分布
+  const currencyDistribution = useMemo(() => {
+    const dist: Record<string, number> = {};
+    assets.forEach(a => {
+      if (a.type === AssetType.LIABILITY) return;
+      const rawVal = a.quantity * a.currentPrice;
+      const val = convertValue(rawVal, a.currency, settings.baseCurrency, exchangeRates);
+      // 使用资产的原生货币作为分类键
+      dist[a.currency] = (dist[a.currency] || 0) + val;
+    });
+    return Object.entries(dist)
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value);
+  }, [assets, settings.baseCurrency, exchangeRates]);
 
   const liabilityDistribution = useMemo(() => {
     return assets
@@ -191,6 +208,13 @@ export const Analytics: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <AssetAllocationChart
           data={typeDistribution}
+          colors={COLORS}
+          formatCurrency={formatCurrency}
+          t={t}
+        />
+
+        <CurrencyDistributionChart
+          data={currencyDistribution}
           colors={COLORS}
           formatCurrency={formatCurrency}
           t={t}

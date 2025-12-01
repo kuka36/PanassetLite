@@ -1,0 +1,56 @@
+name: AI Task
+description: 委派给自动化 Agent 执行的任务（贴上 ai-task 标签后触发 GitHub Actions）
+title: "[ai-task] "
+labels: ["ai-task"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        填好以下字段后，给本 Issue 贴 `ai-task` 标签即可触发自动化 Agent。
+        Agent 会在 devcontainer 中执行任务并自动开 PR。
+  - type: textarea
+    id: goal
+    attributes:
+      label: 目标 (Goal)
+      description: 一句话说清楚最终想得到什么。
+      placeholder: 在资产列表页添加按标签筛选的下拉框。
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: 变更范围 (Scope)
+      description: 哪些文件 / 目录可能会被改动？
+      placeholder: |
+        - components/assets/AssetList.tsx
+        - context/PortfolioContext.tsx
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 验收标准 (Acceptance Criteria)
+      description: 用 checkbox 写出可被 PR 自检的验收条件。
+      value: |
+        - [ ] `npm run build` 通过
+        - [ ]
+    validations:
+      required: true
+  - type: textarea
+    id: risk
+    attributes:
+      label: 风险点 (Risks)
+      description: 是否动到 PortfolioEngine / Storage / 行情刷新 / AI agent？是否引入新存储 key？
+      placeholder: 无风险点 / 引入新 storage key xxx 并需迁移
+    validations:
+      required: false
+  - type: textarea
+    id: refs
+    attributes:
+      label: 相关文件 / 参考 (References)
+      description: 给 Agent 一些导航锚点。
+      placeholder: |
+        - services/PortfolioEngine.ts
+        - types/domain.ts
+    validations:
+      required: false

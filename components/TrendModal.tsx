@@ -1,7 +1,8 @@
 import React from 'react';
 import { X } from 'lucide-react';
 import { NetWorthChart } from './NetWorthChart';
-import { Asset, Transaction, Currency, ExchangeRates } from '../types';
+import { Asset, Transaction, Currency } from '../types/domain';
+import { ExchangeRates } from '../types/store';
 
 interface TrendModalProps {
     isOpen: boolean;

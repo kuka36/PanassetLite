@@ -1,10 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
 import { usePortfolio } from '../context/PortfolioContext';
 import { AgentService } from '../services/agentService';
-import { ChatMessage, PendingAction, TransactionType, AssetType, Currency, BulkAssetItem } from '../types';
+import { TransactionType, AssetType, Currency } from '../types/domain';
+import { PendingAction, BulkAssetItem } from '../types/store';
+import { ChatMessage } from '../types/ui';
 import { compressImage } from '../utils/imageCompression';
-
-const HISTORY_KEY = 'panasset_chat_history';
+import { SequenceService } from '../services/SequenceService';
+import { StorageService } from '../services/StorageService';
 
 export const useChat = (isOpen: boolean) => {
     const { settings, assets, transactions, addTransaction, editTransaction, deleteTransaction, addAsset, editAsset, deleteAsset } = usePortfolio();
@@ -16,13 +18,9 @@ export const useChat = (isOpen: boolean) => {
 
     // Load History on Mount
     useEffect(() => {
-        const saved = localStorage.getItem(HISTORY_KEY);
+        const saved = StorageService.getChatHistory();
         if (saved) {
-            try {
-                setMessages(JSON.parse(saved));
-            } catch (e) {
-                console.error("Failed to load chat history", e);
-            }
+            setMessages(saved);
         } else {
             setMessages([{
                 id: 'init',
@@ -39,7 +37,7 @@ export const useChat = (isOpen: boolean) => {
     useEffect(() => {
         if (messages.length > 0) {
             const validMessages = messages.filter(m => (m.content && m.content.trim() !== '') || m.image || m.pendingAction);
-            localStorage.setItem(HISTORY_KEY, JSON.stringify(validMessages.slice(-50)));
+            StorageService.saveChatHistory(validMessages.slice(-50));
         }
     }, [messages]);
 
@@ -96,7 +94,11 @@ export const useChat = (isOpen: boolean) => {
         setSelectedImage(null);
         setIsTyping(true);
 
-        const agent = new AgentService(settings.geminiApiKey);
+        let apiKey = settings.geminiApiKey;
+        if (settings.aiProvider === 'qwen') apiKey = settings.qwenApiKey;
+        else if (settings.aiProvider === 'deepseek') apiKey = settings.deepSeekApiKey;
+
+        const agent = new AgentService(apiKey, settings.aiProvider);
 
         const response = await agent.processMessage(
             userMsg.content,
@@ -155,8 +157,14 @@ export const useChat = (isOpen: boolean) => {
                         existing = assets.find(a => a.symbol.includes(symbolUpper) || symbolUpper.includes(a.symbol)); // 3. Fuzzy Symbol
                     }
 
+
                     if (!existing && nameUpper && nameUpper.length >= 4) {
                         existing = assets.find(a => a.name.toUpperCase().includes(nameUpper) || nameUpper.includes(a.name.toUpperCase())); // 4. Fuzzy Name
+                    }
+
+                    if (!existing && symbolUpper && symbolUpper.length >= 3) {
+                        // 5. Cross Match: Symbol matches Name (e.g. AI returns "Apple" as symbol, but we have "Apple" as name)
+                        existing = assets.find(a => a.name.toUpperCase().includes(symbolUpper) || symbolUpper.includes(a.name.toUpperCase()));
                     }
 
                     if (existing) {
@@ -164,9 +172,9 @@ export const useChat = (isOpen: boolean) => {
                         const delta = newQty - existing.quantity;
 
                         // Update price if significantly different
-                        const itemPrice = Number(item.price);
-                        if (item.price && Math.abs(itemPrice - existing.currentPrice) > 0.00001) {
-                            editAsset({ ...existing, currentPrice: itemPrice, lastUpdated: Date.now() });
+                        const itemCurrentPrice = Number(item.currentPrice || item.price);
+                        if ((item.currentPrice || item.price) && Math.abs(itemCurrentPrice - existing.currentPrice) > 0.00001) {
+                            editAsset({ ...existing, currentPrice: itemCurrentPrice, lastUpdated: Date.now() });
                         }
 
                         // Create Balance Adjustment Transaction
@@ -176,33 +184,38 @@ export const useChat = (isOpen: boolean) => {
                                 type: TransactionType.BALANCE_ADJUSTMENT,
                                 date: new Date().toISOString(),
                                 quantityChange: delta,
-                                pricePerUnit: itemPrice || existing.currentPrice,
+                                pricePerUnit: item.avgCost ? Number(item.avgCost) : (itemCurrentPrice || existing.currentPrice),
                                 fee: 0,
-                                total: delta * (itemPrice || existing.currentPrice),
+                                total: delta * (item.avgCost ? Number(item.avgCost) : (itemCurrentPrice || existing.currentPrice)),
                                 note: 'AI Bulk Import Adjustment'
                             });
                         }
                     } else {
                         // Create New Asset
+                        const newId = SequenceService.generateId();
+
+                        const price = Number(item.currentPrice || item.price) || 0;
+                        const cost = Number(item.avgCost || item.price) || price;
+
                         const meta = {
-                            id: crypto.randomUUID(),
+                            id: newId,
                             symbol: symbolUpper || 'UNKNOWN',
                             name: item.name || symbolUpper || 'Unknown Asset',
                             type: item.assetType as AssetType || AssetType.STOCK,
-                            currentPrice: Number(item.price) || 0,
+                            currentPrice: price,
                             currency: (item.currency as Currency) || settings.baseCurrency,
                             lastUpdated: Date.now(),
                             dateAcquired: item.dateAcquired || new Date().toISOString()
                         };
 
-                        addAsset(meta, Number(item.quantity) || 0, Number(item.price) || 0, meta.dateAcquired);
+                        addAsset(meta, Number(item.quantity) || 0, cost, meta.dateAcquired);
                     }
                 });
             }
 
             else if (type === 'ADD_ASSET') {
                 const meta = {
-                    id: crypto.randomUUID(),
+                    id: SequenceService.generateId(),
                     symbol: data.symbol || 'UNKNOWN',
                     name: data.name || data.symbol || 'Unknown',
                     type: data.type as AssetType || AssetType.STOCK,
@@ -213,7 +226,9 @@ export const useChat = (isOpen: boolean) => {
                 };
 
 
-                addAsset(meta, data.quantity || 0, data.price || 0, meta.dateAcquired);
+                const cost = data.cost !== undefined ? data.cost : (data.price || 0);
+
+                addAsset(meta, data.quantity || 0, cost, meta.dateAcquired);
             }
             else if (type === 'UPDATE_ASSET' && targetId) {
                 const existing = assets.find(a => a.id === targetId);
@@ -255,7 +270,7 @@ export const useChat = (isOpen: boolean) => {
                 let assetId = data.assetId;
 
                 if (!assetId && data.symbol) {
-                    assetId = crypto.randomUUID();
+                    assetId = SequenceService.generateId();
                     const meta = {
                         id: assetId,
                         symbol: data.symbol,
@@ -335,7 +350,7 @@ export const useChat = (isOpen: boolean) => {
 
     const handleClearHistory = () => {
         setMessages([]);
-        localStorage.removeItem(HISTORY_KEY);
+        StorageService.clearChatHistory();
     };
 
     return {

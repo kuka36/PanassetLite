@@ -22,7 +22,8 @@ export const GeminiAdvisor: React.FC = () => {
     if (e) e.stopPropagation();
 
     // Check key before calling hook action to show UI error immediately if needed
-    const apiKey = settings.aiProvider === 'deepseek' ? settings.deepSeekApiKey : settings.geminiApiKey;
+    const apiKeyMap = { gemini: settings.geminiApiKey, deepseek: settings.deepSeekApiKey, qwen: settings.qwenApiKey };
+    const apiKey = apiKeyMap[settings.aiProvider];
     if (!apiKey) {
       setError(t('apiKeyMissing'));
       setIsExpanded(true);

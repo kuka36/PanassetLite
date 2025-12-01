@@ -1,29 +1,28 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { Suspense, lazy, useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
 import { LayoutDashboard, PieChart, Wallet, Settings, Menu, X, History, BookOpen, Sparkles } from 'lucide-react';
 import { usePortfolio } from '../context/PortfolioContext';
-import { AIChatAssistant } from './AIChatAssistant';
 import { Logo } from './ui/Logo';
+import { StorageService } from '../services/StorageService';
+
+const AIChatAssistant = lazy(() =>
+  import('./AIChatAssistant').then(m => ({ default: m.AIChatAssistant }))
+);
 
 export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { t, settings } = usePortfolio();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
 
-  // Initialize from localStorage or default to expanded (false)
-  const [isCollapsed, setIsCollapsed] = useState(() => {
-    const saved = localStorage.getItem('investflow_sidebar_collapsed');
-    return saved === 'true';
-  });
+  const [isCollapsed, setIsCollapsed] = useState(() => StorageService.getSidebarCollapsed());
 
-  // Persist state changes
   useEffect(() => {
-    localStorage.setItem('investflow_sidebar_collapsed', String(isCollapsed));
+    StorageService.saveSidebarCollapsed(isCollapsed);
   }, [isCollapsed]);
 
-  // Logic: AI Assistant is enabled if the Key is present (Gemini or DeepSeek).
-  const isAiEnabled = !!(settings.geminiApiKey || settings.deepSeekApiKey);
+  // Logic: AI Assistant is enabled if any provider's API Key is present.
+  const isAiEnabled = !!(settings.geminiApiKey || settings.deepSeekApiKey || settings.qwenApiKey);
 
   const title = settings.language === 'zh' ? "盘资产" : "Panasset";
   const subTitle = settings.language === 'zh' ? "轻" : "Lite";
@@ -179,12 +178,13 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
       </main>
 
       {/* Global AI Chat Assistant */}
-      {isAiEnabled && (
-        <AIChatAssistant
-          isOpen={isChatOpen}
-          onClose={() => setIsChatOpen(false)}
-          isSidebarCollapsed={isCollapsed}
-        />
+      {isAiEnabled && isChatOpen && (
+        <Suspense fallback={null}>
+          <AIChatAssistant
+            isOpen={isChatOpen}
+            onClose={() => setIsChatOpen(false)}
+          />
+        </Suspense>
       )}
     </div>
   );

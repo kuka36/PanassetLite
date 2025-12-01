@@ -1,14 +1,18 @@
 import React, { useState } from 'react';
-import { Maximize2, Minimize2, X } from 'lucide-react';
-import { AssetType, Currency } from '../types';
+import { Maximize2, X } from 'lucide-react';
+import { AssetType, Currency } from '../types/domain';
+import { Language } from '../types/store';
 
 interface ConfirmationTableProps {
     items: any[];
     onUpdate: (items: any[]) => void;
+    language?: Language;
 }
 
-export const ConfirmationTable: React.FC<ConfirmationTableProps> = ({ items, onUpdate }) => {
+export const ConfirmationTable: React.FC<ConfirmationTableProps> = ({ items, onUpdate, language = 'en' }) => {
     const [isZoomed, setIsZoomed] = useState(false);
+
+    const isZh = language === 'zh';
 
     const handleChange = (index: number, field: string, value: any) => {
         const newItems = [...items];
@@ -25,7 +29,8 @@ export const ConfirmationTable: React.FC<ConfirmationTableProps> = ({ items, onU
                         <th className="p-2 border-b border-indigo-100 min-w-[100px]">Name</th>
                         <th className="p-2 border-b border-indigo-100 min-w-[80px]">Type</th>
                         <th className="p-2 border-b border-indigo-100 text-right min-w-[60px]">Qty</th>
-                        <th className="p-2 border-b border-indigo-100 text-right min-w-[80px]">Price</th>
+                        <th className="p-2 border-b border-indigo-100 text-right min-w-[80px]">{isZh ? '现价' : 'Price'}</th>
+                        <th className="p-2 border-b border-indigo-100 text-right min-w-[80px]">{isZh ? '成本价' : 'Cost'}</th>
                         <th className="p-2 border-b border-indigo-100 min-w-[60px]">Ccy</th>
                         <th className="p-2 border-b border-indigo-100 text-right min-w-[100px]">Date</th>
                     </tr>
@@ -71,8 +76,17 @@ export const ConfirmationTable: React.FC<ConfirmationTableProps> = ({ items, onU
                             <td className="p-1">
                                 <input
                                     type="number"
-                                    value={item.price || ''}
-                                    onChange={(e) => handleChange(idx, 'price', e.target.value)}
+                                    value={item.currentPrice || item.price || ''}
+                                    onChange={(e) => handleChange(idx, 'currentPrice', e.target.value)}
+                                    className="w-full text-right bg-transparent border border-transparent hover:border-indigo-200 focus:border-indigo-400 rounded px-1 py-0.5 outline-none transition-colors text-slate-600"
+                                />
+                            </td>
+                            <td className="p-1">
+                                <input
+                                    type="number"
+                                    value={item.avgCost || ''}
+                                    onChange={(e) => handleChange(idx, 'avgCost', e.target.value)}
+                                    placeholder="-"
                                     className="w-full text-right bg-transparent border border-transparent hover:border-indigo-200 focus:border-indigo-400 rounded px-1 py-0.5 outline-none transition-colors text-slate-600"
                                 />
                             </td>

@@ -6,15 +6,12 @@ import { ChatHeader } from './chat/ChatHeader';
 import { ChatInput } from './chat/ChatInput';
 import { MessageList } from './chat/MessageList';
 
-const DIMENSIONS_KEY = 'panasset_chat_dim';
-
 interface AIChatAssistantProps {
     isOpen: boolean;
     onClose: () => void;
-    isSidebarCollapsed?: boolean;
 }
 
-export const AIChatAssistant: React.FC<AIChatAssistantProps> = ({ isOpen, onClose, isSidebarCollapsed = false }) => {
+export const AIChatAssistant: React.FC<AIChatAssistantProps> = ({ isOpen, onClose }) => {
     const { t } = usePortfolio();
     const {
         input,
@@ -34,111 +31,123 @@ export const AIChatAssistant: React.FC<AIChatAssistantProps> = ({ isOpen, onClos
         settings
     } = useChat(isOpen);
 
-    // Resizable State
-    const [dimensions, setDimensions] = useState({ width: 400, height: 600 });
+    const [isMobile, setIsMobile] = useState(false);
+    const [isMaximized, setIsMaximized] = useState(false);
+    const [chatWidth, setChatWidth] = useState(450);
     const [isResizing, setIsResizing] = useState(false);
-    const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
-    const dimensionsRef = useRef(dimensions);
+    const resizeRef = useRef<HTMLDivElement>(null);
 
-    // Sync dimensions ref
-    useEffect(() => { dimensionsRef.current = dimensions; }, [dimensions]);
-
-    // Load Dimensions & Mobile Check
     useEffect(() => {
-        try {
-            const savedDim = localStorage.getItem(DIMENSIONS_KEY);
-            if (savedDim) setDimensions(JSON.parse(savedDim));
-        } catch (e) { }
-
-        const handleResize = () => setIsMobile(window.innerWidth < 768);
+        setIsMobile(window.innerWidth < 768);
+        const handleResize = () => {
+            setIsMobile(window.innerWidth < 768);
+            if (window.innerWidth < 768) {
+                setIsMaximized(false);
+            }
+        };
         window.addEventListener('resize', handleResize);
         return () => window.removeEventListener('resize', handleResize);
     }, []);
 
-    // --- Resize Logic ---
-    const handleResizeStart = (e: React.MouseEvent) => {
+    useEffect(() => {
+        const handleMouseMove = (e: MouseEvent) => {
+            if (!isResizing) return;
+            const newWidth = window.innerWidth - e.clientX;
+            if (newWidth >= 320 && newWidth <= window.innerWidth * 0.8) {
+                setChatWidth(newWidth);
+            }
+        };
+
+        const handleMouseUp = () => {
+            setIsResizing(false);
+            document.body.style.cursor = 'default';
+        };
+
+        if (isResizing) {
+            window.addEventListener('mousemove', handleMouseMove);
+            window.addEventListener('mouseup', handleMouseUp);
+            document.body.style.cursor = 'ew-resize';
+        }
+
+        return () => {
+            window.removeEventListener('mousemove', handleMouseMove);
+            window.removeEventListener('mouseup', handleMouseUp);
+        };
+    }, [isResizing]);
+
+    const handleMouseDown = (e: React.MouseEvent) => {
         e.preventDefault();
         setIsResizing(true);
-        const startX = e.clientX;
-        const startY = e.clientY;
-        const startW = dimensions.width;
-        const startH = dimensions.height;
-
-        const onMouseMove = (ev: MouseEvent) => {
-            const deltaX = ev.clientX - startX;
-            const deltaY = ev.clientY - startY;
-
-            // Logic: Dragging Top-Right corner.
-            // Moving Right (+X) increases Width.
-            // Moving Up (-Y) increases Height (since it's anchored to bottom).
-
-            const newW = Math.max(320, Math.min(1200, startW + deltaX));
-            const newH = Math.max(400, Math.min(window.innerHeight - 50, startH - deltaY));
-
-            setDimensions({ width: newW, height: newH });
-        };
-
-        const onMouseUp = () => {
-            setIsResizing(false);
-            window.removeEventListener('mousemove', onMouseMove);
-            window.removeEventListener('mouseup', onMouseUp);
-            localStorage.setItem(DIMENSIONS_KEY, JSON.stringify(dimensionsRef.current));
-        };
-
-        window.addEventListener('mousemove', onMouseMove);
-        window.addEventListener('mouseup', onMouseUp);
     };
 
-    const desktopLeftClass = isSidebarCollapsed ? 'md:left-24' : 'md:left-72';
-    const resizeStyle = !isMobile ? { width: dimensions.width, height: dimensions.height } : {};
+    const toggleMaximize = () => {
+        setIsMaximized(!isMaximized);
+    };
 
-    if (!isOpen) return null;
+    // Width calculation
+    const getWidth = () => {
+        if (isMobile || isMaximized) return '100%';
+        return `${chatWidth}px`;
+    };
 
     return (
-        <div
-            onClick={(e) => e.stopPropagation()}
-            className={`
-        fixed z-50 flex flex-col overflow-hidden bg-white shadow-2xl transition-all duration-75
-        inset-0 rounded-none 
-        md:inset-auto md:bottom-4 md:right-auto md:rounded-2xl md:border md:border-slate-200 ${desktopLeftClass}
-        animate-slide-up origin-bottom-left
-        ${isResizing ? 'pointer-events-none select-none' : ''}
-    `}
-            style={resizeStyle}
-        >
-            <ChatHeader
-                language={settings.language}
-                onClearHistory={handleClearHistory}
-                onClose={onClose}
-                isResizing={isResizing}
-                isMobile={isMobile}
-                onResizeStart={handleResizeStart}
+        <>
+            {/* Backdrop for mobile or to focus on chat */}
+            <div
+                className={`fixed inset-0 bg-slate-900/20 backdrop-blur-sm z-40 transition-opacity duration-300 ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+                onClick={onClose}
             />
 
-            <MessageList
-                messages={messages}
-                isTyping={isTyping}
-                language={settings.language}
-                onUpdatePendingAction={handleUpdatePendingAction}
-                onConfirmAction={handleConfirmAction}
-                isResizing={isResizing}
-            />
+            <div
+                onClick={(e) => e.stopPropagation()}
+                className={`
+                    fixed top-0 right-0 z-50 flex flex-col overflow-hidden bg-white shadow-2xl transition-all duration-300 ease-in-out
+                    h-full border-l border-slate-200
+                    ${isOpen ? 'translate-x-0' : 'translate-x-full'}
+                    ${isResizing ? '!transition-none' : ''}
+                `}
+                style={{ width: getWidth() }}
+            >
+                {/* Resize handle */}
+                {!isMobile && !isMaximized && (
+                    <div
+                        onMouseDown={handleMouseDown}
+                        className="absolute left-0 top-0 w-1.5 h-full cursor-ew-resize hover:bg-indigo-500/30 transition-colors z-[60]"
+                    />
+                )}
 
-            <ChatInput
-                input={input}
-                setInput={setInput}
-                isTyping={isTyping}
-                isVoiceMode={isVoiceMode}
-                setIsVoiceMode={setIsVoiceMode}
-                selectedImage={selectedImage}
-                setSelectedImage={setSelectedImage}
-                handleSend={handleSend}
-                handleFileSelect={handleFileSelect}
-                handlePaste={handlePaste}
-                language={settings.language}
-                t={t}
-                isResizing={isResizing}
-            />
-        </div>
+                <ChatHeader
+                    language={settings.language}
+                    onClearHistory={handleClearHistory}
+                    onClose={onClose}
+                    isMobile={isMobile}
+                    isMaximized={isMaximized}
+                    onToggleMaximize={toggleMaximize}
+                />
+
+                <MessageList
+                    messages={messages}
+                    isTyping={isTyping}
+                    language={settings.language}
+                    onUpdatePendingAction={handleUpdatePendingAction}
+                    onConfirmAction={handleConfirmAction}
+                />
+
+                <ChatInput
+                    input={input}
+                    setInput={setInput}
+                    isTyping={isTyping}
+                    isVoiceMode={isVoiceMode}
+                    setIsVoiceMode={setIsVoiceMode}
+                    selectedImage={selectedImage}
+                    setSelectedImage={setSelectedImage}
+                    handleSend={handleSend}
+                    handleFileSelect={handleFileSelect}
+                    handlePaste={handlePaste}
+                    language={settings.language}
+                    t={t}
+                />
+            </div>
+        </>
     );
 };

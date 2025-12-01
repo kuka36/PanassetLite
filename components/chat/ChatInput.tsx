@@ -1,7 +1,7 @@
 import React, { useRef, useEffect } from 'react';
 import { Keyboard, AudioLines, ImageIcon, Send, X, Sparkles } from 'lucide-react';
 import { VoiceInput } from '../ui/VoiceInput';
-import { Language } from '../../types';
+import { Language } from '../../types/store';
 
 interface ChatInputProps {
     input: string;
@@ -16,7 +16,6 @@ interface ChatInputProps {
     handlePaste: (e: React.ClipboardEvent) => void;
     language: Language;
     t: (key: string) => string;
-    isResizing: boolean;
 }
 
 export const ChatInput: React.FC<ChatInputProps> = ({
@@ -32,7 +31,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     handlePaste,
     language,
     t,
-    isResizing
 }) => {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -47,7 +45,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }, [input]);
 
     return (
-        <div className={`p-3 bg-white border-t border-slate-200 flex items-end gap-2 shrink-0 pb-6 md:pb-3 transition-all duration-300 relative ${isResizing ? 'pointer-events-auto' : ''}`}>
+        <div className="p-3 bg-white border-t border-slate-200 flex items-end gap-2 shrink-0 pb-6 md:pb-3 transition-all duration-300 relative">
 
             {/* Toggle Mode */}
             <button

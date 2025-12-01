@@ -1,6 +1,7 @@
 
-import React, { createContext, useContext, useState, useEffect, ReactNode, useRef } from 'react';
-import { Asset, AssetMetadata, AssetType, Currency, Transaction, TransactionType, AppSettings, AIProvider } from '../types';
+import React, { createContext, useContext, useEffect, ReactNode, useReducer } from 'react';
+import { Asset, AssetMetadata, AssetType, Currency, Transaction, TransactionType } from '../types/domain';
+import { AppSettings } from '../types/store';
 import {
   clearAssetHistoryCache,
   clearAllHistoryCache
@@ -9,8 +10,8 @@ import { StorageService } from '../services/StorageService';
 import { usePortfolioCalculations } from './usePortfolioCalculations';
 import { translations } from '../utils/i18n';
 import { MigrationService } from '../services/MigrationService';
-import { ImportService } from '../services/ImportService';
 import { useMarketData } from '../hooks/useMarketData';
+import { portfolioReducer, PortfolioState } from './portfolioReducer';
 
 interface PortfolioContextType {
   assets: Asset[]; // Computed Assets
@@ -46,6 +47,7 @@ const INITIAL_SETTINGS: AppSettings = {
   isPrivacyMode: false,
   geminiApiKey: process.env.GEMINI_API_KEY || process.env.API_KEY || '',
   deepSeekApiKey: '',
+  qwenApiKey: '',
   aiProvider: 'gemini',
   marketDataProvider: 'finnhub',
   alphaVantageApiKey: '',
@@ -53,40 +55,40 @@ const INITIAL_SETTINGS: AppSettings = {
   language: getBrowserLanguage(),
 };
 
+const getInitialState = (): PortfolioState => {
+  const assetMetas = StorageService.getAssetMetas();
+  const transactions = StorageService.getTransactions();
+  const savedSettings = StorageService.getSettings();
+  const envKey = process.env.GEMINI_API_KEY || process.env.API_KEY || '';
+
+  const settings = savedSettings ? {
+    ...INITIAL_SETTINGS,
+    ...savedSettings,
+    geminiApiKey: savedSettings.geminiApiKey || envKey
+  } : INITIAL_SETTINGS;
+
+  return { assetMetas, transactions, settings };
+};
+
 export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  // --- Raw State (Storage) ---
-  const [assetMetas, setAssetMetas] = useState<AssetMetadata[]>(() => StorageService.getAssetMetas());
-  const [transactions, setTransactions] = useState<Transaction[]>(() => StorageService.getTransactions());
-
-  const [settings, setSettings] = useState<AppSettings>(() => {
-    const saved = StorageService.getSettings();
-    const envKey = process.env.GEMINI_API_KEY || process.env.API_KEY || '';
-
-    if (saved) {
-      return {
-        ...INITIAL_SETTINGS,
-        ...saved,
-        // If local storage has empty key but env has one, use env
-        geminiApiKey: saved.geminiApiKey || envKey
-      };
-    }
-    return INITIAL_SETTINGS;
-  });
+  const [state, dispatch] = useReducer(portfolioReducer, null, getInitialState);
+  const { assetMetas, transactions, settings } = state;
 
   // --- Market Data Hook ---
-  const { exchangeRates, isRefreshing, refreshPrices } = useMarketData(assetMetas, setAssetMetas, settings);
+  const { exchangeRates, isRefreshing, refreshPrices } = useMarketData(assetMetas, dispatch, settings);
 
   // --- Migration Logic ---
   useEffect(() => {
-    MigrationService.migrateIfNeeded(setAssetMetas, setTransactions);
+    MigrationService.migrateIfNeeded(
+      (metas) => dispatch({ type: 'UPDATE_METAS', payload: metas }),
+      (txs) => dispatch({ type: 'UPDATE_TRANSACTIONS', payload: txs })
+    );
   }, []);
 
   // --- Persistence ---
   useEffect(() => {
-    if (assetMetas.length > 0 || transactions.length > 0) {
-      StorageService.saveAssetMetas(assetMetas);
-      StorageService.saveTransactions(transactions);
-    }
+    StorageService.saveAssetMetas(assetMetas);
+    StorageService.saveTransactions(transactions);
   }, [assetMetas, transactions]);
 
   useEffect(() => {
@@ -96,75 +98,79 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
   // --- Core Calculation Engine (Event Sourcing Projection) ---
   const derivedAssets = usePortfolioCalculations(assetMetas, transactions);
 
-  // --- Actions ---
+  // --- Actions (Helpers for Components) ---
 
   const addAsset = (meta: AssetMetadata, initialQty: number, initialCost: number, date: string) => {
-    setAssetMetas(prev => [...prev, meta]);
-
-    // Also create the initial transaction
+    let initialTransaction: Transaction | undefined;
     if (initialQty > 0) {
-      const initialTx: Transaction = {
+      initialTransaction = {
         id: crypto.randomUUID(),
         assetId: meta.id,
         type: meta.type === AssetType.LIABILITY ? TransactionType.BORROW : TransactionType.BUY,
-        date: date, // Now passed as full ISO string from modal
+        date: date,
         quantityChange: initialQty,
         pricePerUnit: initialCost,
         fee: 0,
         total: initialQty * initialCost,
         note: 'Initial Holding'
       };
-      setTransactions(prev => [...prev, initialTx]);
     }
-
-    // Trigger price fetch
-    refreshPrices();
+    dispatch({ type: 'ADD_ASSET', payload: { meta, initialTransaction } });
+    refreshPrices([meta]);
   };
 
   const editAsset = (updatedMeta: AssetMetadata) => {
-    setAssetMetas(prev => prev.map(m => m.id === updatedMeta.id ? updatedMeta : m));
+    dispatch({ type: 'EDIT_ASSET', payload: updatedMeta });
   };
 
   const deleteAsset = (id: string) => {
-    setAssetMetas(prev => prev.filter(m => m.id !== id));
-    setTransactions(prev => prev.filter(t => t.assetId !== id));
+    dispatch({ type: 'DELETE_ASSET', payload: id });
     clearAssetHistoryCache(id);
   };
 
   const addTransaction = (tx: Omit<Transaction, 'id'>) => {
-    const newTx = { ...tx, id: crypto.randomUUID() };
-    setTransactions(prev => [...prev, newTx]);
+    dispatch({ type: 'ADD_TRANSACTION', payload: { ...tx, id: crypto.randomUUID() } });
   };
 
   const editTransaction = (updatedTx: Transaction) => {
-    setTransactions(prev => prev.map(t => t.id === updatedTx.id ? updatedTx : t));
+    dispatch({ type: 'EDIT_TRANSACTION', payload: updatedTx });
   };
 
   const deleteTransaction = (id: string) => {
-    setTransactions(prev => prev.filter(t => t.id !== id));
+    dispatch({ type: 'DELETE_TRANSACTION', payload: id });
   };
 
   const updateAssetPrice = (id: string, newPrice: number) => {
-    setAssetMetas(prev => prev.map(a => a.id === id ? { ...a, currentPrice: newPrice, lastUpdated: Date.now() } : a));
+    dispatch({ type: 'UPDATE_ASSET_PRICE', payload: { id, price: newPrice } });
   };
 
   const updateSettings = (newSettings: Partial<AppSettings>) => {
-    setSettings(prev => ({ ...prev, ...newSettings }));
+    dispatch({ type: 'UPDATE_SETTINGS', payload: newSettings });
   };
 
-  // --- UPSERT Logic for CSV Import ---
-
   const importAssetsCSV = (newMetas: AssetMetadata[]): number => {
-    return ImportService.importAssetsCSV(newMetas, setAssetMetas);
+    dispatch({
+      type: 'UPDATE_METAS',
+      payload: (prev) => {
+        const next = [...prev];
+        newMetas.forEach(newItem => {
+          const idx = next.findIndex(p => p.id === newItem.id);
+          if (idx >= 0) next[idx] = { ...next[idx], ...newItem };
+          else next.push(newItem);
+        });
+        return next;
+      }
+    });
+    return newMetas.length;
   };
 
   const importTransactionsCSV = (newTxs: Transaction[]): number => {
-    return ImportService.importTransactionsCSV(newTxs, setTransactions);
+    newTxs.forEach(tx => dispatch({ type: 'ADD_TRANSACTION', payload: tx }));
+    return newTxs.length;
   };
 
   const clearData = () => {
-    setAssetMetas([]);
-    setTransactions([]);
+    dispatch({ type: 'CLEAR_DATA' });
     StorageService.clearAllData();
     clearAllHistoryCache();
   };

@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
-import { Asset, AssetType, Currency } from '../types';
+import { Asset, AssetType, Currency, TransactionType, PerformanceMetrics } from '../types/domain';
 import { usePortfolio } from '../context/PortfolioContext';
 import { convertValue } from '../services/marketData';
-import { ArrowUpRight, ArrowDownRight, Pencil, Trash2, History, ArrowUp, ArrowDown, ArrowRightLeft, Wifi, PenTool, WifiOff } from 'lucide-react';
+import { AssetDetailModal } from './AssetDetailModal';
+import { ArrowUpRight, ArrowDownRight, Pencil, Trash2, History, ArrowRightLeft, Wifi, PenTool, WifiOff } from 'lucide-react';
+import { isManualValuation } from '../utils/assetUtils';
 
 interface AssetRowProps {
     asset: Asset;
@@ -11,14 +13,17 @@ interface AssetRowProps {
     onEdit?: (asset: Asset) => void;
     onTransaction?: (asset: Asset) => void;
     onDelete?: (id: string, symbol: string) => void;
-    recentReturn?: number | null;
+    performance?: PerformanceMetrics;
+    onSymbolClick?: (symbol: string) => void;
     t: (key: string) => string;
 }
 
-export const AssetRow: React.FC<AssetRowProps> = ({ asset, settings, exchangeRates, onEdit, onTransaction, onDelete, recentReturn, t }) => {
-    const { updateAssetPrice } = usePortfolio();
-    const [updatingId, setUpdatingId] = useState<string | null>(null);
-    const [newValuation, setNewValuation] = useState('');
+export const AssetRow: React.FC<AssetRowProps> = ({ asset, settings, exchangeRates, onEdit, onTransaction, onDelete, performance, onSymbolClick, t }) => {
+    const { updateAssetPrice, addTransaction } = usePortfolio();
+    const [editingField, setEditingField] = useState<'price' | 'quantity' | null>(null);
+    const [editValue, setEditValue] = useState('');
+
+    const [showDetail, setShowDetail] = useState(false);
 
     const getTypeColor = (type: AssetType) => {
         switch (type) {
@@ -32,9 +37,6 @@ export const AssetRow: React.FC<AssetRowProps> = ({ asset, settings, exchangeRat
         }
     };
 
-    const isManualValuation = (type: AssetType) =>
-        type === AssetType.REAL_ESTATE || type === AssetType.LIABILITY || type === AssetType.OTHER || type === AssetType.CASH;
-
     const isLiveMarketData = (type: AssetType) =>
         type === AssetType.STOCK || type === AssetType.CRYPTO || type === AssetType.FUND;
 
@@ -47,17 +49,41 @@ export const AssetRow: React.FC<AssetRowProps> = ({ asset, settings, exchangeRat
         }
     };
 
-    const handleUpdateClick = (asset: Asset) => {
-        setUpdatingId(asset.id);
-        setNewValuation(asset.currentPrice.toString());
+    const handleUpdateClick = (asset: Asset, field: 'price' | 'quantity') => {
+        setEditingField(field);
+        setEditValue(field === 'price' ? asset.currentPrice.toString() : asset.quantity.toString());
     };
 
-    const handleSaveValuation = (id: string) => {
-        const price = parseFloat(newValuation);
-        if (!isNaN(price)) {
-            updateAssetPrice(id, price);
-            setUpdatingId(null);
+    const handleSave = (asset: Asset) => {
+        if (!editValue) {
+            setEditingField(null);
+            return;
         }
+
+        const numVal = parseFloat(editValue);
+        if (isNaN(numVal)) {
+            setEditingField(null);
+            return;
+        }
+
+        if (editingField === 'price') {
+            updateAssetPrice(asset.id, numVal);
+        } else if (editingField === 'quantity') {
+            const delta = numVal - asset.quantity;
+            if (delta !== 0) {
+                addTransaction({
+                    assetId: asset.id,
+                    type: TransactionType.BALANCE_ADJUSTMENT,
+                    date: new Date().toISOString(),
+                    quantityChange: delta,
+                    pricePerUnit: asset.currentPrice,
+                    fee: 0,
+                    total: 0, // Zero total cost impact as requested
+                    note: 'Manual Balance Correction (Inline)'
+                });
+            }
+        }
+        setEditingField(null);
     };
 
     const formatLastUpdated = (timestamp?: number) => {
@@ -83,17 +109,25 @@ export const AssetRow: React.FC<AssetRowProps> = ({ asset, settings, exchangeRat
     const pnlPercent = costBasis > 0 ? (pnl / costBasis) * 100 : 0;
     const isLiability = asset.type === AssetType.LIABILITY;
     const isManual = isManualValuation(asset.type);
-    const isUpdating = updatingId === asset.id;
     const isLive = isLiveMarketData(asset.type);
     const isStale = isAssetStale(asset);
 
     // Mobile Card Layout
     const MobileCard = () => (
-        <div className="md:hidden p-4 border-b border-slate-100 hover:bg-slate-50/50 transition-colors">
+        <div
+            className="md:hidden p-4 border-b border-slate-100 hover:bg-slate-50/50 transition-colors cursor-pointer"
+            onClick={() => onSymbolClick?.(asset.symbol)}
+        >
             {/* Header: Asset Info */}
             <div className="flex items-start justify-between mb-3">
                 <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm shrink-0 ${getTypeColor(asset.type)}`}>
+                    <div
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            setShowDetail(true);
+                        }}
+                        className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm shrink-0 ${getTypeColor(asset.type)} cursor-pointer hover:shadow-md transition-shadow`}
+                    >
                         {asset.symbol.substring(0, 1)}
                     </div>
                     <div className="min-w-0">
@@ -167,40 +201,78 @@ export const AssetRow: React.FC<AssetRowProps> = ({ asset, settings, exchangeRat
                     </div>
                 </div>
 
-                {/* Recent Return */}
-                <div>
+                {/* Performance & P&L Combined */}
+                <div className="col-span-2">
                     <div className="text-[10px] text-slate-400 uppercase mb-1">{t('recentReturn')}</div>
-                    {recentReturn !== undefined && recentReturn !== null ? (
-                        <div className={`font-semibold ${recentReturn > 0 ? 'text-green-600' : recentReturn < 0 ? 'text-red-500' : 'text-slate-500'}`}>
-                            {recentReturn > 0 ? '+' : ''}{(recentReturn * 100).toFixed(2)}%
+
+                    {/* 1. Total P&L */}
+                    <div className="mb-2">
+                        {isManual && !pnl ? (
+                            <div className="text-xs font-medium text-slate-500">
+                                {formatLastUpdated(asset.lastUpdated)}
+                            </div>
+                        ) : (
+                            settings.isPrivacyMode ? (
+                                <span className="text-slate-400 font-bold tracking-widest">••••••</span>
+                            ) : (
+                                <div className="flex items-center gap-2">
+                                    <div className={`font-bold ${pnl >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                                        {pnl >= 0 ? '+' : ''}{symbol}{Math.abs(pnl).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                                    </div>
+                                    <div className={`text-xs font-medium ${pnl >= 0 ? 'text-green-600' : 'text-red-500'} bg-opacity-10 px-1.5 py-0.5 rounded ${pnl >= 0 ? 'bg-green-100' : 'bg-red-100'}`}>
+                                        {pnl >= 0 ? '+' : '-'}{Math.abs(pnlPercent).toFixed(2)}%
+                                    </div>
+                                </div>
+                            )
+                        )}
+                    </div>
+
+                    {/* 2. Metrics (Single Line) */}
+                    {performance ? (
+                        <div className="flex items-center gap-x-3 gap-y-1 text-[10px] flex-wrap text-slate-400">
+                            {/* CAGR */}
+                            <div className="flex items-center gap-1">
+                                <span className="uppercase">CAGR:</span>
+                                <span className={`font-semibold ${performance.cumulative && performance.cumulative > 0 ? 'text-green-600' : performance.cumulative && performance.cumulative < 0 ? 'text-red-500' : 'text-slate-500'}`}>
+                                    {performance.cumulative != null ? (performance.cumulative * 100).toFixed(2) + '%' : '-'}
+                                </span>
+                            </div>
+
+                            {/* Sync */}
+                            {performance.sinceLastSync != null && (
+                                <span className="flex gap-1">
+                                    <span>{t('sinceLastSync')}:</span>
+                                    <span className={`${performance.sinceLastSync > 0 ? 'text-green-600' : performance.sinceLastSync < 0 ? 'text-red-500' : 'text-slate-500'}`}>
+                                        {performance.sinceLastSync > 0 ? '+' : ''}{(performance.sinceLastSync * 100).toFixed(2)}%
+                                    </span>
+                                </span>
+                            )}
+
+                            {/* Period */}
+                            {performance.lastPeriod != null && (
+                                <span className="flex gap-1">
+                                    <span>{t('lastPeriodPerf')}:</span>
+                                    <span className={`${performance.lastPeriod > 0 ? 'text-green-600' : performance.lastPeriod < 0 ? 'text-red-500' : 'text-slate-500'}`}>
+                                        {performance.lastPeriod > 0 ? '+' : ''}{(performance.lastPeriod * 100).toFixed(2)}%
+                                    </span>
+                                </span>
+                            )}
                         </div>
                     ) : (
                         <span className="text-slate-300 font-medium">-</span>
                     )}
                 </div>
 
-                {/* P&L */}
-                <div>
-                    <div className="text-[10px] text-slate-400 uppercase mb-1">{t('statusPnL')}</div>
-                    {isManual && !pnl ? (
-                        <div className="text-xs font-medium text-slate-500">
-                            {formatLastUpdated(asset.lastUpdated)}
-                        </div>
-                    ) : (
-                        settings.isPrivacyMode ? (
-                            <span className="text-slate-400 font-bold tracking-widest">••••••</span>
-                        ) : (
-                            <div>
-                                <div className={`flex items-center gap-1 font-semibold ${pnl >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-                                    {pnl >= 0 ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
-                                    {Math.abs(pnlPercent).toFixed(2)}%
-                                </div>
-                                <div className={`text-xs ${pnl >= 0 ? 'text-green-600/70' : 'text-red-500/70'}`}>
-                                    {pnl >= 0 ? '+' : '-'}{symbol}{Math.abs(pnl).toLocaleString(undefined, { maximumFractionDigits: 0 })}
-                                </div>
-                            </div>
-                        )
-                    )}
+            </div>
+
+            {/* Value Row (Full Width in Grid) */}
+            <div className="mb-3">
+                <div className="text-[10px] text-slate-400 uppercase mb-1">{t('value')}</div>
+                <div className={`font-bold ${isLiability ? 'text-red-700' : 'text-slate-800'}`}>
+                    {settings.isPrivacyMode
+                        ? '••••••'
+                        : `${isLiability ? '-' : ''}${baseCurrencySymbol}${baseValue.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 1 })}`
+                    }
                 </div>
             </div>
 
@@ -209,7 +281,10 @@ export const AssetRow: React.FC<AssetRowProps> = ({ asset, settings, exchangeRat
                 <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
                     {onTransaction && (
                         <button
-                            onClick={() => onTransaction(asset)}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onTransaction(asset);
+                            }}
                             className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-green-600 hover:bg-green-50 rounded-lg transition-colors"
                         >
                             <ArrowRightLeft size={16} />
@@ -218,7 +293,10 @@ export const AssetRow: React.FC<AssetRowProps> = ({ asset, settings, exchangeRat
                     )}
                     {onEdit && (
                         <button
-                            onClick={() => onEdit(asset)}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onEdit(asset);
+                            }}
                             className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                         >
                             <Pencil size={16} />
@@ -227,7 +305,10 @@ export const AssetRow: React.FC<AssetRowProps> = ({ asset, settings, exchangeRat
                     )}
                     {onDelete && (
                         <button
-                            onClick={() => onDelete(asset.id, asset.symbol)}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onDelete(asset.id, asset.symbol);
+                            }}
                             className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                             title={t('delete')}
                         >
@@ -241,11 +322,20 @@ export const AssetRow: React.FC<AssetRowProps> = ({ asset, settings, exchangeRat
 
     // Desktop Table Row Layout
     const DesktopRow = () => (
-        <tr className="hidden md:table-row border-b border-slate-50 hover:bg-slate-50/50 transition-colors group">
+        <tr
+            className="hidden md:table-row border-b border-slate-50 hover:bg-slate-50/50 transition-colors group cursor-pointer"
+            onClick={() => onSymbolClick?.(asset.symbol)}
+        >
             {/* 1. Asset Info */}
             <td className="py-4 pl-2">
                 <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-xs shrink-0 ${getTypeColor(asset.type)}`}>
+                    <div
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            setShowDetail(true);
+                        }}
+                        className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-xs shrink-0 ${getTypeColor(asset.type)} cursor-pointer hover:shadow-md transition-shadow`}
+                    >
                         {asset.symbol.substring(0, 1)}
                     </div>
                     <div className="min-w-0">
@@ -260,35 +350,33 @@ export const AssetRow: React.FC<AssetRowProps> = ({ asset, settings, exchangeRat
 
             {/* Desktop: Price */}
             <td className="py-4">
-                {isUpdating ? (
+                {editingField === 'price' ? (
                     <div className="flex items-center gap-1">
                         <span className="text-slate-400 text-xs">{symbol}</span>
                         <input
                             type="number"
                             autoFocus
                             className="w-20 p-1 text-sm border border-blue-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                            value={newValuation}
-                            onChange={(e) => setNewValuation(e.target.value)}
+                            value={editValue}
+                            onClick={(e) => e.stopPropagation()}
+                            onChange={(e) => setEditValue(e.target.value)}
                             onKeyDown={(e) => {
-                                if (e.key === 'Enter') handleSaveValuation(asset.id);
-                                if (e.key === 'Escape') setUpdatingId(null);
+                                if (e.key === 'Enter') handleSave(asset);
+                                if (e.key === 'Escape') setEditingField(null);
                             }}
-                            onBlur={() => handleSaveValuation(asset.id)}
+                            onBlur={() => handleSave(asset)}
                         />
                     </div>
                 ) : (
                     <div className="flex flex-col">
-                        <div className="font-medium text-slate-700 flex items-center gap-2">
+                        <div className="font-medium text-slate-700 flex items-center gap-2 group/price cursor-pointer"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                handleUpdateClick(asset, 'price');
+                            }}
+                        >
                             {symbol}{asset.currentPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 })}
-                            {onEdit && (
-                                <button
-                                    onClick={() => handleUpdateClick(asset)}
-                                    className="opacity-0 group-hover:opacity-100 transition-opacity text-slate-300 hover:text-blue-600"
-                                    title={t('updatePrice')}
-                                >
-                                    <History size={14} />
-                                </button>
-                            )}
+                            <Pencil size={12} className="opacity-0 group-hover/price:opacity-100 text-slate-300" />
                         </div>
                         <div className="flex items-center gap-1 mt-1">
                             {isLive ? (
@@ -323,23 +411,94 @@ export const AssetRow: React.FC<AssetRowProps> = ({ asset, settings, exchangeRat
 
             {/* Desktop: Quantity */}
             <td className="py-4">
-                <div className="font-medium text-slate-700">
-                    {settings.isPrivacyMode
-                        ? '••••••'
-                        : asset.quantity.toLocaleString()
-                    }
-                </div>
+                {editingField === 'quantity' ? (
+                    <input
+                        type="number"
+                        autoFocus
+                        className="w-24 p-1 text-sm border border-blue-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        value={editValue}
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={(e) => setEditValue(e.target.value)}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter') handleSave(asset);
+                            if (e.key === 'Escape') setEditingField(null);
+                        }}
+                        onBlur={() => handleSave(asset)}
+                    />
+                ) : (
+                    <div className="font-medium text-slate-700 flex items-center gap-2 group/qty cursor-pointer"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            handleUpdateClick(asset, 'quantity');
+                        }}
+                    >
+                        {settings.isPrivacyMode
+                            ? '••••••'
+                            : asset.quantity.toLocaleString()
+                        }
+                        {!settings.isPrivacyMode && (
+                            <Pencil size={12} className="opacity-0 group-hover/qty:opacity-100 text-slate-300" />
+                        )}
+                    </div>
+                )}
             </td>
 
-            {/* Desktop: Recent Return */}
-            <td className="py-4 text-right pr-4">
-                {recentReturn !== undefined && recentReturn !== null ? (
-                    <div className={`font-medium ${recentReturn > 0 ? 'text-green-600' : recentReturn < 0 ? 'text-red-500' : 'text-slate-500'}`}>
-                        {recentReturn > 0 ? '+' : ''}{(recentReturn * 100).toFixed(2)}%
-                    </div>
-                ) : (
-                    <span className="text-slate-300">-</span>
-                )}
+            {/* Desktop: Performance (Integrated P&L + CAGR + Sync) */}
+            <td className="py-4 text-right pr-4 align-top">
+                <div className="flex flex-col items-end gap-1">
+                    {/* 1. Total P&L */}
+                    {isManual && !pnl ? (
+                        <div className="text-xs text-slate-400 italic mb-1">
+                            {formatLastUpdated(asset.lastUpdated)}
+                        </div>
+                    ) : (
+                        settings.isPrivacyMode ? (
+                            <span className="text-slate-400 font-bold tracking-widest mb-1">••••••</span>
+                        ) : (
+                            <div className={`font-bold text-sm mb-0.5 ${pnl >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                                {pnl >= 0 ? '+' : '-'}{symbol}{Math.abs(pnl).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                                <span className="ml-1 opacity-80 text-xs">
+                                    ({pnl >= 0 ? '+' : '-'}{Math.abs(pnlPercent).toFixed(2)}%)
+                                </span>
+                            </div>
+                        )
+                    )}
+
+                    {/* 2. CAGR & Sync Metrics (Single Line) */}
+                    {performance ? (
+                        <div className="flex items-center gap-x-3 text-[10px] text-slate-400 whitespace-nowrap">
+                            {/* CAGR */}
+                            <div className="flex items-center gap-1">
+                                <span className="uppercase">CAGR:</span>
+                                <span className={`${performance.cumulative && performance.cumulative > 0 ? 'text-green-600' : performance.cumulative && performance.cumulative < 0 ? 'text-red-500' : 'text-slate-500'} font-medium`}>
+                                    {performance.cumulative != null ? (performance.cumulative * 100).toFixed(2) + '%' : '-'}
+                                </span>
+                            </div>
+
+                            {/* Sync */}
+                            {performance.sinceLastSync != null && (
+                                <div className="flex items-center gap-1 border-l border-slate-100 pl-3">
+                                    <span>{t('sinceLastSync')}:</span>
+                                    <span className={`${performance.sinceLastSync > 0 ? 'text-green-600' : performance.sinceLastSync < 0 ? 'text-red-500' : 'text-slate-500'}`}>
+                                        {performance.sinceLastSync > 0 ? '+' : ''}{(performance.sinceLastSync * 100).toFixed(2)}%
+                                    </span>
+                                </div>
+                            )}
+
+                            {/* Period */}
+                            {performance.lastPeriod != null && (
+                                <div className="flex items-center gap-1 border-l border-slate-100 pl-3">
+                                    <span>{t('lastPeriodPerf')}:</span>
+                                    <span className={`${performance.lastPeriod > 0 ? 'text-green-600' : performance.lastPeriod < 0 ? 'text-red-500' : 'text-slate-500'}`}>
+                                        {performance.lastPeriod > 0 ? '+' : ''}{(performance.lastPeriod * 100).toFixed(2)}%
+                                    </span>
+                                </div>
+                            )}
+                        </div>
+                    ) : (
+                        <span className="text-slate-300">-</span>
+                    )}
+                </div>
             </td>
 
             {/* Desktop: Value */}
@@ -350,32 +509,7 @@ export const AssetRow: React.FC<AssetRowProps> = ({ asset, settings, exchangeRat
                 }
             </td>
 
-            {/* P&L */}
-            <td className="py-4 text-right pr-2">
-                {isManual && !pnl ? (
-                    <div className="text-right">
-                        <div className="text-xs font-medium text-slate-500 bg-slate-100 inline-block px-2 py-0.5 rounded-md">
-                            {t('lastUpdated')}: {formatLastUpdated(asset.lastUpdated)}
-                        </div>
-                    </div>
-                ) : (
-                    settings.isPrivacyMode ? (
-                        <div className="text-right">
-                            <span className="text-slate-400 font-bold tracking-widest">••••••</span>
-                        </div>
-                    ) : (
-                        <>
-                            <div className={`flex items-center justify-end gap-1 font-medium ${pnl >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-                                {pnl >= 0 ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
-                                {Math.abs(pnlPercent).toFixed(2)}%
-                            </div>
-                            <div className={`text-xs ${pnl >= 0 ? 'text-green-600/70' : 'text-red-500/70'}`}>
-                                {pnl >= 0 ? '+' : '-'}{symbol}{Math.abs(pnl).toLocaleString(undefined, { maximumFractionDigits: 0 })}
-                            </div>
-                        </>
-                    )
-                )}
-            </td>
+            {/* Desktop: P&L Removed (Merged into Performance) */}
 
             {/* Actions */}
             {(onEdit || onTransaction) && (
@@ -383,7 +517,10 @@ export const AssetRow: React.FC<AssetRowProps> = ({ asset, settings, exchangeRat
                     <div className="flex items-center justify-end gap-2">
                         {onTransaction && (
                             <button
-                                onClick={() => onTransaction(asset)}
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onTransaction(asset);
+                                }}
                                 className="p-1.5 text-slate-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
                                 title={t('recordTransaction')}
                             >
@@ -392,7 +529,10 @@ export const AssetRow: React.FC<AssetRowProps> = ({ asset, settings, exchangeRat
                         )}
                         {onEdit && (
                             <button
-                                onClick={() => onEdit(asset)}
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onEdit(asset);
+                                }}
                                 className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                                 title={t('editDetails')}
                             >
@@ -401,7 +541,10 @@ export const AssetRow: React.FC<AssetRowProps> = ({ asset, settings, exchangeRat
                         )}
                         {onDelete && (
                             <button
-                                onClick={() => onDelete(asset.id, asset.symbol)}
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onDelete(asset.id, asset.symbol);
+                                }}
                                 className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                                 title={t('delete')}
                             >
@@ -419,6 +562,15 @@ export const AssetRow: React.FC<AssetRowProps> = ({ asset, settings, exchangeRat
         <>
             <MobileCard />
             <DesktopRow />
+
+            {showDetail && (
+                <AssetDetailModal
+                    isOpen={showDetail}
+                    onClose={() => setShowDetail(false)}
+                    asset={asset}
+                    onEdit={onEdit}
+                />
+            )}
         </>
     );
 };

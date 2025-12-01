@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Asset, AssetType, Currency, VoiceParseResult, TransactionType, AssetMetadata } from '../types';
+import { Asset, AssetType, Currency, VoiceParseResult, TransactionType, AssetMetadata } from '../types/domain';
 import { KNOWN_MANUAL_SYMBOLS } from '../services/marketData';
 import { usePortfolio } from '../context/PortfolioContext';
 import { VoiceInput } from './ui/VoiceInput';
-import { X, Save, TrendingUp, Bitcoin, PieChart, Building, Banknote, CreditCard, Box, Calendar, PenLine } from 'lucide-react';
+import { TagManagementModal } from './TagManagementModal';
+import { X, Save, TrendingUp, Bitcoin, PieChart, Building, Banknote, CreditCard, Box, Calendar, PenLine, Tag } from 'lucide-react';
+import { SequenceService } from '../services/SequenceService';
 
 interface Props {
     isOpen: boolean;
@@ -17,7 +19,7 @@ const getLocalISOString = (d: Date) => {
 };
 
 export const AddAssetModal: React.FC<Props> = ({ isOpen, onClose, initialAsset }) => {
-    const { addAsset, editAsset, addTransaction, t } = usePortfolio();
+    const { addAsset, editAsset, addTransaction, t, assets } = usePortfolio();
 
     // Form State
     const [step, setStep] = useState<1 | 2>(1);
@@ -32,9 +34,9 @@ export const AddAssetModal: React.FC<Props> = ({ isOpen, onClose, initialAsset }
     const [dateAcquired, setDateAcquired] = useState('');
     const [isManual, setIsManual] = useState(false);
 
-    // Balance Correction State
-    const [showAdjustment, setShowAdjustment] = useState(false);
-    const [actualQuantity, setActualQuantity] = useState('');
+    // Tags State
+    const [selectedTags, setSelectedTags] = useState<string[]>([]);
+    const [isTagModalOpen, setIsTagModalOpen] = useState(false);
 
     const ASSET_TYPES = [
         { id: AssetType.STOCK, label: t('type_stock'), icon: TrendingUp, desc: 'US, HK, CN Stocks', color: 'bg-blue-50 text-blue-600 border-blue-200' },
@@ -59,8 +61,8 @@ export const AddAssetModal: React.FC<Props> = ({ isOpen, onClose, initialAsset }
                 setCurrency(initialAsset.currency);
                 setDateAcquired(initialAsset.dateAcquired || getLocalISOString(new Date()));
                 setIsManual(!!initialAsset.isManualPrice || KNOWN_MANUAL_SYMBOLS.includes(initialAsset.symbol));
+                setSelectedTags(initialAsset.tags || []);
                 setStep(2);
-                setShowAdjustment(false);
             } else {
                 // Add Mode - Reset
                 setStep(1);
@@ -69,11 +71,12 @@ export const AddAssetModal: React.FC<Props> = ({ isOpen, onClose, initialAsset }
                 setName('');
                 setQuantity('');
                 setCost('');
-                setCurrentVal('');
+                // 自定义资产默认当前价为 1
+                setCurrentVal(isStrictManualAsset(AssetType.STOCK) ? '1' : '');
                 setCurrency(Currency.USD);
                 setDateAcquired(getLocalISOString(new Date()));
                 setIsManual(false);
-                setShowAdjustment(false);
+                setSelectedTags([]);
             }
         }
     }, [isOpen, initialAsset]);
@@ -105,31 +108,7 @@ export const AddAssetModal: React.FC<Props> = ({ isOpen, onClose, initialAsset }
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
 
-        // --- MODE 1: BALANCE ADJUSTMENT ---
-        if (showAdjustment && initialAsset) {
-            const newQty = parseFloat(actualQuantity);
-            if (isNaN(newQty)) return;
-
-            const delta = newQty - initialAsset.quantity;
-            if (delta === 0) {
-                setShowAdjustment(false);
-                return;
-            }
-
-            // Create a correction transaction
-            addTransaction({
-                assetId: initialAsset.id,
-                type: TransactionType.BALANCE_ADJUSTMENT,
-                date: dateAcquired, // Use the refresh time set by user
-                quantityChange: delta,
-                pricePerUnit: initialAsset.avgCost, // keep cost basis same
-                fee: 0,
-                total: delta * initialAsset.avgCost,
-                note: 'Manual Balance Correction'
-            });
-        }
-
-        // --- MODE 2: CREATE / EDIT METADATA ---
+        // --- CREATE / EDIT METADATA ---
         const qtyNum = parseFloat(quantity);
         let costNum = parseFloat(cost);
         let currentPriceNum = parseFloat(currentVal);
@@ -146,7 +125,7 @@ export const AddAssetModal: React.FC<Props> = ({ isOpen, onClose, initialAsset }
 
         // Construct Metadata
         const assetMeta: AssetMetadata = {
-            id: initialAsset ? initialAsset.id : crypto.randomUUID(),
+            id: initialAsset ? initialAsset.id : SequenceService.generateId(),
             symbol: symbol.toUpperCase(),
             name: name || symbol.toUpperCase(),
             type,
@@ -154,7 +133,8 @@ export const AddAssetModal: React.FC<Props> = ({ isOpen, onClose, initialAsset }
             currency: currency,
             lastUpdated: Date.now(),
             dateAcquired,
-            isManualPrice: isManual
+            isManualPrice: isManual,
+            tags: selectedTags.length > 0 ? selectedTags : undefined
         };
 
         if (initialAsset) {
@@ -203,7 +183,14 @@ export const AddAssetModal: React.FC<Props> = ({ isOpen, onClose, initialAsset }
                                 {ASSET_TYPES.map((t) => (
                                     <button
                                         key={t.id}
-                                        onClick={() => { setType(t.id); setStep(2); }}
+                                        onClick={() => {
+                                            setType(t.id);
+                                            setStep(2);
+                                            // 自定义资产默认当前价为 1
+                                            if (isStrictManualAsset(t.id)) {
+                                                setCurrentVal('1');
+                                            }
+                                        }}
                                         className={`flex flex-col items-center justify-center p-4 rounded-xl border transition-all hover:scale-[1.02] ${t.id === type ? 'ring-2 ring-blue-500 bg-blue-50/50 border-blue-200' : 'bg-white border-slate-100 hover:border-slate-300 hover:shadow-md'}`}
                                     >
                                         <div className={`p-3 rounded-full mb-3 ${t.color}`}>
@@ -252,6 +239,47 @@ export const AddAssetModal: React.FC<Props> = ({ isOpen, onClose, initialAsset }
                                 </div>
                             </div>
 
+                            {/* Tags Section */}
+                            <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 space-y-3">
+                                <div className="flex justify-between items-center">
+                                    <h3 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                                        <Tag size={14} className="text-blue-600" />
+                                        {t('tags') || '标签'}
+                                    </h3>
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsTagModalOpen(true)}
+                                        className="text-xs text-blue-600 hover:bg-blue-50 px-2 py-1 rounded-lg transition-colors font-medium"
+                                    >
+                                        {selectedTags.length > 0 ? t('editTags') || '编辑标签' : t('addTags') || '添加标签'}
+                                    </button>
+                                </div>
+
+                                {selectedTags.length > 0 ? (
+                                    <div className="flex flex-wrap gap-2">
+                                        {selectedTags.map(tag => (
+                                            <span
+                                                key={tag}
+                                                className="px-3 py-1.5 bg-blue-100 text-blue-700 rounded-lg text-sm font-medium flex items-center gap-1.5"
+                                            >
+                                                {tag}
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setSelectedTags(selectedTags.filter(t => t !== tag))}
+                                                    className="hover:bg-blue-200 rounded-full p-0.5 transition-colors"
+                                                >
+                                                    <X size={12} />
+                                                </button>
+                                            </span>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <p className="text-xs text-slate-400 italic">
+                                        {t('noTagsSelected') || '未选择标签'}
+                                    </p>
+                                )}
+                            </div>
+
                             {/* Financials Section */}
                             <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 space-y-4">
                                 <div className="flex justify-between items-center">
@@ -269,28 +297,12 @@ export const AddAssetModal: React.FC<Props> = ({ isOpen, onClose, initialAsset }
                                     )}
                                 </div>
 
-                                {showAdjustment && (
-                                    <div className="bg-blue-50 p-3 rounded-lg border border-blue-100 mb-2 animate-fade-in">
-                                        <label className="block text-xs font-bold text-blue-700 uppercase mb-1">{t('newCorrectQuantity')}</label>
-                                        <input
-                                            type="number" step="any"
-                                            placeholder={t('enterActualQuantity')}
-                                            value={actualQuantity}
-                                            onChange={e => setActualQuantity(e.target.value)}
-                                            className="w-full p-2 bg-white border border-blue-300 rounded focus:ring-2 focus:ring-blue-500 outline-none font-bold text-blue-900"
-                                            autoFocus
-                                        />
-                                        <p className="text-[10px] text-blue-600 mt-1">
-                                            {t('adjustmentHint')}
-                                        </p>
-                                    </div>
-                                )}
 
                                 <div className="grid grid-cols-2 gap-4">
                                     {/* Date Acquired / Refreshed */}
                                     <div className="col-span-2">
                                         <label className="block text-xs font-medium text-slate-500 uppercase mb-1">
-                                            {showAdjustment ? t('dateRefreshed') : t('dateAcquired')}
+                                            {t('dateAcquired')}
                                         </label>
                                         <div className="relative">
                                             <Calendar className="absolute left-3 top-2.5 text-slate-400" size={16} />
@@ -308,16 +320,6 @@ export const AddAssetModal: React.FC<Props> = ({ isOpen, onClose, initialAsset }
                                     <div>
                                         <label className="flex items-center justify-between text-xs font-medium text-slate-500 uppercase mb-1">
                                             {type === AssetType.CASH ? t('balance') : (type === AssetType.LIABILITY ? t('principalRemaining') : t('quantity'))}
-
-                                            {initialAsset && !showAdjustment && (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setShowAdjustment(true)}
-                                                    className="text-[10px] normal-case text-blue-600 hover:bg-blue-50 px-1.5 py-0.5 rounded flex items-center gap-1 transition-colors"
-                                                >
-                                                    <PenLine size={10} /> {t('adjustButton')}
-                                                </button>
-                                            )}
                                         </label>
                                         <input
                                             type="number" step="any"
@@ -395,11 +397,25 @@ export const AddAssetModal: React.FC<Props> = ({ isOpen, onClose, initialAsset }
                             className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl shadow-lg shadow-blue-200 transition-all flex items-center justify-center gap-2"
                         >
                             <Save size={18} />
-                            {showAdjustment ? t('confirmAdjustment') : (initialAsset ? t('saveChanges') : t('addToPortfolio'))}
+                            {initialAsset ? t('saveChanges') : t('addToPortfolio')}
                         </button>
                     </div>
                 )}
             </div>
+
+            {/* Tag Management Modal */}
+            <TagManagementModal
+                isOpen={isTagModalOpen}
+                onClose={() => setIsTagModalOpen(false)}
+                selectedTags={selectedTags}
+                onToggleTag={(tag) => {
+                    setSelectedTags(prev =>
+                        prev.includes(tag)
+                            ? prev.filter(t => t !== tag)
+                            : [...prev, tag]
+                    );
+                }}
+            />
         </div>
     );
 };

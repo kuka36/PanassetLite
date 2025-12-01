@@ -28,7 +28,7 @@ export const PerformanceCharts: React.FC<PerformanceChartsProps> = ({
                             <YAxis
                                 dataKey="name"
                                 type="category"
-                                width={50}
+                                width={80}
                                 tick={{ fontSize: 11, fill: '#64748b' }}
                                 interval={0}
                             />

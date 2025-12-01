@@ -1,4 +1,4 @@
-import { Language } from '../types';
+import { Language } from '../types/store';
 import { en } from './locales/en';
 import { zh } from './locales/zh';
 

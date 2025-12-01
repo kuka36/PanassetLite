@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { usePortfolio } from '../context/PortfolioContext';
-import { Transaction, TransactionType } from '../types';
+import { Transaction, TransactionType } from '../types/domain';
 import { X, Save, Calendar, DollarSign, Hash, Edit3, Wallet } from 'lucide-react';
 
 interface Props {
@@ -286,34 +286,36 @@ export const EditTransactionModal: React.FC<Props> = ({ isOpen, onClose, transac
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
-                        {/* Price */}
-                        <div>
-                            <label className="block text-xs font-medium text-slate-500 uppercase mb-1">{t('pricePerUnit')}</label>
-                            <div className="relative">
-                                <DollarSign className="absolute left-3 top-2.5 text-slate-400" size={16} />
-                                <input
-                                    type="number" step="any" placeholder="0.00"
-                                    value={price} onChange={e => handlePriceChange(e.target.value)}
-                                    className="w-full pl-9 p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                                    required
-                                />
+                    {transaction.type !== TransactionType.BALANCE_ADJUSTMENT && (
+                        <div className="grid grid-cols-2 gap-4">
+                            {/* Price */}
+                            <div>
+                                <label className="block text-xs font-medium text-slate-500 uppercase mb-1">{t('pricePerUnit')}</label>
+                                <div className="relative">
+                                    <DollarSign className="absolute left-3 top-2.5 text-slate-400" size={16} />
+                                    <input
+                                        type="number" step="any" placeholder="0.00"
+                                        value={price} onChange={e => handlePriceChange(e.target.value)}
+                                        className="w-full pl-9 p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                        required
+                                    />
+                                </div>
                             </div>
-                        </div>
 
-                        {/* Fees */}
-                        <div>
-                            <label className="block text-xs font-medium text-slate-500 uppercase mb-1">{t('fees')}</label>
-                            <div className="relative">
-                                <DollarSign className="absolute left-3 top-2.5 text-slate-400" size={16} />
-                                <input
-                                    type="number" step="any" placeholder="0.00"
-                                    value={fee} onChange={e => handleFeeChange(e.target.value)}
-                                    className="w-full pl-9 p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                                />
+                            {/* Fees */}
+                            <div>
+                                <label className="block text-xs font-medium text-slate-500 uppercase mb-1">{t('fees')}</label>
+                                <div className="relative">
+                                    <DollarSign className="absolute left-3 top-2.5 text-slate-400" size={16} />
+                                    <input
+                                        type="number" step="any" placeholder="0.00"
+                                        value={fee} onChange={e => handleFeeChange(e.target.value)}
+                                        className="w-full pl-9 p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                    />
+                                </div>
                             </div>
                         </div>
-                    </div>
+                    )}
 
                     <button
                         type="submit"

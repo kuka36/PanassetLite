@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { usePortfolio } from '../context/PortfolioContext';
 import { Card } from './ui/Card';
 import { ConfirmModal } from './ui/ConfirmModal';
-import { TransactionType, Currency } from '../types';
+import { TransactionType, Currency } from '../types/domain';
 import { ArrowDownLeft, ArrowUpRight, DollarSign, Trash2, ArrowRightLeft, CreditCard, RefreshCw, Calendar, Edit3 } from 'lucide-react';
 import { EditTransactionModal } from './EditTransactionModal';
 
@@ -22,15 +22,32 @@ export const AssetTransactionTable: React.FC<AssetTransactionTableProps> = ({ as
         return asset ? { symbol: asset.symbol, name: asset.name, currency: asset.currency } : { symbol: 'UNKNOWN', name: 'Deleted Asset', currency: Currency.USD };
     };
 
-    // Filter transactions by assetIds if provided
+    // Filter transactions and compute running balance
     const filteredTransactions = useMemo(() => {
-        return transactions
-            .filter(t => {
-                if (!t) return false;
-                if (assetIds && assetIds.length > 0 && !assetIds.includes(t.assetId)) return false;
-                return true;
-            })
-            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        // 1. Filter relevant transactions
+        const relevant = transactions.filter(t => {
+            if (!t) return false;
+            if (assetIds && assetIds.length > 0 && !assetIds.includes(t.assetId)) return false;
+            return true;
+        });
+
+        // 2. Sort ASC to compute running balance
+        // We must copy the array before sorting to avoid mutating the original if it's not immutable
+        const ascending = [...relevant].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+        // 3. Compute Balance
+        const balances = new Map<string, number>();
+        const withBalance = ascending.map(t => {
+            const prev = balances.get(t.assetId) || 0;
+            const next = prev + t.quantityChange;
+            balances.set(t.assetId, next);
+            return { ...t, balanceAfter: next };
+        });
+
+        // 4. Sort DESC and Slice
+        return withBalance
+            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+            .slice(0, 1000);
     }, [transactions, assetIds]);
 
     const getTypeStyle = (type: TransactionType) => {
@@ -154,7 +171,7 @@ export const AssetTransactionTable: React.FC<AssetTransactionTableProps> = ({ as
                                         <div className={`font-bold text-lg text-slate-800`}>
                                             {settings.isPrivacyMode
                                                 ? '••••••'
-                                                : `${currencySymbol}${safeTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                                                : (isAdjustment ? '-' : `${currencySymbol}${safeTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
                                             }
                                         </div>
                                     </div>
@@ -170,7 +187,13 @@ export const AssetTransactionTable: React.FC<AssetTransactionTableProps> = ({ as
                                     <div className="flex flex-col text-right">
                                         <span className="text-xs text-slate-400 uppercase mb-0.5">{t('pricePerUnit')}</span>
                                         <span className="font-mono text-slate-600">
-                                            {currencySymbol}{safePrice.toLocaleString()}
+                                            {isAdjustment ? '-' : `${currencySymbol}${safePrice.toLocaleString()}`}
+                                        </span>
+                                    </div>
+                                    <div className="flex flex-col text-right">
+                                        <span className="text-xs text-slate-400 uppercase mb-0.5">{t('holdings') || 'Holdings'}</span>
+                                        <span className="font-mono text-slate-600">
+                                            {settings.isPrivacyMode ? '••••••' : tx.balanceAfter.toLocaleString()}
                                         </span>
                                     </div>
                                 </div>
@@ -188,6 +211,7 @@ export const AssetTransactionTable: React.FC<AssetTransactionTableProps> = ({ as
                                 <th className="pb-3 font-medium">{t('asset')}</th>
                                 <th className="pb-3 font-medium">{t('type')}</th>
                                 <th className="pb-3 font-medium text-right">{t('quantity')}</th>
+                                <th className="pb-3 font-medium text-right">{t('holdings') || 'Holdings'}</th>
                                 <th className="pb-3 font-medium text-right">{t('pricePerUnit')}</th>
                                 <th className="pb-3 font-medium text-right">{t('fees')}</th>
                                 <th className="pb-3 font-medium text-right pr-2">{t('total')}</th>
@@ -232,16 +256,19 @@ export const AssetTransactionTable: React.FC<AssetTransactionTableProps> = ({ as
                                         <td className={`py-4 text-right font-medium ${qtyColorClass}`}>
                                             {settings.isPrivacyMode ? '••••••' : (displayQty !== '0' ? displayQty : '-')}
                                         </td>
+                                        <td className="py-4 text-right font-mono text-slate-600">
+                                            {settings.isPrivacyMode ? '••••••' : tx.balanceAfter.toLocaleString()}
+                                        </td>
                                         <td className="py-4 text-right text-slate-600 whitespace-nowrap">
-                                            {currencySymbol}{safePrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                            {isAdjustment ? '-' : `${currencySymbol}${safePrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
                                         </td>
                                         <td className="py-4 text-right text-slate-500 whitespace-nowrap">
-                                            {safeFee > 0 ? `${currencySymbol}${safeFee.toFixed(2)}` : '-'}
+                                            {isAdjustment || safeFee === 0 ? '-' : `${currencySymbol}${safeFee.toFixed(2)}`}
                                         </td>
                                         <td className="py-4 text-right pr-2 font-bold text-slate-800 whitespace-nowrap">
                                             {settings.isPrivacyMode
                                                 ? '••••••'
-                                                : `${currencySymbol}${safeTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                                                : (isAdjustment ? '-' : `${currencySymbol}${safeTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
                                             }
                                         </td>
                                         <td className="py-4 text-right pr-2">

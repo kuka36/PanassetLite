@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@google/genai": "^1.30.0",
+    "eventemitter3": "^5.0.4",
     "lucide-react": "^0.554.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
@@ -21,7 +22,10 @@
     "recharts": "^3.4.1"
   },
   "devDependencies": {
-    "@types/node": "^22.14.0",
+    "@types/node": "^22.19.3",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
+    "@types/recharts": "^1.8.29",
     "@vitejs/plugin-react": "^4.3.4",
     "gh-pages": "^6.3.0",
     "terser": "^5.44.1",

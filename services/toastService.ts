@@ -1,4 +1,4 @@
-import { ToastMessage, ToastType } from '../types';
+import { ToastMessage, ToastType } from '../types/ui';
 
 type ToastListener = (toast: ToastMessage) => void;
 

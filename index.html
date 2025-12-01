@@ -18,6 +18,39 @@
       ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
       ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
     </style>
+  <!-- PanassetLite Analytics -->
+  <script>
+    (function () {
+      var WORKER = 'https://panassetlite-analytics.panassetlite.workers.dev';
+      var SID_KEY = '__pa_sid';
+
+      function getSid() {
+        var s = localStorage.getItem(SID_KEY);
+        if (!s) { s = crypto.randomUUID(); localStorage.setItem(SID_KEY, s); }
+        return s;
+      }
+
+      function hit(isNew) {
+        var p = location.pathname + location.hash;
+        var r = document.referrer;
+        var url = WORKER + '/hit?sid=' + getSid()
+          + '&p=' + encodeURIComponent(p)
+          + '&r=' + encodeURIComponent(r)
+          + (isNew ? '&new=1' : '');
+        fetch(url).catch(function () {});
+      }
+
+      function leave() {
+        navigator.sendBeacon(WORKER + '/leave?sid=' + getSid());
+      }
+
+      hit(true);                                        // 首次加载上报
+      setInterval(function () { hit(false); }, 120000); // 每 2 分钟心跳
+
+      // 关闭/跳转时主动离线（pagehide 不会在切换标签时触发）
+      window.addEventListener('pagehide', leave);
+    })();
+  </script>
   <script type="importmap">
 {
   "imports": {
