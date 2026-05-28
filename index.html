@@ -19,9 +19,6 @@
       ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
     </style>
   <!-- PanassetLite Analytics -->
-  <!-- script
-    data-goatcounter="https://panassetlite.goatcounter.com/count"
-    async src="//gc.zgo.at/count.js"></script -->
   <script>
     (function () {
       var WORKER = 'https://panassetlite-analytics.panassetlite.workers.dev';
@@ -43,8 +40,18 @@
         fetch(url).catch(function () {});
       }
 
+      function leave() {
+        navigator.sendBeacon(WORKER + '/leave?sid=' + getSid());
+      }
+
       hit(true);                                        // 首次加载上报
       setInterval(function () { hit(false); }, 120000); // 每 2 分钟心跳
+
+      // 关闭/切换标签时主动离线，统计面板秒级更新
+      document.addEventListener('visibilitychange', function () {
+        if (document.visibilityState === 'hidden') leave();
+      });
+      window.addEventListener('pagehide', leave);
     })();
   </script>
 
