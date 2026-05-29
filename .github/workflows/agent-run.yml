@@ -43,6 +43,15 @@ jobs:
           gh issue comment "$ISSUE_NUMBER" --body \
             ":robot: Agent run started on branch \`${{ steps.slug.outputs.branch }}\` ([run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}))."
 
+      # Self-hosted runner persists Docker state between runs. `devcontainer up`
+      # reuses a container matching this folder by label and never re-applies
+      # config/mount changes, so a once-broken container stays broken forever.
+      # Remove it up front to force a clean recreate every run.
+      - name: Remove stale devcontainer
+        run: |
+          docker rm -f $(docker ps -aq \
+            --filter "label=devcontainer.local_folder=${{ github.workspace }}") 2>/dev/null || true
+
       - name: Run agent in devcontainer
         id: agent
         uses: devcontainers/ci@v0.3

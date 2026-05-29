@@ -26,6 +26,13 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
 
+      # Force a clean container: the self-hosted runner reuses stale devcontainers
+      # by folder label, which never picks up config/mount changes.
+      - name: Remove stale devcontainer
+        run: |
+          docker rm -f $(docker ps -aq \
+            --filter "label=devcontainer.local_folder=${{ github.workspace }}") 2>/dev/null || true
+
       - name: Build check
         uses: devcontainers/ci@v0.3
         with:
