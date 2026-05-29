@@ -12,14 +12,13 @@ permissions:
 jobs:
   run-agent:
     if: github.event.label.name == 'ai-task'
-    runs-on: ubuntu-latest
+    # Runs on the user's self-hosted runner so Codex ChatGPT login (~/.codex/auth.json)
+    # stays on the local box. Public repo: never expose CODEX_AUTH_JSON as a secret.
+    runs-on: [self-hosted, panasset-agent]
     env:
       ISSUE_NUMBER: ${{ github.event.issue.number }}
       ISSUE_TITLE: ${{ github.event.issue.title }}
       ISSUE_BODY: ${{ github.event.issue.body }}
-      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-      API_KEY: ${{ secrets.ALPHAVANTAGE_API_KEY }}
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: Checkout
@@ -49,9 +48,6 @@ jobs:
           imageName: panassetlite-agent
           push: never
           env: |
-            OPENAI_API_KEY
-            GEMINI_API_KEY
-            API_KEY
             GH_TOKEN
             ISSUE_NUMBER
             ISSUE_TITLE
@@ -61,6 +57,13 @@ jobs:
             git config --global user.email "agent@panassetlite.local"
             git config --global user.name "PanassetLite Agent"
             git checkout -b "${{ steps.slug.outputs.branch }}"
+
+            # Codex auth comes from the host's ~/.codex/auth.json mounted by
+            # devcontainer.json (mounts:). No secret required.
+            test -f "$HOME/.codex/auth.json" || {
+              echo "::error::~/.codex/auth.json missing — run 'codex login' on the self-hosted runner host."
+              exit 3
+            }
 
             printf '# Issue #%s: %s\n\n%s\n' "$ISSUE_NUMBER" "$ISSUE_TITLE" "$ISSUE_BODY" > /tmp/task.md
 
