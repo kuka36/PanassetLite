@@ -87,10 +87,12 @@ jobs:
 
             printf '# Issue #%s: %s\n\n%s\n' "$ISSUE_NUMBER" "$ISSUE_TITLE" "$ISSUE_BODY" > /tmp/task.md
 
-            codex exec \
-              --full-auto \
-              --instructions .agent/harness/rules/panasset-instructions.md \
-              "$(cat /tmp/task.md)"
+            # codex 0.13x `exec` has no --instructions flag: prepend the harness
+            # instructions to the prompt and feed via stdin (avoids arg-length and
+            # shell-quoting limits on large issue bodies). --full-auto is also
+            # deprecated in favour of --sandbox workspace-write.
+            { cat .agent/harness/rules/panasset-instructions.md; echo; cat /tmp/task.md; } > /tmp/prompt.md
+            codex exec --sandbox workspace-write < /tmp/prompt.md
 
             npm run build 2>&1 | tee /tmp/build.log
 
