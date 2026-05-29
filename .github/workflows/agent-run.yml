@@ -65,11 +65,18 @@ jobs:
             ISSUE_BODY
           runCmd: |
             set -euo pipefail
+            # /workspace is bind-mounted from the host and owned by a different
+            # uid than the container's `ubuntu` user, so git rejects it as
+            # "dubious ownership". Whitelist it before any git command.
+            git config --global --add safe.directory /workspace
             # Commit as the GitHub Actions bot so commits get a real avatar and
             # are clearly attributable to automation (not a human contributor).
             git config --global user.name "github-actions[bot]"
             git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git checkout -b "${{ steps.slug.outputs.branch }}"
+            # -B (not -b): the self-hosted runner's .git persists between runs,
+            # so a same-named branch from a prior run already exists. -B resets
+            # it onto the freshly checked-out main instead of erroring out.
+            git checkout -B "${{ steps.slug.outputs.branch }}"
 
             # Codex auth comes from the host's ~/.codex/auth.json mounted by
             # devcontainer.json (mounts:). No secret required.
@@ -107,11 +114,22 @@ jobs:
 
       - name: Push branch
         if: success()
-        run: git push origin "${{ steps.slug.outputs.branch }}"
+        # --force: agent branches are disposable and a prior run may have left a
+        # diverged remote branch, which would reject a normal push.
+        run: git push --force origin "${{ steps.slug.outputs.branch }}"
 
       - name: Open PR
         if: success()
+        env:
+          BRANCH: ${{ steps.slug.outputs.branch }}
         run: |
+          # Idempotent: a re-run may already have an open PR for this head branch,
+          # in which case `gh pr create` would error. Skip creation if one exists.
+          if [ -n "$(gh pr list --head "$BRANCH" --state open --json number -q '.[0].number')" ]; then
+            echo "PR for $BRANCH already open; skipping create."
+            exit 0
+          fi
+
           {
             cat .agent/harness/PULL_REQUEST_TEMPLATE.md
             printf '\n\n---\nCloses #%s\n' "$ISSUE_NUMBER"
@@ -119,7 +137,7 @@ jobs:
 
           gh pr create \
             --base main \
-            --head "${{ steps.slug.outputs.branch }}" \
+            --head "$BRANCH" \
             --title "${ISSUE_TITLE}" \
             --body-file /tmp/pr-body.md \
             --label ai-generated

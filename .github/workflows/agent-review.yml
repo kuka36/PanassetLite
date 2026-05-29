@@ -53,6 +53,11 @@ jobs:
           runCmd: |
             set -euo pipefail
 
+            # /workspace is bind-mounted from the host (different uid than the
+            # container's ubuntu user); whitelist it so any git invocation
+            # (including codex's) doesn't trip git's "dubious ownership" guard.
+            git config --global --add safe.directory /workspace
+
             test -f "$HOME/.codex/auth.json" || {
               echo "::error::~/.codex/auth.json missing on self-hosted runner host."
               exit 3
