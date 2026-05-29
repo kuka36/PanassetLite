@@ -11,7 +11,9 @@ permissions:
 
 jobs:
   run-agent:
-    if: github.event.label.name == 'ai-task'
+    # Only the repo owner may kick off an agent run: the 'ai-task' label must be
+    # applied by the owner themselves, not by collaborators or outside contributors.
+    if: github.event.label.name == 'ai-task' && github.actor == github.repository_owner
     # Runs on the user's self-hosted runner so Codex ChatGPT login (~/.codex/auth.json)
     # stays on the local box. Public repo: never expose CODEX_AUTH_JSON as a secret.
     runs-on: [self-hosted, panasset-agent]
