@@ -46,7 +46,35 @@ sudo ./svc.sh install
 sudo ./svc.sh start
 ```
 
-### 5. GitHub 仓库设置（无需任何 secret）
+### 5. 代理（国内网络必需）
+
+Codex 运行时要访问 `chatgpt.com`，容器内通常需要走宿主的代理。配置**不写进 git**，
+放在 runner 本机的 `.devcontainer/.env`（devcontainer.json 通过 `--env-file` 加载）：
+
+```ini
+# .devcontainer/.env —— 各 runner 各自配置，端口按本机代理实际值改
+HTTP_PROXY=http://host.docker.internal:7897
+HTTPS_PROXY=http://host.docker.internal:7897
+http_proxy=http://host.docker.internal:7897
+https_proxy=http://host.docker.internal:7897
+NO_PROXY=localhost,127.0.0.1,::1,.local
+no_proxy=localhost,127.0.0.1,::1,.local
+```
+
+要点：
+- 容器内 `host.docker.internal` 代表宿主，**不能用 `127.0.0.1`**（那是容器自己）。
+- **宿主代理必须监听 `0.0.0.0`**，否则容器连不进来（默认只听 `127.0.0.1`）。
+  - Clash / Clash Verge：打开 **Allow LAN / 允许局域网连接**。
+  - Trojan-Qt5：偏好设置 → **Inbound/入站设置** → 把 **本地地址(Local Address) 从 `127.0.0.1` 改成 `0.0.0.0`**，
+    并勾选 **允许来自局域网的连接 / Share over LAN**；用它的 **HTTP 入站端口**填到上面的 `HTTP_PROXY`
+    （Trojan-Qt5 的 HTTP/SOCKS 端口与 Clash 的 7897 未必相同，以本机实际为准）。改完重启代理。
+- 验证容器内能出网（在 runner 宿主执行，端口换成实际值）：
+  ```bash
+  docker run --rm curlimages/curl -x http://host.docker.internal:7897 \
+    -sS -o /dev/null -w '%{http_code}\n' https://chatgpt.com
+  ```
+
+### 6. GitHub 仓库设置（无需任何 secret）
 
 - **Settings → Actions → General → Workflow permissions**：`Read and write permissions`
 - **Settings → Pages → Source**：`GitHub Actions`

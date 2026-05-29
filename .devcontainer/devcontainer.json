@@ -13,6 +13,13 @@
     "API_KEY": "${localEnv:API_KEY}",
     "GITHUB_TOKEN": "${localEnv:GITHUB_TOKEN}"
   },
+  // 加载 runner 本机的 .devcontainer/.env（不入 git，各宿主各自配置）。
+  // 代理等与宿主相关的设置放这里，不在 devcontainer.json 里硬编码端口。
+  // 容器内用 host.docker.internal 指代宿主，且宿主代理须监听 0.0.0.0。
+  "runArgs": [
+    "--env-file",
+    "${localWorkspaceFolder}/.devcontainer/.env"
+  ],
   "mounts": [
     "source=${localEnv:HOME}/.codex,target=/home/ubuntu/.codex,type=bind,consistency=cached"
   ],
