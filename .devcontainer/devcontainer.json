@@ -2,10 +2,10 @@
   "name": "PanassetLite Agent Harness",
   "build": {
     "dockerfile": "Dockerfile",
-    "context": "."
+    "context": ".."
   },
   "workspaceFolder": "/workspace",
-  "remoteUser": "node",
+  "remoteUser": "ubuntu",
   "postCreateCommand": "npm ci",
   "containerEnv": {
     "GEMINI_API_KEY": "${localEnv:GEMINI_API_KEY}",
@@ -13,7 +13,7 @@
     "GITHUB_TOKEN": "${localEnv:GITHUB_TOKEN}"
   },
   "mounts": [
-    "source=${localEnv:HOME}/.codex,target=/home/node/.codex,type=bind,consistency=cached"
+    "source=${localEnv:HOME}/.codex,target=/home/ubuntu/.codex,type=bind,consistency=cached"
   ],
   "customizations": {
     "vscode": {
