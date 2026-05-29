@@ -6,7 +6,7 @@
     // HTTP_PROXY/HTTPS_PROXY/NO_PROXY 是 Docker 预定义构建参数：经 build.args
     // 传入后 BuildKit 会自动注入到各 RUN 的环境（apt/curl/npm install -g 都走代理），
     // 且不写入镜像历史/缓存键。值取自运行 devcontainer 的进程环境——
-    // run-local.sh 会先 source .devcontainer/.env 再调用，故等价于"用 .env 里的代理"。
+    // self-hosted runner 须在自身环境变量里配置代理（如 actions-runner/.env）。
     "args": {
       "HTTP_PROXY": "${localEnv:HTTP_PROXY}",
       "HTTPS_PROXY": "${localEnv:HTTPS_PROXY}",
@@ -17,18 +17,19 @@
   "workspaceFolder": "/workspace",
   "remoteUser": "ubuntu",
   "postCreateCommand": "npm ci",
+  // 全部从宿主进程环境（localEnv）读取，不依赖任何仓库内文件——
+  // 仓库内的 .devcontainer/.env 会被 actions/checkout 的 clean 清掉，不可靠。
+  // 代理与宿主相关，须在 self-hosted runner 的环境变量里配置
+  // （如 actions-runner/.env，runner 服务启动时加载）。
+  // 容器内用 host.docker.internal 指代宿主，且宿主代理须监听 0.0.0.0。
   "containerEnv": {
     "GEMINI_API_KEY": "${localEnv:GEMINI_API_KEY}",
     "API_KEY": "${localEnv:API_KEY}",
-    "GITHUB_TOKEN": "${localEnv:GITHUB_TOKEN}"
+    "GITHUB_TOKEN": "${localEnv:GITHUB_TOKEN}",
+    "HTTP_PROXY": "${localEnv:HTTP_PROXY}",
+    "HTTPS_PROXY": "${localEnv:HTTPS_PROXY}",
+    "NO_PROXY": "${localEnv:NO_PROXY}"
   },
-  // 加载 runner 本机的 .devcontainer/.env（不入 git，各宿主各自配置）。
-  // 代理等与宿主相关的设置放这里，不在 devcontainer.json 里硬编码端口。
-  // 容器内用 host.docker.internal 指代宿主，且宿主代理须监听 0.0.0.0。
-  "runArgs": [
-    "--env-file",
-    "${localWorkspaceFolder}/.devcontainer/.env"
-  ],
   "mounts": [
     "source=${localEnv:HOME}/.codex,target=/home/ubuntu/.codex,type=bind,consistency=cached"
   ],
