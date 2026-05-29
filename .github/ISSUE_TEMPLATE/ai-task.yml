@@ -1,56 +1,68 @@
 name: AI Task
-description: 委派给自动化 Agent 执行的任务（贴上 ai-task 标签后触发 GitHub Actions）
+description: 委派给自动化 Agent 执行的任务（提交后自动触发 GitHub Actions）
 title: "[ai-task] "
 labels: ["ai-task"]
 body:
   - type: markdown
     attributes:
       value: |
-        填好以下字段后，给本 Issue 贴 `ai-task` 标签即可触发自动化 Agent。
-        Agent 会在 devcontainer 中执行任务并自动开 PR。
+        填写**目标**和**验收标准**即可提交，其余字段按需填写。
+        Agent 会自己探索代码库并确定改动范围。
+
+  - type: dropdown
+    id: type
+    attributes:
+      label: 任务类型
+      description: 决定分支前缀和 commit type，不确定就选 feat。
+      options:
+        - feat（新功能）
+        - fix（Bug 修复）
+        - refactor（重构，不改功能）
+        - docs（文档）
+        - chore（构建/配置维护）
+    validations:
+      required: true
+
   - type: textarea
     id: goal
     attributes:
-      label: 目标 (Goal)
-      description: 一句话说清楚最终想得到什么。
-      placeholder: 在资产列表页添加按标签筛选的下拉框。
+      label: 目标
+      description: 一句话说清楚最终想得到什么结果。
+      placeholder: 在资产列表页添加按标签筛选的下拉框，选中标签后列表实时过滤。
     validations:
       required: true
-  - type: textarea
-    id: scope
-    attributes:
-      label: 变更范围 (Scope)
-      description: 哪些文件 / 目录可能会被改动？
-      placeholder: |
-        - components/assets/AssetList.tsx
-        - context/PortfolioContext.tsx
-    validations:
-      required: true
+
   - type: textarea
     id: acceptance
     attributes:
-      label: 验收标准 (Acceptance Criteria)
-      description: 用 checkbox 写出可被 PR 自检的验收条件。
+      label: 验收标准
+      description: 用 checkbox 写出可被自动检查的完成条件。
       value: |
         - [ ] `npm run build` 通过
         - [ ]
     validations:
       required: true
+
+  - type: textarea
+    id: hints
+    attributes:
+      label: 已知线索（可选）
+      description: |
+        如果你知道从哪里入手，填在这里帮 Agent 缩短探索时间。
+        可以是文件路径、函数名、组件名、相关 issue/PR 链接——任何有帮助的信息都行。
+      placeholder: |
+        - 可能涉及 components/assets/ 下的列表组件
+        - 标签数据已在 types/domain.ts 的 Asset 类型里
+    validations:
+      required: false
+
   - type: textarea
     id: risk
     attributes:
-      label: 风险点 (Risks)
-      description: 是否动到 PortfolioEngine / Storage / 行情刷新 / AI agent？是否引入新存储 key？
-      placeholder: 无风险点 / 引入新 storage key xxx 并需迁移
-    validations:
-      required: false
-  - type: textarea
-    id: refs
-    attributes:
-      label: 相关文件 / 参考 (References)
-      description: 给 Agent 一些导航锚点。
+      label: 风险提示（可选）
+      description: 如果你知道某些地方特别容易出问题，提前告诉 Agent。
       placeholder: |
-        - services/PortfolioEngine.ts
-        - types/domain.ts
+        - 涉及 PortfolioEngine 计算
+        - 需要新增 LocalStorage key（需写迁移）
     validations:
       required: false
