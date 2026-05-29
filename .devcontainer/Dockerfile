@@ -38,6 +38,10 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     nodejs \
     && rm -rf /var/lib/apt/lists/*
 
+# 配置 npm 国内镜像（国内网络优化）。写入全局 npmrc，构建阶段的全局安装
+# 与运行时 ubuntu 用户的 npm ci 都会读取，避免默认 registry.npmjs.org 超时。
+RUN npm config set registry https://registry.npmmirror.com -g
+
 # 应用层 / 易变开发工具，集中在脚本里维护（增删工具只改这个脚本，不动上面的系统层逻辑）
 COPY .agent/harness/install-tools.sh /tmp/install-tools.sh
 RUN chmod +x /tmp/install-tools.sh && /tmp/install-tools.sh && rm /tmp/install-tools.sh
