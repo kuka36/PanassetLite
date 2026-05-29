@@ -2,7 +2,16 @@
   "name": "PanassetLite Agent Harness",
   "build": {
     "dockerfile": "Dockerfile",
-    "context": ".."
+    "context": "..",
+    // HTTP_PROXY/HTTPS_PROXY/NO_PROXY 是 Docker 预定义构建参数：经 build.args
+    // 传入后 BuildKit 会自动注入到各 RUN 的环境（apt/curl/npm install -g 都走代理），
+    // 且不写入镜像历史/缓存键。值取自运行 devcontainer 的进程环境——
+    // run-local.sh 会先 source .devcontainer/.env 再调用，故等价于"用 .env 里的代理"。
+    "args": {
+      "HTTP_PROXY": "${localEnv:HTTP_PROXY}",
+      "HTTPS_PROXY": "${localEnv:HTTPS_PROXY}",
+      "NO_PROXY": "${localEnv:NO_PROXY}"
+    }
   },
   "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached",
   "workspaceFolder": "/workspace",
