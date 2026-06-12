@@ -64,10 +64,23 @@ const proxyMiddleware: Connect.NextHandleFunction = async (req, res, next) => {
 
     res.statusCode = upstream.status
     upstream.headers.forEach((value, key) => {
-      if (key.toLowerCase() === 'transfer-encoding') return
+      const lower = key.toLowerCase()
+      if (lower === 'transfer-encoding' || lower === 'content-length') return
       res.setHeader(key, value)
     })
-    res.end(await upstream.text())
+
+    if (!upstream.body) {
+      res.end()
+      return
+    }
+
+    const reader = upstream.body.getReader()
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      res.write(Buffer.from(value))
+    }
+    res.end()
   } catch (err) {
     res.statusCode = 502
     res.end(`LLM proxy error: ${(err as Error).message}`)

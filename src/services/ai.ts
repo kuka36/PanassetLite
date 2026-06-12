@@ -1,6 +1,6 @@
 import type { PortfolioSummary, Settings } from '../types'
 import { ASSET_TYPE_LABEL } from '../types'
-import { postChatCompletions } from './llmClient'
+import { postChatCompletions, readChatCompletionStream } from './llmClient'
 
 /**
  * AI 智能顾问。
@@ -23,6 +23,13 @@ export interface HealthReport {
 }
 
 const pct = (n: number) => `${(n * 100).toFixed(1)}%`
+
+const LEVEL_LABEL: Record<InsightLevel, string> = {
+  danger: '严重',
+  warn: '警告',
+  info: '提示',
+  good: '良好',
+}
 
 export function analyzePortfolio(summary: PortfolioSummary): HealthReport {
   const insights: Insight[] = []
@@ -218,10 +225,55 @@ export function analyzePortfolio(summary: PortfolioSummary): HealthReport {
 
 export function buildPortfolioBrief(summary: PortfolioSummary): string {
   const lines: string[] = []
-  lines.push(`总资产 ¥${summary.totalAssetsCNY.toFixed(0)},负债 ¥${summary.totalDebtCNY.toFixed(0)},净资产 ¥${summary.netWorthCNY.toFixed(0)}`)
-  lines.push('类别分布:' + summary.byType
-    .map((t) => `${ASSET_TYPE_LABEL[t.type]} ¥${t.valueCNY.toFixed(0)}`)
-    .join(','))
+  const { totalAssetsCNY: assets, totalDebtCNY: debt } = summary
+
+  lines.push(
+    `总资产 ¥${assets.toFixed(0)},负债 ¥${debt.toFixed(0)},净资产 ¥${summary.netWorthCNY.toFixed(0)}`,
+  )
+  if (assets > 0) {
+    lines.push(`负债率 ${pct(debt / assets)}`)
+  }
+
+  lines.push(
+    '类别分布:' +
+      summary.byType
+        .map((t) => {
+          const share =
+            assets > 0 && t.valueCNY > 0 ? ` ${pct(t.valueCNY / assets)}` : ''
+          return `${ASSET_TYPE_LABEL[t.type]}${share} ¥${t.valueCNY.toFixed(0)}`
+        })
+        .join(','),
+  )
+
+  if (summary.periodReturns.length > 0) {
+    lines.push('区间收益:')
+    for (const p of summary.periodReturns) {
+      const ratioStr = p.ratio != null ? `,收益率 ${pct(p.ratio)}` : ''
+      lines.push(`- ${p.label}: 收益 ¥${p.pnlCNY.toFixed(0)}${ratioStr}`)
+    }
+  }
+
+  const now = Date.now()
+  const stale = summary.snapshots.filter(
+    (s) =>
+      s.asset.priceSource === 'manual' &&
+      s.asset.type !== 'cash' &&
+      s.asset.type !== 'debt' &&
+      s.lastUpdated &&
+      now - Date.parse(s.lastUpdated) > 45 * 86400_000,
+  )
+  if (stale.length > 0) {
+    lines.push(`估值过期(>45天未更新): ${stale.map((s) => s.asset.name).join('、')}`)
+  }
+
+  const report = analyzePortfolio(summary)
+  if (report.insights.length > 0) {
+    lines.push(`本地健康评分 ${report.score}/100(${report.grade}),已检出的问题与优点:`)
+    for (const i of report.insights) {
+      lines.push(`- [${LEVEL_LABEL[i.level]}] ${i.title}`)
+    }
+  }
+
   lines.push('持仓明细:')
   for (const s of summary.snapshots) {
     if (s.valueCNY <= 0) continue
@@ -245,35 +297,72 @@ export function buildPortfolioBrief(summary: PortfolioSummary): string {
   return lines.join('\n')
 }
 
-export async function fetchLlmAdvice(
+/** 留空 question 时 LLM 使用的默认问题 */
+export const DEFAULT_ADVISOR_PROMPT =
+  '请做一次整体健康检查:评估风险点、配置是否合理、哪些资产应该调整,并给出 3 条最重要的行动建议。'
+
+export interface AdvisorPreset {
+  label: string
+  /** 空字符串表示使用 DEFAULT_ADVISOR_PROMPT */
+  prompt: string
+}
+
+export const ADVISOR_PRESETS: AdvisorPreset[] = [
+  { label: '整体健康检查', prompt: '' },
+  {
+    label: '本月财富复盘',
+    prompt:
+      '结合「区间收益」中的本月数据与近一个月净资产变动,帮我做一次财富复盘:本月表现如何、主要贡献来自哪里、有哪些需要改进的地方?给出 3 条可执行建议。',
+  },
+  {
+    label: '哪些理财该换/该留',
+    prompt:
+      '逐一评估持仓中的理财产品与稳健类资产(含近期区间年化),哪些值得继续持有、哪些收益偏低应考虑换仓?按优先级给出操作建议。',
+  },
+  {
+    label: '如何降低风险敞口',
+    prompt:
+      '基于当前资产集中度、股票/加密货币占比和本地规则检出的风险项,给出具体可行的降风险方案(含目标占比或调整顺序),控制在可执行范围内。',
+  },
+  {
+    label: '应急金够吗',
+    prompt:
+      '根据现金类资产占比与持仓结构,评估应急金是否充足(参考 3–6 个月生活开支的一般标准);若不足说明缺口大致方向,若过多说明如何兼顾流动性与收益。',
+  },
+]
+
+export async function streamLlmAdvice(
   summary: PortfolioSummary,
   settings: Settings,
-  question?: string,
+  question: string | undefined,
+  onDelta: (accumulated: string) => void,
+  signal?: AbortSignal,
 ): Promise<string> {
   const { baseUrl, apiKey, model } = settings.llm
   if (!apiKey) throw new Error('未配置 LLM API key,请到设置页填写(或仅使用本地规则分析)')
 
   const system =
     '你是一位专业、务实的个人理财顾问。基于用户的资产组合数据,用简体中文给出具体、可执行的建议。' +
+    '数据里已附带本地规则引擎的健康评分与检出问题(含等级),请在此基础上解释、排序优先级并给出行动方案,不要重复做同样的数值判断。' +
     '直接给结论和理由,不要免责声明套话。用 markdown 列表组织内容,控制在 400 字以内。'
   const user = `我的资产组合如下:\n${buildPortfolioBrief(summary)}\n\n${
-    question?.trim() || '请做一次整体健康检查:评估风险点、配置是否合理、哪些资产应该调整,并给出 3 条最重要的行动建议。'
+    question?.trim() || DEFAULT_ADVISOR_PROMPT
   }`
 
-  const res = await postChatCompletions(baseUrl, apiKey, {
-    model,
-    messages: [
-      { role: 'system', content: system },
-      { role: 'user', content: user },
-    ],
-    temperature: 0.4,
-  })
-  if (!res.ok) {
-    const text = await res.text()
-    throw new Error(`LLM 接口请求失败 (${res.status}): ${text.slice(0, 200)}`)
-  }
-  const data = await res.json()
-  const content = data.choices?.[0]?.message?.content
-  if (!content) throw new Error('LLM 返回内容为空')
-  return content
+  const res = await postChatCompletions(
+    baseUrl,
+    apiKey,
+    {
+      model,
+      messages: [
+        { role: 'system', content: system },
+        { role: 'user', content: user },
+      ],
+      temperature: 0.4,
+      stream: true,
+    },
+    signal,
+  )
+
+  return readChatCompletionStream(res, (_chunk, accumulated) => onDelta(accumulated))
 }

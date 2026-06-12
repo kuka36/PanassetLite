@@ -1,8 +1,15 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useStore } from '../store'
 import { useSummary } from '../hooks/useSummary'
 import EChart from '../components/EChart'
-import { analyzePortfolio, fetchLlmAdvice, type InsightLevel } from '../services/ai'
+import LightMarkdown from '../components/LightMarkdown'
+import {
+  ADVISOR_PRESETS,
+  analyzePortfolio,
+  streamLlmAdvice,
+  type AdvisorPreset,
+  type InsightLevel,
+} from '../services/ai'
 import { btnPrimary, inputCls } from '../components/Modal'
 
 const LEVEL_STYLE: Record<InsightLevel, { icon: string; cls: string }> = {
@@ -21,6 +28,7 @@ export default function Advisor() {
   const [loading, setLoading] = useState(false)
   const [answer, setAnswer] = useState('')
   const [error, setError] = useState('')
+  const abortRef = useRef<AbortController | null>(null)
 
   const gaugeOption = useMemo(
     () => ({
@@ -60,18 +68,28 @@ export default function Advisor() {
     [report],
   )
 
-  const askLlm = async () => {
+  const askLlm = async (promptOverride?: string) => {
+    const q = promptOverride !== undefined ? promptOverride : question
+    abortRef.current?.abort()
+    const ac = new AbortController()
+    abortRef.current = ac
+
     setLoading(true)
     setError('')
     setAnswer('')
     try {
-      const text = await fetchLlmAdvice(summary, settings, question)
-      setAnswer(text)
+      await streamLlmAdvice(summary, settings, q, setAnswer, ac.signal)
     } catch (e) {
+      if ((e as Error).name === 'AbortError') return
       setError((e as Error).message)
     } finally {
-      setLoading(false)
+      if (abortRef.current === ac) setLoading(false)
     }
+  }
+
+  const runPreset = (preset: AdvisorPreset) => {
+    setQuestion(preset.prompt)
+    void askLlm(preset.prompt)
   }
 
   return (
@@ -110,22 +128,51 @@ export default function Advisor() {
             ? '将向你配置的 LLM 接口发送资产汇总数据(金额与收益率),获取个性化建议。'
             : '未配置 LLM API key。到「设置」页填写 OpenAI 兼容接口后即可使用;不配置也不影响上面的本地分析。'}
         </p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {ADVISOR_PRESETS.map((preset) => {
+            const active = question === preset.prompt
+            return (
+              <button
+                key={preset.label}
+                type="button"
+                className={`rounded-full border px-3 py-1 text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                  active
+                    ? 'border-sky-500/50 bg-sky-500/10 text-sky-300'
+                    : 'border-slate-700 text-slate-400 hover:border-slate-600 hover:bg-slate-800 hover:text-slate-300'
+                }`}
+                disabled={loading || !settings.llm.apiKey}
+                onClick={() => runPreset(preset)}
+              >
+                {preset.label}
+              </button>
+            )
+          })}
+        </div>
         <div className="mt-3 flex gap-2">
           <input
             className={inputCls}
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
-            placeholder="想问什么?留空则做整体健康检查。例:我想 3 年内攒够 50 万首付,该怎么调整?"
+            placeholder="也可以自定义问题,或点上方快捷问题一键分析"
             onKeyDown={(e) => e.key === 'Enter' && !loading && settings.llm.apiKey && askLlm()}
           />
-          <button className={`${btnPrimary} shrink-0`} onClick={askLlm} disabled={loading || !settings.llm.apiKey}>
-            {loading ? '分析中…' : '生成建议'}
+          <button
+            className={`${btnPrimary} shrink-0`}
+            onClick={() => askLlm()}
+            disabled={loading || !settings.llm.apiKey}
+          >
+            {loading ? (answer ? '生成中…' : '连接中…') : '生成建议'}
           </button>
         </div>
         {error && <p className="mt-3 text-sm text-red-400">{error}</p>}
-        {answer && (
-          <div className="mt-4 whitespace-pre-wrap rounded-xl border border-slate-800 bg-slate-950/60 p-4 text-sm leading-relaxed text-slate-300">
-            {answer}
+        {(loading || answer) && (
+          <div className="mt-4 rounded-xl border border-slate-800 bg-slate-950/60 p-4 text-sm leading-relaxed text-slate-300">
+            {answer ? <LightMarkdown text={answer} /> : null}
+            {loading && (
+              <span className={`text-sky-400 ${answer ? 'ml-0.5 inline animate-pulse' : 'text-slate-500'}`}>
+                {answer ? '▍' : '正在生成…'}
+              </span>
+            )}
           </div>
         )}
       </div>
