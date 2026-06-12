@@ -8,7 +8,7 @@ import TxForm from '../components/TxForm'
 import type { NlTxParseResult } from '../services/nlTx'
 import type { Asset, AssetSnapshot, AssetType, Transaction, TxLedgerRow, TxType } from '../types'
 import { ASSET_TYPE_COLOR, ASSET_TYPE_LABEL, TX_TYPE_LABEL, isQuantityBased } from '../types'
-import { fmtMoney, fmtNum, fmtPct, pnlColor } from '../utils/format'
+import { fmtMoney, fmtNum, fmtPct, isUpdateStale, pnlColor, staleUpdateCls } from '../utils/format'
 
 type ModalState =
   | { kind: 'add' }
@@ -131,7 +131,14 @@ export default function Assets() {
                   <td className={`px-2 py-2.5 text-right tabular-nums ${s.recentAnnualized != null ? pnlColor(s.recentAnnualized) : 'text-slate-500'}`}>
                     {s.recentAnnualized != null ? fmtPct(s.recentAnnualized) : '—'}
                   </td>
-                  <td className="px-2 py-2.5 text-right text-xs text-slate-500">{s.lastUpdated ?? '—'}</td>
+                  <td
+                    className={`px-2 py-2.5 text-right text-xs tabular-nums ${staleUpdateCls(s.lastUpdated)}`}
+                    title={
+                      isUpdateStale(s.lastUpdated) ? '已超过一个月未更新,建议更新估值' : undefined
+                    }
+                  >
+                    {s.lastUpdated ?? '—'}
+                  </td>
                   <td className="px-4 py-2.5 text-right" onClick={(e) => e.stopPropagation()}>
                     <button
                       className="rounded-md px-2 py-1 text-xs text-sky-400 hover:bg-slate-800"

@@ -31,3 +31,18 @@ export function pnlColor(n: number): string {
 export function fmtNum(n: number, maxDigits = 4): string {
   return n.toLocaleString('zh-CN', { maximumFractionDigits: maxDigits })
 }
+
+const DAY_MS = 86_400_000
+
+/** 更新日期是否早于今天超过指定天数(默认 30 天 ≈ 一个月) */
+export function isUpdateStale(dateStr: string | undefined, thresholdDays = 30): boolean {
+  if (!dateStr) return false
+  const parsed = Date.parse(dateStr)
+  if (Number.isNaN(parsed)) return false
+  return Date.now() - parsed > thresholdDays * DAY_MS
+}
+
+/** 「更新于」列文字颜色:超过一个月未更新时用琥珀色警示 */
+export function staleUpdateCls(dateStr: string | undefined, thresholdDays = 30): string {
+  return isUpdateStale(dateStr, thresholdDays) ? 'text-amber-400' : 'text-slate-500'
+}
