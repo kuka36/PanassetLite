@@ -1,0 +1,36 @@
+---
+description: 新页面与表单功能开发清单
+globs: "src/pages/**/*.tsx"
+alwaysApply: false
+---
+
+# 页面与功能开发
+
+## 新增页面
+
+`App.tsx` 使用 state 路由，无 react-router。新页面需三处同步：
+
+1. `NAV` 数组增加 `{ id, label, icon }`
+2. `<main>` 内增加 `{page === 'xxx' && <Xxx />}`
+3. 在 `src/pages/` 新建页面组件
+
+## UI 一致性
+
+- 页面标题：`<h1 className="text-xl font-semibold text-slate-100">`
+- 卡片容器：`rounded-2xl border border-slate-800 bg-slate-900/60 p-4`（或 `p-5`）
+- 空状态：居中、`text-sm text-slate-500`
+- 按钮/输入：从 `Modal.tsx` 导入 `btnPrimary`、`btnGhost`、`inputCls`、`labelCls`
+
+## 表单与弹窗
+
+- 增删改交互优先用 `Modal` + 独立表单组件（参考 `AssetForm`、`TxForm`）。
+- 表单校验失败时静默 return 或 inline 提示，不用 `alert`（ destructive 确认如删除可用 `confirm`）。
+- 列表页 state 用 discriminated union 管理弹窗，参考 `Assets.tsx` 的 `ModalState`。
+
+## 图表示例
+
+ECharts 配置放 `useMemo`，复用 `src/components/chartTheme.ts` 与 `<EChart />`，避免在页面直接操作 DOM。
+
+## 文案
+
+用户可见字符串用简体中文；新增 `AssetType` 等枚举时同步更新 `types.ts` 中的 `*_LABEL` / `*_COLOR`。

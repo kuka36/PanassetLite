@@ -1,0 +1,23 @@
+---
+description: PanassetLite 项目概览与核心约定
+alwaysApply: true
+---
+
+# PanassetLite 项目约定
+
+轻量个人资产管理 SPA：React 19 + Vite + Tailwind CSS v4 + Zustand + ECharts，TypeScript。
+
+## 核心原则
+
+- **数据仅存本地浏览器**（Zustand persist / localStorage），无后端、无注册、无上传。不要引入任何把用户资产数据发送到外部的逻辑（用户主动配置的 LLM 接口除外）。
+- UI 文案使用**简体中文**，代码注释可中可英。
+- 深色主题：背景 `#060a13`，使用 slate 色系（`bg-slate-900`、`border-slate-800` 等），主色 sky。
+- 页面切换是 `App.tsx` 内的 state 路由（无 react-router），新页面需同时加入 `NAV` 数组和 `<main>` 内的条件渲染。
+
+## 共享样式
+
+按钮和表单控件样式统一从 `src/components/Modal.tsx` 导入，不要重复手写：
+
+```typescript
+import { btnPrimary, btnGhost, inputCls, labelCls } from '../components/Modal'
+```

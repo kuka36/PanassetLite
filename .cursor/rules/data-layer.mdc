@@ -1,0 +1,38 @@
+---
+description: 数据层约定：事件溯源、持久化与 store 模式
+globs: "src/{store,engine,services,hooks}/**/*"
+alwaysApply: false
+---
+
+# 数据层约定
+
+## 事件溯源，不落盘派生状态
+
+组合状态（持仓、市值、盈亏、XIRR、净值曲线）由 `PortfolioEngine` 从 `assets + transactions + prices + settings` **实时重算**，见 `src/hooks/useSummary.ts`。
+
+```typescript
+// ❌ BAD：把 totalValue、pnl 等计算结果写入 localStorage
+StorageService.saveDerived({ netWorth: 12345 })
+
+// ✅ GOOD：只持久化原始事件与配置，展示时 useSummary()
+return useMemo(
+  () => new PortfolioEngine(assets, transactions, prices, settings).summary(),
+  [assets, transactions, prices, settings],
+)
+```
+
+## 持久化入口
+
+- 所有 localStorage 读写经 `StorageService`（`src/services/storage.ts`），key 前缀 `panasset.*`。
+- Store action 内：**先改内存 → 再 StorageService.save → 再 set()**，保持与 `store.ts` 现有写法一致。
+- 新增可持久化字段时，同步更新 `DEFAULT_SETTINGS` / 导出导入结构。
+
+## Store 边界
+
+- `store.ts` 负责 CRUD 与 orchestration（如 `refreshPrices`），不含复杂财务公式。
+- 财务逻辑放 `src/engine/`，外部 API 放 `src/services/`。
+- 组件用细粒度 selector：`useStore((s) => s.assets)`，避免整 store 订阅引发多余渲染。
+
+## 隐私
+
+除用户主动配置的 LLM/行情接口外，**不得**新增将资产明细上传到外部的逻辑。

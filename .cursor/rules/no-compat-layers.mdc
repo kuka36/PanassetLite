@@ -1,0 +1,42 @@
+---
+description: 禁止随意增加兼容性处理，避免无谓复杂度
+alwaysApply: true
+---
+
+# 不随意做兼容性处理
+
+不要为了「兜底历史脏数据」或「多字段都能用」而在业务逻辑里叠兼容层。兼容性代码会扩散到多处读取路径，长期难维护、难测试。
+
+## 默认做法
+
+- **单一数据源**：字段语义在 `src/types.ts` 定死，读写只走约定字段（如 `VALUATION` 只用 `value`）。
+- **在入口校验**：表单提交、store 写入时保证结构正确，而不是在 `engine/` 里 `value ?? amount`。
+- **脏数据靠修复**：用户数据有误时，引导删除重录或一次性迁移脚本，不在核心计算里永久背负。
+
+## 何时才允许兼容
+
+须同时满足：
+
+1. 用户明确要求，或已有大量无法重录的真实数据；
+2. 兼容范围极小、有注释说明退役计划；
+3. 不引入新的辅助函数链或分支蔓延。
+
+## 示例
+
+```typescript
+// ❌ BAD：引擎为历史误写字段兜底
+private valuationValue(tx: Transaction) {
+  return tx.value ?? tx.amount ?? null
+}
+
+// ✅ GOOD：只认约定字段；数据问题在表单/文档层解决
+if (tx.type === 'VALUATION' && tx.value != null) { ... }
+```
+
+```typescript
+// ❌ BAD：为旧 API 形状保留多套解析
+const price = data.price ?? data.unitPrice ?? data.p ?? 0
+
+// ✅ GOOD：类型与调用方对齐，改一处而非处处 fallback
+const price = data.price
+```
