@@ -2,16 +2,20 @@ import { useMemo, useState } from 'react'
 import { useStore } from '../store'
 import Modal, { btnPrimary, inputCls } from '../components/Modal'
 import TxForm from '../components/TxForm'
+import type { Transaction } from '../types'
 import { TX_TYPE_LABEL } from '../types'
 import { fmtNum } from '../utils/format'
+
+type ModalState = { kind: 'add' } | { kind: 'edit'; tx: Transaction } | null
 
 export default function Transactions() {
   const assets = useStore((s) => s.assets)
   const transactions = useStore((s) => s.transactions)
   const addTransaction = useStore((s) => s.addTransaction)
+  const updateTransaction = useStore((s) => s.updateTransaction)
   const deleteTransaction = useStore((s) => s.deleteTransaction)
   const [filterAsset, setFilterAsset] = useState('')
-  const [showAdd, setShowAdd] = useState(false)
+  const [modal, setModal] = useState<ModalState>(null)
 
   const assetMap = useMemo(() => new Map(assets.map((a) => [a.id, a])), [assets])
 
@@ -40,7 +44,7 @@ export default function Transactions() {
               </option>
             ))}
           </select>
-          <button className={btnPrimary} onClick={() => setShowAdd(true)} disabled={assets.length === 0}>
+          <button className={btnPrimary} onClick={() => setModal({ kind: 'add' })} disabled={assets.length === 0}>
             + 记一笔
           </button>
         </div>
@@ -79,6 +83,12 @@ export default function Transactions() {
                   <td className="max-w-40 truncate px-3 py-2.5 text-xs text-slate-500">{t.note}</td>
                   <td className="px-4 py-2.5 text-right">
                     <button
+                      className="mr-3 text-xs text-sky-400 hover:underline"
+                      onClick={() => setModal({ kind: 'edit', tx: t })}
+                    >
+                      编辑
+                    </button>
+                    <button
                       className="text-xs text-slate-500 hover:text-red-400"
                       onClick={() => {
                         if (confirm('删除这条记录?')) deleteTransaction(t.id)
@@ -101,15 +111,29 @@ export default function Transactions() {
         </table>
       </div>
 
-      {showAdd && (
-        <Modal title="记一笔" onClose={() => setShowAdd(false)}>
+      {modal?.kind === 'add' && (
+        <Modal title="记一笔" onClose={() => setModal(null)}>
           <TxForm
             assets={assets}
             onSubmit={(t) => {
               addTransaction(t)
-              setShowAdd(false)
+              setModal(null)
             }}
-            onCancel={() => setShowAdd(false)}
+            onCancel={() => setModal(null)}
+          />
+        </Modal>
+      )}
+
+      {modal?.kind === 'edit' && (
+        <Modal title="编辑交易" onClose={() => setModal(null)}>
+          <TxForm
+            assets={assets}
+            initial={modal.tx}
+            onSubmit={(t) => {
+              updateTransaction(modal.tx.id, t)
+              setModal(null)
+            }}
+            onCancel={() => setModal(null)}
           />
         </Modal>
       )}

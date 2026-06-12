@@ -4,7 +4,7 @@ import { useSummary } from '../hooks/useSummary'
 import Modal, { btnPrimary } from '../components/Modal'
 import AssetForm from '../components/AssetForm'
 import TxForm from '../components/TxForm'
-import type { Asset, AssetSnapshot, AssetType, TxType } from '../types'
+import type { Asset, AssetSnapshot, AssetType, Transaction, TxType } from '../types'
 import { ASSET_TYPE_COLOR, ASSET_TYPE_LABEL, TX_TYPE_LABEL } from '../types'
 import { fmtMoney, fmtNum, fmtPct, pnlColor } from '../utils/format'
 
@@ -12,8 +12,16 @@ type ModalState =
   | { kind: 'add' }
   | { kind: 'edit'; asset: Asset }
   | { kind: 'tx'; asset: Asset; defaultType?: TxType }
+  | { kind: 'editTx'; tx: Transaction; returnAssetId?: string }
   | { kind: 'detail'; assetId: string }
   | null
+
+function closeEditTx(
+  editModal: Extract<ModalState, { kind: 'editTx' }>,
+  setModal: (m: ModalState) => void,
+) {
+  setModal(editModal.returnAssetId ? { kind: 'detail', assetId: editModal.returnAssetId } : null)
+}
 
 export default function Assets() {
   const summary = useSummary()
@@ -22,6 +30,7 @@ export default function Assets() {
   const updateAsset = useStore((s) => s.updateAsset)
   const deleteAsset = useStore((s) => s.deleteAsset)
   const addTransaction = useStore((s) => s.addTransaction)
+  const updateTransaction = useStore((s) => s.updateTransaction)
   const [modal, setModal] = useState<ModalState>(null)
 
   const groups = useMemo(() => {
@@ -163,11 +172,27 @@ export default function Assets() {
         </Modal>
       )}
 
+      {modal?.kind === 'editTx' && (
+        <Modal title="编辑交易" onClose={() => closeEditTx(modal, setModal)}>
+          <TxForm
+            assets={assets}
+            fixedAssetId={modal.tx.assetId}
+            initial={modal.tx}
+            onSubmit={(t) => {
+              updateTransaction(modal.tx.id, t)
+              closeEditTx(modal, setModal)
+            }}
+            onCancel={() => closeEditTx(modal, setModal)}
+          />
+        </Modal>
+      )}
+
       {modal?.kind === 'detail' && (
         <AssetDetail
           assetId={modal.assetId}
           onClose={() => setModal(null)}
           onEdit={(asset) => setModal({ kind: 'edit', asset })}
+          onEditTx={(tx) => setModal({ kind: 'editTx', tx, returnAssetId: modal.assetId })}
           onDelete={(asset) => {
             if (confirm(`确定删除「${asset.name}」及其全部交易记录?此操作不可恢复。`)) {
               deleteAsset(asset.id)
@@ -184,11 +209,13 @@ function AssetDetail({
   assetId,
   onClose,
   onEdit,
+  onEditTx,
   onDelete,
 }: {
   assetId: string
   onClose: () => void
   onEdit: (a: Asset) => void
+  onEditTx: (t: Transaction) => void
   onDelete: (a: Asset) => void
 }) {
   const summary = useSummary()
@@ -244,6 +271,12 @@ function AssetDetail({
                 </td>
                 <td className="max-w-32 truncate px-3 py-2 text-xs text-slate-500">{t.note}</td>
                 <td className="px-3 py-2 text-right">
+                  <button
+                    className="mr-3 text-xs text-sky-400 hover:underline"
+                    onClick={() => onEditTx(t)}
+                  >
+                    编辑
+                  </button>
                   <button
                     className="text-xs text-slate-500 hover:text-red-400"
                     onClick={() => {

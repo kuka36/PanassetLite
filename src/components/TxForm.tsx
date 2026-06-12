@@ -9,6 +9,7 @@ interface Props {
   /** 固定资产时传入,否则可下拉选择 */
   fixedAssetId?: string
   defaultType?: TxType
+  initial?: Transaction
   onSubmit: (t: Omit<Transaction, 'id' | 'createdAt'>) => void
   onCancel: () => void
 }
@@ -20,20 +21,21 @@ function allowedTypes(asset: Asset | undefined): TxType[] {
   return ['DEPOSIT', 'WITHDRAW', 'INCOME', 'VALUATION']
 }
 
-export default function TxForm({ assets, fixedAssetId, defaultType, onSubmit, onCancel }: Props) {
+export default function TxForm({ assets, fixedAssetId, defaultType, initial, onSubmit, onCancel }: Props) {
   const active = assets.filter((a) => !a.archived)
-  const [assetId, setAssetId] = useState(fixedAssetId ?? active[0]?.id ?? '')
+  const [assetId, setAssetId] = useState(fixedAssetId ?? initial?.assetId ?? active[0]?.id ?? '')
   const asset = active.find((a) => a.id === assetId)
   const types = allowedTypes(asset)
   const [type, setType] = useState<TxType>(
-    defaultType && types.includes(defaultType) ? defaultType : types[0] ?? 'DEPOSIT',
+    initial?.type ??
+      (defaultType && types.includes(defaultType) ? defaultType : types[0] ?? 'DEPOSIT'),
   )
-  const [date, setDate] = useState(today())
-  const [quantity, setQuantity] = useState('')
-  const [price, setPrice] = useState('')
-  const [amount, setAmount] = useState('')
-  const [value, setValue] = useState('')
-  const [note, setNote] = useState('')
+  const [date, setDate] = useState(initial?.date ?? today())
+  const [quantity, setQuantity] = useState(initial?.quantity != null ? String(initial.quantity) : '')
+  const [price, setPrice] = useState(initial?.price != null ? String(initial.price) : '')
+  const [amount, setAmount] = useState(initial?.amount != null ? String(initial.amount) : '')
+  const [value, setValue] = useState(initial?.value != null ? String(initial.value) : '')
+  const [note, setNote] = useState(initial?.note ?? '')
 
   const effType = types.includes(type) ? type : types[0]
   const needsQty = effType === 'BUY' || effType === 'SELL'
@@ -184,7 +186,7 @@ export default function TxForm({ assets, fixedAssetId, defaultType, onSubmit, on
           取消
         </button>
         <button className={btnPrimary} onClick={submit} disabled={!valid}>
-          记录
+          {initial ? '保存' : '记录'}
         </button>
       </div>
     </div>
