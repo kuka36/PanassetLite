@@ -18,6 +18,7 @@ export default function Settings() {
   )
   const [finnhubKey, setFinnhubKey] = useState(settings.finnhubKey ?? '')
   const [llm, setLlm] = useState(settings.llm)
+  const [llmSendAssetNames, setLlmSendAssetNames] = useState(settings.llmSendAssetNames !== false)
 
   const flash = (m: string) => {
     setMsg(m)
@@ -140,7 +141,7 @@ export default function Settings() {
 
       <Section
         title="AI 顾问 · LLM 接口(可选)"
-        desc="OpenAI 兼容接口(OpenAI / DeepSeek / 通义 / 本地 LM Studio·Ollama 均可)。本地模型请填 http://127.0.0.1:端口/v1,通过 npm run dev 访问时会自动走代理避免 CORS。仅在你主动点击「生成建议」时发送资产汇总数字。"
+        desc="OpenAI 兼容接口(OpenAI / DeepSeek / 通义 / 本地 LM Studio·Ollama 均可)。本地模型请填 http://127.0.0.1:端口/v1,通过 npm run dev 访问时会自动走代理避免 CORS。仅在主动触发时发送数据:AI 顾问发送资产汇总数字;自然语言记一笔发送你的原文,并可选择是否附带资产名称列表。"
       >
         <div className="space-y-3">
           <div>
@@ -172,10 +173,24 @@ export default function Settings() {
               />
             </div>
           </div>
+          <label className="mt-2 flex cursor-pointer items-start gap-2 text-sm text-slate-300">
+            <input
+              type="checkbox"
+              className="mt-0.5 accent-sky-500"
+              checked={llmSendAssetNames}
+              onChange={(e) => setLlmSendAssetNames(e.target.checked)}
+            />
+            <span>
+              自然语言记一笔时发送资产名称
+              <span className="mt-0.5 block text-xs text-slate-500">
+                关闭后仅发送你的原文与资产类别统计,匹配准确度可能下降。
+              </span>
+            </span>
+          </label>
           <button
             className={btnPrimary}
             onClick={() => {
-              saveSettings({ llm })
+              saveSettings({ llm, llmSendAssetNames })
               flash('LLM 配置已保存')
             }}
           >

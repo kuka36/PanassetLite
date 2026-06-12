@@ -1,15 +1,22 @@
 import { useMemo, useState } from 'react'
 import { useStore } from '../store'
 import Modal, { btnPrimary, inputCls } from '../components/Modal'
+import NlTxInput, { nlResultToTxInitial } from '../components/NlTxInput'
 import TxForm from '../components/TxForm'
 import type { Transaction } from '../types'
 import { TX_TYPE_LABEL } from '../types'
+import type { NlTxParseResult } from '../services/nlTx'
 import { fmtNum } from '../utils/format'
 
-type ModalState = { kind: 'add' } | { kind: 'edit'; tx: Transaction } | null
+type ModalState =
+  | { kind: 'add' }
+  | { kind: 'edit'; tx: Transaction }
+  | { kind: 'nlConfirm'; result: NlTxParseResult; rawInput: string }
+  | null
 
 export default function Transactions() {
   const assets = useStore((s) => s.assets)
+  const settings = useStore((s) => s.settings)
   const transactions = useStore((s) => s.transactions)
   const addTransaction = useStore((s) => s.addTransaction)
   const updateTransaction = useStore((s) => s.updateTransaction)
@@ -49,6 +56,14 @@ export default function Transactions() {
           </button>
         </div>
       </div>
+
+      <NlTxInput
+        assets={assets}
+        settings={settings}
+        disabled={assets.length === 0}
+        onParsed={(result, rawInput) => setModal({ kind: 'nlConfirm', result, rawInput })}
+        onManual={() => setModal({ kind: 'add' })}
+      />
 
       <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/60">
         <table className="w-full text-sm">
@@ -110,6 +125,28 @@ export default function Transactions() {
           </tbody>
         </table>
       </div>
+
+      {modal?.kind === 'nlConfirm' && (
+        <Modal title="确认 AI 解析结果" onClose={() => setModal(null)}>
+          <p className="mb-3 text-xs text-slate-500">
+            原文:「{modal.rawInput}」— 请核对字段后记录,数据仅保存在本地。
+          </p>
+          {modal.result.warnings.map((w) => (
+            <p key={w} className="mb-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
+              {w}
+            </p>
+          ))}
+          <TxForm
+            assets={assets}
+            initial={nlResultToTxInitial(modal.result, assets)}
+            onSubmit={(t) => {
+              addTransaction(t)
+              setModal(null)
+            }}
+            onCancel={() => setModal(null)}
+          />
+        </Modal>
+      )}
 
       {modal?.kind === 'add' && (
         <Modal title="记一笔" onClose={() => setModal(null)}>
