@@ -142,6 +142,16 @@ export interface AssetSnapshot {
   recentAnnualized?: number | null
 }
 
+/** 单资产交易账本行(由事件重放推导) */
+export interface TxLedgerRow {
+  tx: Transaction
+  /** 发生额(原币种);VALUATION 为当日总市值 */
+  amountNative: number | null
+  /** 该笔事件后的余额/持仓(原币种: 份额或金额) */
+  balanceAfter: number
+  balanceLabel: 'quantity' | 'value' | 'debt'
+}
+
 /** 区间收益(本周/本月/今年以来/近一年) */
 export interface PeriodReturn {
   key: 'week' | 'month' | 'ytd' | 'year'

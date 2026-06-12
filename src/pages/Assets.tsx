@@ -1,17 +1,17 @@
 import { useMemo, useState } from 'react'
 import { useStore } from '../store'
-import { useSummary } from '../hooks/useSummary'
+import { usePortfolioEngine, useSummary } from '../hooks/useSummary'
 import Modal, { btnPrimary } from '../components/Modal'
 import AssetForm from '../components/AssetForm'
 import TxForm from '../components/TxForm'
-import type { Asset, AssetSnapshot, AssetType, Transaction, TxType } from '../types'
-import { ASSET_TYPE_COLOR, ASSET_TYPE_LABEL, TX_TYPE_LABEL } from '../types'
+import type { Asset, AssetSnapshot, AssetType, Transaction, TxLedgerRow, TxType } from '../types'
+import { ASSET_TYPE_COLOR, ASSET_TYPE_LABEL, TX_TYPE_LABEL, isQuantityBased } from '../types'
 import { fmtMoney, fmtNum, fmtPct, pnlColor } from '../utils/format'
 
 type ModalState =
   | { kind: 'add' }
   | { kind: 'edit'; asset: Asset }
-  | { kind: 'tx'; asset: Asset; defaultType?: TxType }
+  | { kind: 'tx'; asset: Asset; defaultType?: TxType; returnAssetId?: string }
   | { kind: 'editTx'; tx: Transaction; returnAssetId?: string }
   | { kind: 'detail'; assetId: string }
   | null
@@ -21,6 +21,13 @@ function closeEditTx(
   setModal: (m: ModalState) => void,
 ) {
   setModal(editModal.returnAssetId ? { kind: 'detail', assetId: editModal.returnAssetId } : null)
+}
+
+function closeTx(
+  txModal: Extract<ModalState, { kind: 'tx' }>,
+  setModal: (m: ModalState) => void,
+) {
+  setModal(txModal.returnAssetId ? { kind: 'detail', assetId: txModal.returnAssetId } : null)
 }
 
 export default function Assets() {
@@ -158,16 +165,16 @@ export default function Assets() {
       )}
 
       {modal?.kind === 'tx' && (
-        <Modal title={`${modal.asset.name} · 记一笔`} onClose={() => setModal(null)}>
+        <Modal title={`${modal.asset.name} · 记一笔`} onClose={() => closeTx(modal, setModal)}>
           <TxForm
             assets={assets}
             fixedAssetId={modal.asset.id}
             defaultType={modal.defaultType}
             onSubmit={(t) => {
               addTransaction(t)
-              setModal(null)
+              closeTx(modal, setModal)
             }}
-            onCancel={() => setModal(null)}
+            onCancel={() => closeTx(modal, setModal)}
           />
         </Modal>
       )}
@@ -192,6 +199,7 @@ export default function Assets() {
           assetId={modal.assetId}
           onClose={() => setModal(null)}
           onEdit={(asset) => setModal({ kind: 'edit', asset })}
+          onAddTx={(asset) => setModal({ kind: 'tx', asset, returnAssetId: modal.assetId })}
           onEditTx={(tx) => setModal({ kind: 'editTx', tx, returnAssetId: modal.assetId })}
           onDelete={(asset) => {
             if (confirm(`确定删除「${asset.name}」及其全部交易记录?此操作不可恢复。`)) {
@@ -209,27 +217,36 @@ function AssetDetail({
   assetId,
   onClose,
   onEdit,
+  onAddTx,
   onEditTx,
   onDelete,
 }: {
   assetId: string
   onClose: () => void
   onEdit: (a: Asset) => void
+  onAddTx: (a: Asset) => void
   onEditTx: (t: Transaction) => void
   onDelete: (a: Asset) => void
 }) {
   const summary = useSummary()
-  const transactions = useStore((s) => s.transactions)
+  const engine = usePortfolioEngine()
+  const settings = useStore((s) => s.settings)
   const deleteTransaction = useStore((s) => s.deleteTransaction)
   const snap = summary.snapshots.find((s) => s.asset.id === assetId)
-  if (!snap) return null
-  const asset = snap.asset
-  const txs = transactions
-    .filter((t) => t.assetId === assetId)
-    .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt)
+  const asset = snap?.asset
+  const ledger = useMemo(
+    () => (asset ? engine.txLedger(asset) : []),
+    [engine, asset],
+  )
+  if (!snap || !asset) return null
+
+  const qtyBased = isQuantityBased(asset.type)
+  const showFx = asset.currency !== 'CNY'
+  const fx = asset.currency === settings.baseCurrency ? 1 : (settings.fxRates[asset.currency] ?? 1)
+  const colSpan = (qtyBased ? 8 : 6) + (showFx ? 1 : 0)
 
   return (
-    <Modal title={asset.name} onClose={onClose} wide>
+    <Modal title={asset.name} onClose={onClose} size="xl">
       <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Mini label="当前市值" value={fmtMoney(snap.valueCNY)} />
         <Mini
@@ -244,43 +261,69 @@ function AssetDetail({
         />
       </div>
 
-      <div className="mb-4 max-h-72 overflow-y-auto rounded-xl border border-slate-800">
+      <div className="mb-2 flex justify-end">
+        <button className={btnPrimary} onClick={() => onAddTx(asset)}>
+          + 记一笔
+        </button>
+      </div>
+
+      <div className="mb-4 max-h-[min(50vh,28rem)] overflow-x-auto overflow-y-auto rounded-xl border border-slate-800">
         <table className="w-full text-sm">
           <thead className="sticky top-0 bg-slate-900">
             <tr className="text-left text-xs text-slate-500">
               <th className="px-3 py-2 font-normal">日期</th>
               <th className="px-3 py-2 font-normal">类型</th>
-              <th className="px-3 py-2 font-normal text-right">明细</th>
+              {qtyBased && (
+                <>
+                  <th className="px-3 py-2 font-normal text-right">数量</th>
+                  <th className="px-3 py-2 font-normal text-right">单价</th>
+                </>
+              )}
+              <th className="px-3 py-2 font-normal text-right">发生额</th>
+              {showFx && <th className="px-3 py-2 font-normal text-right">折合 CNY</th>}
+              <th className="px-3 py-2 font-normal text-right">交易后余额</th>
               <th className="px-3 py-2 font-normal">备注</th>
               <th className="px-3 py-2 font-normal text-right"></th>
             </tr>
           </thead>
           <tbody>
-            {txs.map((t) => (
-              <tr key={t.id} className="border-t border-slate-800/60">
-                <td className="px-3 py-2 text-slate-400">{t.date}</td>
-                <td className="px-3 py-2 text-slate-300">{TX_TYPE_LABEL[t.type]}</td>
+            {ledger.map(({ tx, amountNative, balanceAfter, balanceLabel }) => (
+              <tr key={tx.id} className="border-t border-slate-800/60">
+                <td className="px-3 py-2 tabular-nums text-slate-400">{tx.date}</td>
+                <td className="px-3 py-2 text-slate-300">{TX_TYPE_LABEL[tx.type]}</td>
+                {qtyBased && (
+                  <>
+                    <td className="px-3 py-2 text-right tabular-nums text-slate-300">
+                      {tx.quantity != null ? fmtNum(tx.quantity) : '—'}
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums text-slate-300">
+                      {tx.price != null ? `${fmtNum(tx.price)} ${asset.currency}` : '—'}
+                    </td>
+                  </>
+                )}
                 <td className="px-3 py-2 text-right tabular-nums text-slate-300">
-                  {t.quantity != null && t.price != null
-                    ? `${fmtNum(t.quantity)} × ${fmtNum(t.price)} ${asset.currency}`
-                    : t.amount != null
-                      ? `${fmtNum(t.amount, 2)} ${asset.currency}`
-                      : t.value != null
-                        ? `市值 ${fmtNum(t.value, 2)} ${asset.currency}`
-                        : '—'}
+                  {formatTxAmount(amountNative, asset.currency)}
                 </td>
-                <td className="max-w-32 truncate px-3 py-2 text-xs text-slate-500">{t.note}</td>
+                {showFx && (
+                  <td className="px-3 py-2 text-right tabular-nums text-slate-400">
+                    {amountNative != null ? fmtMoney(amountNative * fx) : '—'}
+                  </td>
+                )}
+                <td className="px-3 py-2 text-right tabular-nums text-slate-300">
+                  {formatTxBalance(balanceAfter, balanceLabel, asset.currency)}
+                </td>
+                <td className="max-w-32 truncate px-3 py-2 text-xs text-slate-500">{tx.note}</td>
                 <td className="px-3 py-2 text-right">
                   <button
                     className="mr-3 text-xs text-sky-400 hover:underline"
-                    onClick={() => onEditTx(t)}
+                    onClick={() => onEditTx(tx)}
                   >
                     编辑
                   </button>
                   <button
                     className="text-xs text-slate-500 hover:text-red-400"
                     onClick={() => {
-                      if (confirm('删除这条记录?')) deleteTransaction(t.id)
+                      if (confirm('删除这条记录?')) deleteTransaction(tx.id)
                     }}
                   >
                     删除
@@ -288,9 +331,9 @@ function AssetDetail({
                 </td>
               </tr>
             ))}
-            {txs.length === 0 && (
+            {ledger.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-3 py-6 text-center text-slate-500">
+                <td colSpan={colSpan} className="px-3 py-6 text-center text-slate-500">
                   暂无交易记录
                 </td>
               </tr>
@@ -309,6 +352,20 @@ function AssetDetail({
       </div>
     </Modal>
   )
+}
+
+function formatTxAmount(amount: number | null, currency: string): string {
+  if (amount == null) return '—'
+  return `${fmtNum(amount, 2)} ${currency}`
+}
+
+function formatTxBalance(
+  balance: number,
+  label: TxLedgerRow['balanceLabel'],
+  currency: string,
+): string {
+  if (label === 'quantity') return `${fmtNum(balance)} 份`
+  return `${fmtNum(balance, 2)} ${currency}`
 }
 
 function Mini({ label, value, cls = 'text-slate-200' }: { label: string; value: string; cls?: string }) {

@@ -5,10 +5,20 @@ interface Props {
   title: string
   onClose: () => void
   children: ReactNode
+  /** md=表单弹窗, lg=宽表(原 wide), xl=资产详情等大面板 */
+  size?: 'md' | 'lg' | 'xl'
+  /** @deprecated 请用 size="lg" */
   wide?: boolean
 }
 
-export default function Modal({ title, onClose, children, wide }: Props) {
+const SIZE_CLS: Record<NonNullable<Props['size']>, string> = {
+  md: 'max-w-md',
+  lg: 'max-w-2xl',
+  xl: 'max-w-5xl max-h-[90vh] overflow-y-auto',
+}
+
+export default function Modal({ title, onClose, children, size, wide }: Props) {
+  const resolved = size ?? (wide ? 'lg' : 'md')
   return createPortal(
     <div
       className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-sm"
@@ -17,7 +27,7 @@ export default function Modal({ title, onClose, children, wide }: Props) {
       {/* 外层负责滚动,内层 min-h-full 居中:内容高于视口时从顶部完整滚动,不会被裁切 */}
       <div className="flex min-h-full items-center justify-center p-4 sm:p-6">
         <div
-          className={`fade-up my-6 w-full ${wide ? 'max-w-2xl' : 'max-w-md'} rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl`}
+          className={`fade-up my-6 w-full ${SIZE_CLS[resolved]} rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl`}
           onClick={(e) => e.stopPropagation()}
         >
           <div className="mb-4 flex items-center justify-between">

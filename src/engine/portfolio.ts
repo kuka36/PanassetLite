@@ -7,6 +7,7 @@ import type {
   PriceHistory,
   Settings,
   Transaction,
+  TxLedgerRow,
 } from '../types'
 import { isQuantityBased } from '../types'
 import { xirr, type CashFlow } from './xirr'
@@ -228,6 +229,74 @@ export class PortfolioEngine {
     if (base <= 0) return null
     const gain = (v2.value ?? 0) - (v1.value ?? 0) - netFlow
     return (gain / base) * (365 / days)
+  }
+
+  /** 单笔发生额(原币种) */
+  private txAmountNative(tx: Transaction): number | null {
+    if (tx.type === 'BUY' || tx.type === 'SELL') {
+      if (tx.quantity != null && tx.price != null) return tx.quantity * tx.price
+      return null
+    }
+    if (
+      tx.type === 'DEPOSIT' ||
+      tx.type === 'WITHDRAW' ||
+      tx.type === 'INCOME' ||
+      tx.type === 'BORROW' ||
+      tx.type === 'REPAY'
+    ) {
+      return tx.amount ?? null
+    }
+    if (tx.type === 'VALUATION') return tx.value ?? null
+    return null
+  }
+
+  /**
+   * 单资产交易账本:按 date + createdAt 正序重放,返回 newest-first 供列表展示。
+   */
+  txLedger(asset: Asset): TxLedgerRow[] {
+    const txs = this.txByAsset.get(asset.id) ?? []
+    const balanceLabel: TxLedgerRow['balanceLabel'] = isQuantityBased(asset.type)
+      ? 'quantity'
+      : asset.type === 'debt'
+        ? 'debt'
+        : 'value'
+
+    let balance = 0
+    const rows: TxLedgerRow[] = []
+
+    for (const tx of txs) {
+      if (isQuantityBased(asset.type)) {
+        if (tx.type === 'BUY') balance += tx.quantity ?? 0
+        if (tx.type === 'SELL') balance -= tx.quantity ?? 0
+      } else {
+        switch (tx.type) {
+          case 'DEPOSIT':
+          case 'BORROW':
+          case 'INCOME':
+            balance += tx.amount ?? 0
+            break
+          case 'WITHDRAW':
+          case 'REPAY':
+            balance -= tx.amount ?? 0
+            break
+          case 'VALUATION':
+            balance = tx.value ?? balance
+            break
+          default:
+            break
+        }
+        if (asset.type !== 'debt') balance = Math.max(0, balance)
+      }
+
+      rows.push({
+        tx,
+        amountNative: this.txAmountNative(tx),
+        balanceAfter: balance,
+        balanceLabel,
+      })
+    }
+
+    return rows.reverse()
   }
 
   /** 累计现金流(CNY)截至某日:in = 投入(买入/存入),out = 收回(卖出/取出) */
