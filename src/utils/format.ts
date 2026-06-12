@@ -1,3 +1,5 @@
+import { isUpdateStale, pnlTextCls, staleTextCls } from '../theme/colors'
+
 /** 金额格式化:¥1,234,567 */
 export function fmtMoney(n: number, digits = 0): string {
   return `¥${n.toLocaleString('zh-CN', {
@@ -21,28 +23,18 @@ export function fmtPct(n: number, digits = 1, signed = true): string {
   return `${signed && n > 0 ? '+' : ''}${v}%`
 }
 
-/** 盈亏颜色(中国习惯:红涨绿跌) */
+/** 盈亏颜色 class */
 export function pnlColor(n: number): string {
-  if (n > 0.0001) return 'text-red-400'
-  if (n < -0.0001) return 'text-emerald-400'
-  return 'text-slate-400'
+  return pnlTextCls(n)
 }
 
 export function fmtNum(n: number, maxDigits = 4): string {
   return n.toLocaleString('zh-CN', { maximumFractionDigits: maxDigits })
 }
 
-const DAY_MS = 86_400_000
+export { isUpdateStale }
 
-/** 更新日期是否早于今天超过指定天数(默认 30 天 ≈ 一个月) */
-export function isUpdateStale(dateStr: string | undefined, thresholdDays = 30): boolean {
-  if (!dateStr) return false
-  const parsed = Date.parse(dateStr)
-  if (Number.isNaN(parsed)) return false
-  return Date.now() - parsed > thresholdDays * DAY_MS
-}
-
-/** 「更新于」列文字颜色:超过一个月未更新时用琥珀色警示 */
+/** 「更新于」列文字颜色 */
 export function staleUpdateCls(dateStr: string | undefined, thresholdDays = 30): string {
-  return isUpdateStale(dateStr, thresholdDays) ? 'text-amber-400' : 'text-slate-500'
+  return staleTextCls(dateStr, thresholdDays)
 }

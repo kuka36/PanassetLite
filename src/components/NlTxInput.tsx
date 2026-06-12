@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import type { Asset, Settings, Transaction } from '../types'
 import { isLocalLlmBaseUrl } from '../services/llmClient'
 import { parseNaturalLanguageTx, type NlTxParseResult } from '../services/nlTx'
+import { color } from '../theme/colors'
 import { btnGhost, btnPrimary, inputCls } from './Modal'
 
 interface Props {
@@ -108,9 +109,9 @@ export default function NlTxInput({
         </div>
       </div>
       {error && (
-        <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-red-400">
+        <div className={`mt-2 flex flex-wrap items-center gap-2 text-sm ${color.error}`}>
           <span>{error}</span>
-          <button className="text-xs text-sky-400 hover:underline" onClick={onManual}>
+          <button className={`text-xs ${color.link} hover:underline`} onClick={onManual}>
             改用手动填写
           </button>
         </div>

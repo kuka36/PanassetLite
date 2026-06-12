@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { palette } from './theme/colors'
 import Dashboard from './pages/Dashboard'
 import Assets from './pages/Assets'
 import Transactions from './pages/Transactions'
@@ -24,7 +25,7 @@ export default function App() {
       <aside className="fixed inset-y-0 left-0 z-40 flex w-52 flex-col border-r border-slate-800 bg-slate-950/80 backdrop-blur max-md:w-16">
         <div className="flex items-center gap-2.5 px-5 py-5 max-md:justify-center max-md:px-0">
           <svg viewBox="0 0 32 32" className="h-7 w-7 shrink-0">
-            <rect x="2" y="2" width="28" height="28" rx="7" fill="#0ea5e9" />
+            <rect x="2" y="2" width="28" height="28" rx="7" fill={palette.sky500} />
             <path
               d="M9 22 L13 14 L17 18 L23 9"
               stroke="#fff"

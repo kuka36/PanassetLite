@@ -11,12 +11,13 @@ import {
   type InsightLevel,
 } from '../services/ai'
 import { btnPrimary, inputCls } from '../components/Modal'
+import { color, healthScoreHex, insightLevelCls, palette } from '../theme/colors'
 
-const LEVEL_STYLE: Record<InsightLevel, { icon: string; cls: string }> = {
-  danger: { icon: '⛔', cls: 'border-red-500/30 bg-red-500/5' },
-  warn: { icon: '⚠️', cls: 'border-amber-500/30 bg-amber-500/5' },
-  info: { icon: '💡', cls: 'border-sky-500/30 bg-sky-500/5' },
-  good: { icon: '✅', cls: 'border-emerald-500/30 bg-emerald-500/5' },
+const LEVEL_ICON: Record<InsightLevel, string> = {
+  danger: '⛔',
+  warn: '⚠️',
+  info: '💡',
+  good: '✅',
 }
 
 export default function Advisor() {
@@ -42,11 +43,9 @@ export default function Advisor() {
           progress: {
             show: true,
             width: 14,
-            itemStyle: {
-              color: report.score >= 85 ? '#34d399' : report.score >= 70 ? '#38bdf8' : report.score >= 55 ? '#fbbf24' : '#f87171',
-            },
+            itemStyle: { color: healthScoreHex(report.score) },
           },
-          axisLine: { lineStyle: { width: 14, color: [[1, '#1e293b']] as [number, string][] } },
+          axisLine: { lineStyle: { width: 14, color: [[1, palette.scrollbar]] as [number, string][] } },
           axisTick: { show: false },
           splitLine: { show: false },
           axisLabel: { show: false },
@@ -56,11 +55,11 @@ export default function Advisor() {
             valueAnimation: true,
             fontSize: 40,
             fontWeight: 700,
-            color: '#e2e8f0',
+            color: palette.text,
             offsetCenter: [0, '-5%'],
             formatter: (v: number) => `${Math.round(v)}`,
           },
-          title: { offsetCenter: [0, '32%'], color: '#94a3b8', fontSize: 14 },
+          title: { offsetCenter: [0, '32%'], color: palette.textMuted, fontSize: 14 },
           data: [{ value: report.score, name: `健康评分 · ${report.grade}` }],
         },
       ],
@@ -106,11 +105,10 @@ export default function Advisor() {
 
         <div className="space-y-3 lg:col-span-2">
           {report.insights.map((ins, i) => {
-            const s = LEVEL_STYLE[ins.level]
             return (
-              <div key={i} className={`rounded-xl border p-4 ${s.cls}`}>
+              <div key={i} className={`rounded-xl border p-4 ${insightLevelCls[ins.level]}`}>
                 <p className="text-sm font-medium text-slate-200">
-                  <span className="mr-2">{s.icon}</span>
+                  <span className="mr-2">{LEVEL_ICON[ins.level]}</span>
                   {ins.title}
                 </p>
                 <p className="mt-1 text-sm leading-relaxed text-slate-400">{ins.detail}</p>
@@ -164,12 +162,12 @@ export default function Advisor() {
             {loading ? (answer ? '生成中…' : '连接中…') : '生成建议'}
           </button>
         </div>
-        {error && <p className="mt-3 text-sm text-red-400">{error}</p>}
+        {error && <p className={`mt-3 text-sm ${color.error}`}>{error}</p>}
         {(loading || answer) && (
           <div className="mt-4 rounded-xl border border-slate-800 bg-slate-950/60 p-4 text-sm leading-relaxed text-slate-300">
             {answer ? <LightMarkdown text={answer} /> : null}
             {loading && (
-              <span className={`text-sky-400 ${answer ? 'ml-0.5 inline animate-pulse' : 'text-slate-500'}`}>
+              <span className={`${color.link} ${answer ? 'ml-0.5 inline animate-pulse' : color.muted}`}>
                 {answer ? '▍' : '正在生成…'}
               </span>
             )}

@@ -1,3 +1,5 @@
+import { assetTypeHex } from './theme/colors'
+
 // ── 领域模型 ────────────────────────────────────────────────────────────────
 
 /** 资产类别 */
@@ -22,16 +24,7 @@ export const ASSET_TYPE_LABEL: Record<AssetType, string> = {
   other: '其他',
 }
 
-export const ASSET_TYPE_COLOR: Record<AssetType, string> = {
-  cash: '#38bdf8',
-  wealth: '#34d399',
-  stock: '#f472b6',
-  fund: '#a78bfa',
-  crypto: '#fbbf24',
-  property: '#fb923c',
-  debt: '#f87171',
-  other: '#94a3b8',
-}
+export const ASSET_TYPE_COLOR: Record<AssetType, string> = { ...assetTypeHex }
 
 /** 计价模式:quantity = 份额×单价(股票/基金/加密);value = 直接记总值(现金/理财/房产/负债) */
 export function isQuantityBased(type: AssetType): boolean {

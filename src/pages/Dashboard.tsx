@@ -3,6 +3,7 @@ import { useStore } from '../store'
 import { useSummary } from '../hooks/useSummary'
 import EChart from '../components/EChart'
 import { darkAxis, darkTooltip } from '../components/chartTheme'
+import { color, hexAlpha, palette } from '../theme/colors'
 import { ASSET_TYPE_COLOR, ASSET_TYPE_LABEL } from '../types'
 import { fmtCompact, fmtMoney, fmtPct, pnlColor } from '../utils/format'
 
@@ -33,13 +34,13 @@ export default function Dashboard({ goTo }: { goTo: (page: string) => void }) {
         ...darkTooltip,
         valueFormatter: (v: unknown) => fmtMoney(Number(v)),
       },
-      legend: { textStyle: { color: '#94a3b8' }, top: 0 },
+      legend: { textStyle: { color: palette.textMuted }, top: 0 },
       grid: { left: 12, right: 16, top: 36, bottom: 8, containLabel: true },
       xAxis: { type: 'category' as const, data: history.map((h) => h.date), ...darkAxis, boundaryGap: false },
       yAxis: {
         type: 'value' as const,
         ...darkAxis,
-        axisLabel: { color: '#94a3b8', formatter: (v: number) => fmtCompact(v) },
+        axisLabel: { color: palette.textMuted, formatter: (v: number) => fmtCompact(v) },
         scale: true,
       },
       series: [
@@ -49,13 +50,13 @@ export default function Dashboard({ goTo }: { goTo: (page: string) => void }) {
           data: history.map((h) => Math.round(h.netWorth)),
           smooth: true,
           showSymbol: false,
-          lineStyle: { width: 2.5, color: '#38bdf8' },
+          lineStyle: { width: 2.5, color: palette.sky400 },
           areaStyle: {
             color: {
               type: 'linear' as const, x: 0, y: 0, x2: 0, y2: 1,
               colorStops: [
-                { offset: 0, color: 'rgba(56,189,248,0.35)' },
-                { offset: 1, color: 'rgba(56,189,248,0.02)' },
+                { offset: 0, color: hexAlpha(palette.sky400, 0.35) },
+                { offset: 1, color: hexAlpha(palette.sky400, 0.02) },
               ],
             },
           },
@@ -66,7 +67,7 @@ export default function Dashboard({ goTo }: { goTo: (page: string) => void }) {
           data: history.map((h) => Math.round(h.assets)),
           smooth: true,
           showSymbol: false,
-          lineStyle: { width: 1.5, color: '#34d399', type: 'dashed' as const },
+          lineStyle: { width: 1.5, color: palette.emerald400, type: 'dashed' as const },
         },
         {
           name: '负债',
@@ -74,7 +75,7 @@ export default function Dashboard({ goTo }: { goTo: (page: string) => void }) {
           data: history.map((h) => Math.round(h.debt)),
           smooth: true,
           showSymbol: false,
-          lineStyle: { width: 1.5, color: '#f87171', type: 'dashed' as const },
+          lineStyle: { width: 1.5, color: palette.red400, type: 'dashed' as const },
         },
       ],
     }),
@@ -95,14 +96,14 @@ export default function Dashboard({ goTo }: { goTo: (page: string) => void }) {
         orient: 'vertical' as const,
         right: 8,
         top: 'center',
-        textStyle: { color: '#94a3b8' },
+        textStyle: { color: palette.textMuted },
       },
       series: [
         {
           type: 'pie' as const,
           radius: ['52%', '76%'],
           center: ['38%', '50%'],
-          itemStyle: { borderColor: '#060a13', borderWidth: 2 },
+          itemStyle: { borderColor: palette.bg, borderWidth: 2 },
           label: { show: false },
           data: summary.byType
             .filter((t) => t.type !== 'debt' && t.valueCNY > 0)
@@ -176,9 +177,9 @@ export default function Dashboard({ goTo }: { goTo: (page: string) => void }) {
 
       {/* 核心指标 */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <StatCard label="净资产" value={fmtMoney(summary.netWorthCNY)} accent="text-sky-400" />
+        <StatCard label="净资产" value={fmtMoney(summary.netWorthCNY)} accent={color.accent} />
         <StatCard label="总资产" value={fmtMoney(summary.totalAssetsCNY)} />
-        <StatCard label="总负债" value={fmtMoney(summary.totalDebtCNY)} accent="text-red-400/80" />
+        <StatCard label="总负债" value={fmtMoney(summary.totalDebtCNY)} accent={color.danger} />
         <StatCard
           label="累计盈亏"
           value={`${summary.totalPnlCNY > 0 ? '+' : ''}${fmtMoney(summary.totalPnlCNY)}`}

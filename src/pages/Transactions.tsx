@@ -6,6 +6,7 @@ import TxForm from '../components/TxForm'
 import type { Transaction } from '../types'
 import { TX_TYPE_LABEL } from '../types'
 import type { NlTxParseResult } from '../services/nlTx'
+import { color } from '../theme/colors'
 import { fmtNum } from '../utils/format'
 
 type ModalState =
@@ -132,7 +133,7 @@ export default function Transactions() {
             原文:「{modal.rawInput}」— 请核对字段后记录,数据仅保存在本地。
           </p>
           {modal.result.warnings.map((w) => (
-            <p key={w} className="mb-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
+            <p key={w} className={`mb-2 ${color.alertWarn}`}>
               {w}
             </p>
           ))}

@@ -8,6 +8,7 @@ import TxForm from '../components/TxForm'
 import type { NlTxParseResult } from '../services/nlTx'
 import type { Asset, AssetSnapshot, AssetType, Transaction, TxLedgerRow, TxType } from '../types'
 import { ASSET_TYPE_COLOR, ASSET_TYPE_LABEL, TX_TYPE_LABEL, isQuantityBased } from '../types'
+import { color } from '../theme/colors'
 import { fmtMoney, fmtNum, fmtPct, isUpdateStale, pnlColor, staleUpdateCls } from '../utils/format'
 
 type ModalState =
@@ -226,7 +227,7 @@ export default function Assets() {
           {modal.result.warnings.map((w) => (
             <p
               key={w}
-              className="mb-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300"
+              className={`mb-2 ${color.alertWarn}`}
             >
               {w}
             </p>

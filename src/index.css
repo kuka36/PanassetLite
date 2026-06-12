@@ -8,10 +8,11 @@
   -webkit-font-smoothing: antialiased;
 }
 
+/* 与 src/theme/colors.ts 的 palette 保持同步 */
 body {
   margin: 0;
-  background: #060a13;
-  color: #e2e8f0;
+  background: #060a13; /* palette.bg */
+  color: #e2e8f0; /* palette.text */
 }
 
 ::-webkit-scrollbar {
@@ -19,7 +20,7 @@ body {
   height: 8px;
 }
 ::-webkit-scrollbar-thumb {
-  background: #1e293b;
+  background: #1e293b; /* palette.scrollbar */
   border-radius: 4px;
 }
 ::-webkit-scrollbar-track {

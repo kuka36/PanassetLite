@@ -4,6 +4,7 @@ import { StorageService } from '../services/storage'
 import { fetchFxRates } from '../services/prices'
 import { buildDemoData } from '../demoData'
 import { btnGhost, btnPrimary, inputCls, labelCls } from '../components/Modal'
+import { color } from '../theme/colors'
 
 export default function Settings() {
   const settings = useStore((s) => s.settings)
@@ -85,7 +86,7 @@ export default function Settings() {
   return (
     <div className="max-w-3xl space-y-6">
       <h1 className="text-xl font-semibold text-slate-100">设置</h1>
-      {msg && <p className="rounded-lg border border-sky-500/30 bg-sky-500/10 px-4 py-2 text-sm text-sky-300">{msg}</p>}
+      {msg && <p className={color.alertInfo}>{msg}</p>}
 
       <Section
         title="汇率"
@@ -208,7 +209,7 @@ export default function Settings() {
           <button className={btnGhost} onClick={() => fileRef.current?.click()}>导入备份</button>
           <button className={btnGhost} onClick={loadDemo}>加载演示数据</button>
           <button
-            className="rounded-lg border border-red-500/40 px-4 py-2 text-sm text-red-400 hover:bg-red-500/10"
+            className={color.btnDanger}
             onClick={clearAll}
           >
             清空全部数据
