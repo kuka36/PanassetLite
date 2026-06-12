@@ -3,7 +3,9 @@ import { useStore } from '../store'
 import { usePortfolioEngine, useSummary } from '../hooks/useSummary'
 import Modal, { btnGhost, btnPrimary } from '../components/Modal'
 import AssetForm from '../components/AssetForm'
+import NlTxInput, { nlResultToTxInitial } from '../components/NlTxInput'
 import TxForm from '../components/TxForm'
+import type { NlTxParseResult } from '../services/nlTx'
 import type { Asset, AssetSnapshot, AssetType, Transaction, TxLedgerRow, TxType } from '../types'
 import { ASSET_TYPE_COLOR, ASSET_TYPE_LABEL, TX_TYPE_LABEL, isQuantityBased } from '../types'
 import { fmtMoney, fmtNum, fmtPct, pnlColor } from '../utils/format'
@@ -11,7 +13,9 @@ import { fmtMoney, fmtNum, fmtPct, pnlColor } from '../utils/format'
 type ModalState =
   | { kind: 'add' }
   | { kind: 'edit'; asset: Asset }
-  | { kind: 'tx'; asset: Asset; defaultType?: TxType; returnAssetId?: string }
+  | { kind: 'nlTx'; asset?: Asset; returnAssetId?: string }
+  | { kind: 'tx'; asset?: Asset; defaultType?: TxType; returnAssetId?: string }
+  | { kind: 'nlConfirm'; asset?: Asset; result: NlTxParseResult; rawInput: string; returnAssetId?: string }
   | { kind: 'editTx'; tx: Transaction; returnAssetId?: string }
   | { kind: 'detail'; assetId: string }
   | null
@@ -24,7 +28,7 @@ function closeEditTx(
 }
 
 function closeTx(
-  txModal: Extract<ModalState, { kind: 'tx' }>,
+  txModal: Extract<ModalState, { kind: 'tx' | 'nlTx' | 'nlConfirm' }>,
   setModal: (m: ModalState) => void,
 ) {
   setModal(txModal.returnAssetId ? { kind: 'detail', assetId: txModal.returnAssetId } : null)
@@ -36,6 +40,7 @@ export default function Assets() {
   const addAsset = useStore((s) => s.addAsset)
   const updateAsset = useStore((s) => s.updateAsset)
   const deleteAsset = useStore((s) => s.deleteAsset)
+  const settings = useStore((s) => s.settings)
   const addTransaction = useStore((s) => s.addTransaction)
   const updateTransaction = useStore((s) => s.updateTransaction)
   const [modal, setModal] = useState<ModalState>(null)
@@ -52,11 +57,20 @@ export default function Assets() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-xl font-semibold text-slate-100">资产</h1>
-        <button className={btnPrimary} onClick={() => setModal({ kind: 'add' })}>
-          + 添加资产
-        </button>
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+          <button
+            className={btnGhost}
+            disabled={assets.length === 0}
+            onClick={() => setModal({ kind: 'nlTx' })}
+          >
+            记一笔流水
+          </button>
+          <button className={btnPrimary} onClick={() => setModal({ kind: 'add' })}>
+            + 添加资产
+          </button>
+        </div>
       </div>
 
       {groups.length === 0 && (
@@ -121,7 +135,7 @@ export default function Assets() {
                   <td className="px-4 py-2.5 text-right" onClick={(e) => e.stopPropagation()}>
                     <button
                       className="rounded-md px-2 py-1 text-xs text-sky-400 hover:bg-slate-800"
-                      onClick={() => setModal({ kind: 'tx', asset: s.asset })}
+                      onClick={() => setModal({ kind: 'nlTx', asset: s.asset })}
                     >
                       记一笔
                     </button>
@@ -164,11 +178,73 @@ export default function Assets() {
         </Modal>
       )}
 
-      {modal?.kind === 'tx' && (
-        <Modal title={`${modal.asset.name} · 记一笔`} onClose={() => closeTx(modal, setModal)}>
+      {modal?.kind === 'nlTx' && (
+        <Modal
+          title={modal.asset ? `${modal.asset.name} · 记一笔` : '记一笔流水'}
+          onClose={() => closeTx(modal, setModal)}
+        >
+          <NlTxInput
+            embedded
+            assets={assets}
+            settings={settings}
+            fixedAssetId={modal.asset?.id}
+            onParsed={(result, rawInput) =>
+              setModal({
+                kind: 'nlConfirm',
+                asset: modal.asset,
+                result,
+                rawInput,
+                returnAssetId: modal.returnAssetId,
+              })
+            }
+            onManual={() =>
+              setModal({
+                kind: 'tx',
+                asset: modal.asset,
+                returnAssetId: modal.returnAssetId,
+              })
+            }
+          />
+        </Modal>
+      )}
+
+      {modal?.kind === 'nlConfirm' && (
+        <Modal
+          title={modal.asset ? `${modal.asset.name} · 确认解析结果` : '确认 AI 解析结果'}
+          onClose={() => closeTx(modal, setModal)}
+        >
+          <p className="mb-3 text-xs text-slate-500">
+            原文:「{modal.rawInput}」{!modal.asset && ' — 请核对字段后记录'}
+          </p>
+          {modal.result.warnings.map((w) => (
+            <p
+              key={w}
+              className="mb-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300"
+            >
+              {w}
+            </p>
+          ))}
           <TxForm
             assets={assets}
-            fixedAssetId={modal.asset.id}
+            fixedAssetId={modal.asset?.id}
+            initial={nlResultToTxInitial(modal.result, assets, modal.asset?.id)}
+            onSubmit={(t) => {
+              addTransaction(t)
+              closeTx(modal, setModal)
+            }}
+            onCancel={() => closeTx(modal, setModal)}
+          />
+        </Modal>
+      )}
+
+      {modal?.kind === 'tx' && (
+        <Modal
+          title={modal.asset ? `${modal.asset.name} · 手动填写` : '记一笔'}
+          onClose={() => closeTx(modal, setModal)}
+        >
+          <TxForm
+            assets={assets}
+            fixedAssetId={modal.asset?.id}
             defaultType={modal.defaultType}
             onSubmit={(t) => {
               addTransaction(t)
@@ -199,7 +275,7 @@ export default function Assets() {
           assetId={modal.assetId}
           onClose={() => setModal(null)}
           onEdit={(asset) => setModal({ kind: 'edit', asset })}
-          onAddTx={(asset) => setModal({ kind: 'tx', asset, returnAssetId: modal.assetId })}
+          onAddTx={(asset) => setModal({ kind: 'nlTx', asset, returnAssetId: modal.assetId })}
           onEditTx={(tx) => setModal({ kind: 'editTx', tx, returnAssetId: modal.assetId })}
           onDelete={(asset) => {
             if (confirm(`确定删除「${asset.name}」及其全部交易记录?此操作不可恢复。`)) {

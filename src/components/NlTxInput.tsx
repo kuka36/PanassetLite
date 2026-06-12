@@ -8,11 +8,23 @@ interface Props {
   assets: Asset[]
   settings: Settings
   disabled?: boolean
+  /** 从资产页进入时锁定目标资产 */
+  fixedAssetId?: string
+  /** 弹窗内使用,去掉外层卡片样式 */
+  embedded?: boolean
   onParsed: (result: NlTxParseResult, rawInput: string) => void
   onManual: () => void
 }
 
-export default function NlTxInput({ assets, settings, disabled, onParsed, onManual }: Props) {
+export default function NlTxInput({
+  assets,
+  settings,
+  disabled,
+  fixedAssetId,
+  embedded,
+  onParsed,
+  onManual,
+}: Props) {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -32,6 +44,10 @@ export default function NlTxInput({ assets, settings, disabled, onParsed, onManu
     setError('')
     try {
       const result = await parseNaturalLanguageTx(text, assets, settings, ac.signal)
+      if (fixedAssetId) {
+        result.assetId = fixedAssetId
+        result.warnings = result.warnings.filter((w) => !w.includes('未能自动匹配资产'))
+      }
       onParsed(result, text)
       setInput('')
     } catch (e) {
@@ -42,20 +58,34 @@ export default function NlTxInput({ assets, settings, disabled, onParsed, onManu
     }
   }
 
-  return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <h3 className="text-sm font-medium text-slate-200">自然语言记一笔</h3>
-        <span className="text-xs text-slate-500">
-          例:今天招商银行存了 2 万 · 支付宝理财更新估值 12 万
-        </span>
-      </div>
+  const fixedAsset = fixedAssetId ? assets.find((a) => a.id === fixedAssetId) : undefined
+  const placeholder = !canUseLlm
+    ? '请先在设置页配置 LLM 接口'
+    : fixedAsset
+      ? '用一句话描述,如:今天存入 2 万'
+      : '用一句话描述这笔交易…'
+
+  const body = (
+    <>
+      {!embedded && (
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-sm font-medium text-slate-200">自然语言记一笔</h3>
+          <span className="text-xs text-slate-500">
+            例:今天招商银行存了 2 万 · 支付宝理财更新估值 12 万
+          </span>
+        </div>
+      )}
+      {embedded && (
+        <p className="text-xs text-slate-500">
+          用一句话描述这笔交易,AI 解析后请你确认再写入。
+        </p>
+      )}
       <div className="flex flex-col gap-2 sm:flex-row">
         <input
           className={inputCls}
           value={input}
           disabled={disabled || loading || !canUseLlm}
-          placeholder={canUseLlm ? '用一句话描述这笔交易…' : '请先在设置页配置 LLM 接口'}
+          placeholder={placeholder}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
@@ -87,20 +117,28 @@ export default function NlTxInput({ assets, settings, disabled, onParsed, onManu
       )}
       <p className="mt-2 text-xs text-slate-500">
         将发送你的原文
-        {settings.llmSendAssetNames !== false ? '及资产名称列表' : ''}
-        至 LLM 解析,确认后才会写入本地。可在设置页关闭「发送资产名称」。
+        {settings.llmSendAssetNames !== false && !fixedAssetId ? '及资产名称列表' : ''}
+        至 LLM 解析,确认后才会写入本地。
+        {!fixedAssetId && '可在设置页关闭「发送资产名称」。'}
       </p>
-    </div>
+    </>
   )
+
+  if (embedded) return <div className="space-y-3">{body}</div>
+  return <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">{body}</div>
 }
 
 /** 将 NL 解析结果转为 TxForm 可用的 initial */
-export function nlResultToTxInitial(result: NlTxParseResult, assets: Asset[]): Transaction {
+export function nlResultToTxInitial(
+  result: NlTxParseResult,
+  assets: Asset[],
+  fixedAssetId?: string,
+): Transaction {
   const active = assets.filter((a) => !a.archived)
   const { draft, assetId } = result
   return {
     id: '',
-    assetId: assetId ?? active[0]?.id ?? '',
+    assetId: fixedAssetId ?? assetId ?? active[0]?.id ?? '',
     type: draft.type,
     date: draft.date,
     amount: draft.amount,
