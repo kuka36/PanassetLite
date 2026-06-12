@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useStore } from '../store'
 import { usePortfolioEngine, useSummary } from '../hooks/useSummary'
-import Modal, { btnPrimary } from '../components/Modal'
+import Modal, { btnGhost, btnPrimary } from '../components/Modal'
 import AssetForm from '../components/AssetForm'
 import TxForm from '../components/TxForm'
 import type { Asset, AssetSnapshot, AssetType, Transaction, TxLedgerRow, TxType } from '../types'
@@ -261,12 +261,6 @@ function AssetDetail({
         />
       </div>
 
-      <div className="mb-2 flex justify-end">
-        <button className={btnPrimary} onClick={() => onAddTx(asset)}>
-          + 记一笔
-        </button>
-      </div>
-
       <div className="mb-4 max-h-[min(50vh,28rem)] overflow-x-auto overflow-y-auto rounded-xl border border-slate-800">
         <table className="w-full text-sm">
           <thead className="sticky top-0 bg-slate-900">
@@ -342,13 +336,22 @@ function AssetDetail({
         </table>
       </div>
 
-      <div className="flex justify-between">
-        <button className="text-sm text-red-400/80 hover:text-red-400" onClick={() => onDelete(asset)}>
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-800 pt-4">
+        <button
+          type="button"
+          className="text-sm text-red-400/80 transition-colors hover:text-red-400"
+          onClick={() => onDelete(asset)}
+        >
           删除资产
         </button>
-        <button className="text-sm text-sky-400 hover:underline" onClick={() => onEdit(asset)}>
-          编辑资产信息
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button type="button" className={btnGhost} onClick={() => onEdit(asset)}>
+            编辑资产信息
+          </button>
+          <button type="button" className={btnPrimary} onClick={() => onAddTx(asset)}>
+            + 记一笔
+          </button>
+        </div>
       </div>
     </Modal>
   )
