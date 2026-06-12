@@ -192,6 +192,25 @@ export default function Dashboard({ goTo }: { goTo: (page: string) => void }) {
         />
       </div>
 
+      {/* 区间收益 */}
+      <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+        <h3 className="mb-3 text-sm font-medium text-slate-300">区间收益</h3>
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          {summary.periodReturns.map((p) => (
+            <div key={p.key}>
+              <p className="text-xs text-slate-500">{p.label}</p>
+              <p className={`mt-1 text-lg font-semibold tabular-nums ${pnlColor(p.pnlCNY)}`}>
+                {p.pnlCNY > 0 ? '+' : ''}
+                {fmtMoney(p.pnlCNY)}
+              </p>
+              <p className="mt-0.5 text-xs tabular-nums text-slate-500">
+                {p.ratio != null ? `收益率 ${fmtPct(p.ratio)}` : '—'}
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
+
       {/* 图表 */}
       <div className="grid gap-4 xl:grid-cols-5">
         <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 xl:col-span-3">

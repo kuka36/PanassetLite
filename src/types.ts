@@ -142,6 +142,16 @@ export interface AssetSnapshot {
   recentAnnualized?: number | null
 }
 
+/** 区间收益(本周/本月/今年以来/近一年) */
+export interface PeriodReturn {
+  key: 'week' | 'month' | 'ytd' | 'year'
+  label: string
+  /** 区间收益(CNY),已剔除区间内存取/买卖的本金变动,与 totalPnlCNY 同口径 */
+  pnlCNY: number
+  /** 区间收益率 = 收益 / (期初市值 + 区间净投入正部分);基数不足时为 null */
+  ratio: number | null
+}
+
 export interface PortfolioSummary {
   totalAssetsCNY: number   // 正资产合计
   totalDebtCNY: number     // 负债合计(正数表示欠款)
@@ -151,4 +161,6 @@ export interface PortfolioSummary {
   snapshots: AssetSnapshot[]
   /** 净值历史(按日) */
   history: { date: string; netWorth: number; assets: number; debt: number }[]
+  /** 区间收益 */
+  periodReturns: PeriodReturn[]
 }
