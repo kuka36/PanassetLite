@@ -45,7 +45,7 @@ export function analyzePortfolio(summary: PortfolioSummary): HealthReport {
         {
           level: 'info',
           title: '暂无数据',
-          detail: '先添加几项资产并记录交易,AI 顾问就能开始为你做风险评估和健康检查。',
+          detail: '先添加几项资产并记录交易,AI 助手就能开始为你做风险评估和健康检查。',
         },
       ],
     }

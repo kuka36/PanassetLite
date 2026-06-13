@@ -152,8 +152,8 @@ export default function Settings() {
       </Section>
 
       <Section
-        title="AI 顾问 · LLM 接口(可选)"
-        desc="OpenAI 兼容接口(OpenAI / DeepSeek / 通义 / 本地 LM Studio·Ollama 均可)。本地模型请填 http://127.0.0.1:端口/v1,通过 npm run dev 访问时会自动走代理避免 CORS。仅在主动触发时发送数据:AI 顾问发送资产汇总数字;自然语言记一笔发送你的原文,并可选择是否附带资产名称列表。"
+        title="AI 助手 · LLM 接口(可选)"
+        desc="OpenAI 兼容接口(OpenAI / DeepSeek / 通义 / 本地 LM Studio·Ollama 均可)。本地模型请填 http://127.0.0.1:端口/v1,通过 npm run dev 访问时会自动走代理避免 CORS。仅在主动触发时发送数据:AI 助手发送资产汇总数字;自然语言记一笔发送你的原文,并可选择是否附带资产名称列表。"
       >
         <div className="space-y-3">
           <div>

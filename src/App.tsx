@@ -6,7 +6,6 @@ import {
   LayoutDashboard,
   Menu,
   Settings,
-  Sparkles,
   Wallet,
   X,
 } from 'lucide-react'
@@ -14,15 +13,18 @@ import { palette } from './theme/colors'
 import Dashboard from './pages/Dashboard'
 import Assets from './pages/Assets'
 import Transactions from './pages/Transactions'
-import Advisor from './pages/Advisor'
 import SettingsPage from './pages/Settings'
+import AssistantFab from './components/AssistantFab'
+import AssistantPanel from './components/AssistantPanel'
+import AssistantConfirmModals from './components/AssistantConfirmModals'
+import { useAssistantStore } from './assistantStore'
+import type { AppPageId } from './types/assistant'
 
 const NAV = [
-  { id: 'dashboard', label: '总览', icon: LayoutDashboard, ai: false },
-  { id: 'assets', label: '资产', icon: Wallet, ai: false },
-  { id: 'transactions', label: '流水', icon: ArrowLeftRight, ai: false },
-  { id: 'advisor', label: 'AI 顾问', icon: Sparkles, ai: true },
-  { id: 'settings', label: '设置', icon: Settings, ai: false },
+  { id: 'dashboard', label: '总览', icon: LayoutDashboard },
+  { id: 'assets', label: '资产', icon: Wallet },
+  { id: 'transactions', label: '流水', icon: ArrowLeftRight },
+  { id: 'settings', label: '设置', icon: Settings },
 ] as const
 
 type PageId = (typeof NAV)[number]['id']
@@ -36,6 +38,7 @@ export default function App() {
   const [page, setPage] = useState<PageId>('dashboard')
   const [collapsed, setCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
+  const addAssistantMessage = useAssistantStore((s) => s.addMessage)
 
   const goTo = (id: PageId) => {
     setPage(id)
@@ -114,13 +117,11 @@ export default function App() {
                   collapsed ? 'justify-center px-0' : ''
                 } ${
                   active
-                    ? item.ai
-                      ? 'bg-indigo-50 font-medium text-indigo-700'
-                      : 'bg-blue-50 font-medium text-blue-700'
+                    ? 'bg-blue-50 font-medium text-blue-700'
                     : 'text-slate-600 hover:bg-slate-50 hover:text-slate-800'
                 }`}
               >
-                <Icon className={`h-[18px] w-[18px] shrink-0 ${active && item.ai ? 'text-indigo-600' : active ? 'text-blue-600' : ''}`} />
+                <Icon className={`h-[18px] w-[18px] shrink-0 ${active ? 'text-blue-600' : ''}`} />
                 {!collapsed && <span>{item.label}</span>}
               </button>
             )
@@ -152,10 +153,15 @@ export default function App() {
           {page === 'dashboard' && <Dashboard goTo={(p) => goTo(p as PageId)} />}
           {page === 'assets' && <Assets />}
           {page === 'transactions' && <Transactions />}
-          {page === 'advisor' && <Advisor />}
           {page === 'settings' && <SettingsPage />}
         </div>
       </main>
+
+      <AssistantFab />
+      <AssistantPanel currentPage={page as AppPageId} onNavigate={goTo} />
+      <AssistantConfirmModals
+        onSuccess={(msg) => addAssistantMessage({ role: 'assistant', content: msg })}
+      />
     </div>
   )
 }
@@ -175,4 +181,8 @@ function LogoMark({ className }: { className?: string }) {
       <circle cx="23" cy="9" r="2.2" fill="#fff" />
     </svg>
   )
+}
+
+export function openAssistant() {
+  useAssistantStore.getState().setOpen(true)
 }
