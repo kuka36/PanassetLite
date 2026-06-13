@@ -10,7 +10,7 @@ import {
   PendingActionCard,
 } from './AssistantConfirmModals'
 import { btnAi, btnGhost, inputCls } from './Modal'
-import { ADVISOR_PRESETS, DEFAULT_ADVISOR_PROMPT, streamLlmAdvice } from '../services/ai'
+import { ADVISOR_PRESETS, DEFAULT_ADVISOR_PROMPT, resolveAdvisorPrompt, streamLlmAdvice } from '../services/ai'
 import { runAssistantTurn, runLocalAssistantTurn } from '../services/assistantAgent'
 import type { AssistantToolContext } from '../services/assistantTools'
 import { isLocalLlmBaseUrl } from '../services/llmClient'
@@ -47,7 +47,25 @@ export default function AssistantPanel({ currentPage, onNavigate }: Props) {
 
   const [input, setInput] = useState('')
   const listRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
   const abortRef = useRef<AbortController | null>(null)
+
+  useEffect(() => {
+    if (!open) return
+    inputRef.current?.focus()
+  }, [open])
+
+  useEffect(() => {
+    if (!open) return
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        setOpen(false)
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [open, setOpen])
 
   const llmReady = canUseLlm(settings.llm.apiKey, settings.llm.baseUrl)
 
@@ -115,25 +133,33 @@ export default function AssistantPanel({ currentPage, onNavigate }: Props) {
       let result
 
       if (llmReady) {
-        result = await runAssistantTurn(trimmed, history, buildContext(), currentPage, ac.signal)
+        const advisorPrompt = resolveAdvisorPrompt(trimmed)
+        if (advisorPrompt !== null) {
+          await streamLlmAdvice(summary, settings, advisorPrompt, (acc) => {
+            updateMessage(assistantId, { content: acc })
+          }, ac.signal)
+        } else {
+          result = await runAssistantTurn(trimmed, history, buildContext(), currentPage, ac.signal)
+          updateMessage(assistantId, { content: result.assistantContent })
+          attachPendingToMessage(assistantId, result.pendingActions)
+
+          for (let i = 1; i < result.pendingActions.length; i++) {
+            const p = result.pendingActions[i]
+            addMessage({
+              role: 'assistant',
+              content: `还有一项待确认:**${p.summary}**`,
+              pendingAction: p.action,
+              pendingSummary: p.summary,
+            })
+            if (p.action.kind !== 'deleteAsset' && p.action.kind !== 'deleteTx') {
+              openFormAction(p.action)
+            }
+          }
+        }
       } else {
         result = await runLocalAssistantTurn(trimmed, buildContext())
-      }
-
-      updateMessage(assistantId, { content: result.assistantContent })
-      attachPendingToMessage(assistantId, result.pendingActions)
-
-      for (let i = 1; i < result.pendingActions.length; i++) {
-        const p = result.pendingActions[i]
-        addMessage({
-          role: 'assistant',
-          content: `还有一项待确认:**${p.summary}**`,
-          pendingAction: p.action,
-          pendingSummary: p.summary,
-        })
-        if (p.action.kind !== 'deleteAsset' && p.action.kind !== 'deleteTx') {
-          openFormAction(p.action)
-        }
+        updateMessage(assistantId, { content: result.assistantContent })
+        attachPendingToMessage(assistantId, result.pendingActions)
       }
     } catch (e) {
       if ((e as Error).name === 'AbortError') return
@@ -284,6 +310,7 @@ export default function AssistantPanel({ currentPage, onNavigate }: Props) {
           </div>
           <div className="flex gap-2">
             <input
+              ref={inputRef}
               className={inputCls}
               value={input}
               disabled={loading}

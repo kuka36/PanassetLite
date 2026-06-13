@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import {
   ArrowLeftRight,
   ChevronLeft,
@@ -17,6 +17,8 @@ import SettingsPage from './pages/Settings'
 import AssistantFab from './components/AssistantFab'
 import AssistantPanel from './components/AssistantPanel'
 import AssistantConfirmModals from './components/AssistantConfirmModals'
+import ShortcutHelpModal from './components/ShortcutHelpModal'
+import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
 import { useAssistantStore } from './assistantStore'
 import type { AppPageId } from './types/assistant'
 
@@ -38,12 +40,27 @@ export default function App() {
   const [page, setPage] = useState<PageId>('dashboard')
   const [collapsed, setCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [helpOpen, setHelpOpen] = useState(false)
   const addAssistantMessage = useAssistantStore((s) => s.addMessage)
+  const toggleAssistant = useAssistantStore((s) => s.toggle)
 
-  const goTo = (id: PageId) => {
+  const goTo = useCallback((id: PageId) => {
     setPage(id)
     setMobileOpen(false)
-  }
+  }, [])
+
+  const globalShortcuts = useMemo(
+    () => [
+      { key: '1', alt: true, action: () => goTo('dashboard') },
+      { key: '2', alt: true, action: () => goTo('assets') },
+      { key: '3', alt: true, action: () => goTo('transactions') },
+      { key: '4', alt: true, action: () => goTo('settings') },
+      { key: 'k', mod: true, action: toggleAssistant },
+      { key: '?', shift: true, action: () => setHelpOpen(true) },
+    ],
+    [goTo, toggleAssistant],
+  )
+  useKeyboardShortcuts(globalShortcuts)
 
   const sidebarWidth = collapsed ? SIDEBAR_COLLAPSED : SIDEBAR_EXPANDED
   const mainMargin = collapsed ? MAIN_COLLAPSED : MAIN_EXPANDED
@@ -112,7 +129,11 @@ export default function App() {
                 key={item.id}
                 type="button"
                 onClick={() => goTo(item.id)}
-                title={collapsed ? item.label : undefined}
+                title={
+                  collapsed
+                    ? item.label
+                    : `Alt+${NAV.findIndex((n) => n.id === item.id) + 1} · ${item.label}`
+                }
                 className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-all duration-200 active:scale-[0.98] ${
                   collapsed ? 'justify-center px-0' : ''
                 } ${
@@ -162,6 +183,7 @@ export default function App() {
       <AssistantConfirmModals
         onSuccess={(msg) => addAssistantMessage({ role: 'assistant', content: msg })}
       />
+      <ShortcutHelpModal open={helpOpen} onClose={() => setHelpOpen(false)} />
     </div>
   )
 }

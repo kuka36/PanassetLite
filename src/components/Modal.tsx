@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useEffect, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 
@@ -20,6 +20,18 @@ const SIZE_CLS: Record<NonNullable<Props['size']>, string> = {
 
 export default function Modal({ title, onClose, children, size, wide }: Props) {
   const resolved = size ?? (wide ? 'lg' : 'md')
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        onClose()
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [onClose])
+
   return createPortal(
     <div
       className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/50 backdrop-blur-sm"

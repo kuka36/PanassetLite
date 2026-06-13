@@ -5,7 +5,7 @@ const MSG_KEY = 'panasset.assistant.messages'
 
 function loadMessages(): ChatMessage[] {
   try {
-    const raw = sessionStorage.getItem(MSG_KEY)
+    const raw = localStorage.getItem(MSG_KEY)
     if (!raw) return []
     const parsed = JSON.parse(raw) as ChatMessage[]
     return Array.isArray(parsed) ? parsed : []
@@ -16,7 +16,7 @@ function loadMessages(): ChatMessage[] {
 
 function saveMessages(messages: ChatMessage[]) {
   try {
-    sessionStorage.setItem(MSG_KEY, JSON.stringify(messages.slice(-50)))
+    localStorage.setItem(MSG_KEY, JSON.stringify(messages.slice(-50)))
   } catch {
     /* ignore quota */
   }

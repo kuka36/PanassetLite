@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useStore } from '../store'
+import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
 import Modal, { btnPrimary, inputCls } from '../components/Modal'
 import NlTxInput, { nlResultToTxInitial } from '../components/NlTxInput'
 import TxForm from '../components/TxForm'
@@ -25,6 +26,21 @@ export default function Transactions() {
   const deleteTransaction = useStore((s) => s.deleteTransaction)
   const [filterAsset, setFilterAsset] = useState('')
   const [modal, setModal] = useState<ModalState>(null)
+
+  useKeyboardShortcuts(
+    useMemo(
+      () => [
+        {
+          key: 'n',
+          action: () => {
+            if (assets.length > 0) setModal({ kind: 'add' })
+          },
+        },
+      ],
+      [assets.length],
+    ),
+    modal === null,
+  )
 
   const assetMap = useMemo(() => new Map(assets.map((a) => [a.id, a])), [assets])
 

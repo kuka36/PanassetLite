@@ -331,6 +331,22 @@ export const ADVISOR_PRESETS: AdvisorPreset[] = [
   },
 ]
 
+/** 用户输入若匹配快捷问题标签,返回对应完整 prompt(供 streamLlmAdvice 使用) */
+export function resolveAdvisorPrompt(userInput: string): string | null {
+  const trimmed = userInput.trim()
+  if (!trimmed) return null
+
+  const exact = ADVISOR_PRESETS.find((p) => p.label === trimmed)
+  if (exact) return exact.prompt.trim() || DEFAULT_ADVISOR_PROMPT
+
+  const partial = ADVISOR_PRESETS.find(
+    (p) => trimmed.includes(p.label) || p.label.includes(trimmed),
+  )
+  if (partial) return partial.prompt.trim() || DEFAULT_ADVISOR_PROMPT
+
+  return null
+}
+
 export async function streamLlmAdvice(
   summary: PortfolioSummary,
   settings: Settings,

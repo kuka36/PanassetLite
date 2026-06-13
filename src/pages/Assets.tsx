@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useStore } from '../store'
 import { usePortfolioEngine, useSummary } from '../hooks/useSummary'
+import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
 import Modal, { btnGhost, btnPrimary } from '../components/Modal'
 import AssetForm from '../components/AssetForm'
 import NlTxInput, { nlResultToTxInitial } from '../components/NlTxInput'
@@ -46,6 +47,22 @@ export default function Assets() {
   const addTransaction = useStore((s) => s.addTransaction)
   const updateTransaction = useStore((s) => s.updateTransaction)
   const [modal, setModal] = useState<ModalState>(null)
+
+  useKeyboardShortcuts(
+    useMemo(
+      () => [
+        { key: 'a', action: () => setModal({ kind: 'add' }) },
+        {
+          key: 't',
+          action: () => {
+            if (assets.length > 0) setModal({ kind: 'nlTx' })
+          },
+        },
+      ],
+      [assets.length],
+    ),
+    modal === null,
+  )
 
   const groups = useMemo(() => {
     const map = new Map<AssetType, AssetSnapshot[]>()

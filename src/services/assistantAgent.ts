@@ -39,11 +39,57 @@ function buildSystemPrompt(summary: PortfolioSummary, currentPage: AppPageId): s
     '你是 PanassetLite 的 AI 助手,帮助用户管理本地个人资产。' +
     '你可以查询组合、分析风险、导航页面、刷新行情,以及提议添加/修改/删除资产与流水。' +
     '重要:所有写操作(添加/修改/删除)必须通过工具 propose_* 发起,系统会打开确认表单或对话确认,你不得声称已直接写入。' +
+    '调用工具后必须用自然语言向用户解释结果,禁止只调用工具而不给出文字回复。' +
     '导入导出、清空数据、LLM 配置请用 open_settings 引导用户去设置页手动操作。' +
     `当前页面:${currentPage}。` +
     '\n\n当前资产组合摘要:\n' +
     buildPortfolioBrief(summary)
   )
+}
+
+function dedupeTrailingUserMessage(history: ApiMessage[], userInput: string): ApiMessage[] {
+  const last = history[history.length - 1]
+  if (last?.role === 'user' && last.content === userInput) {
+    return history.slice(0, -1)
+  }
+  return history
+}
+
+async function synthesizeAssistantReply(
+  apiMessages: ApiMessage[],
+  ctx: AssistantToolContext,
+  signal?: AbortSignal,
+): Promise<string> {
+  const res = await postChatCompletions(
+    ctx.settings.llm.baseUrl,
+    ctx.settings.llm.apiKey,
+    {
+      model: ctx.settings.llm.model,
+      messages: [
+        ...apiMessages,
+        {
+          role: 'user',
+          content: '请根据已获得的数据,用简体中文直接回答用户最后的问题。给出具体分析和建议,不要调用工具。',
+        },
+      ],
+      temperature: 0.4,
+      stream: false,
+    },
+    signal,
+  )
+
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(`LLM 请求失败 (${res.status}): ${text.slice(0, 200)}`)
+  }
+
+  const data = (await res.json()) as {
+    choices?: Array<{ message?: { content?: string | null } }>
+    error?: { message?: string }
+  }
+  if (data.error?.message) throw new Error(data.error.message)
+
+  return data.choices?.[0]?.message?.content?.trim() ?? ''
 }
 
 function chatHistoryToApi(messages: ChatMessage[]): ApiMessage[] {
@@ -72,6 +118,19 @@ export async function runLocalQuickReply(
   if (/健康|评分|风险|分析/.test(text)) {
     const r = await executeAssistantTool('analyze_portfolio', {}, ctx)
     return { assistantContent: formatAnalyzeResult(r.content), pendingActions: [] }
+  }
+
+  if (/复盘|财富/.test(text)) {
+    const summary = await executeAssistantTool('get_portfolio_summary', {}, ctx)
+    const analyze = await executeAssistantTool('analyze_portfolio', {}, ctx)
+    return {
+      assistantContent:
+        formatSummaryResult(summary.content) +
+        '\n\n' +
+        formatAnalyzeResult(analyze.content) +
+        '\n\n*深度财富复盘需配置 LLM,或点击上方「本月财富复盘」快捷问题。*',
+      pendingActions: [],
+    }
   }
 
   if (/净资产|总资产|负债|多少钱|概况|摘要/.test(text)) {
@@ -134,9 +193,10 @@ export async function runAssistantTurn(
 ): Promise<RunAssistantTurnResult> {
   assertLlmReady(ctx.settings)
 
+  const historyMessages = dedupeTrailingUserMessage(chatHistoryToApi(history), userInput)
   const apiMessages: ApiMessage[] = [
     { role: 'system', content: buildSystemPrompt(ctx.summary, currentPage) },
-    ...chatHistoryToApi(history),
+    ...historyMessages,
     { role: 'user', content: userInput },
   ]
 
@@ -206,7 +266,11 @@ export async function runAssistantTurn(
   }
 
   if (!finalContent) {
-    finalContent = '已完成操作,还有什么可以帮你的?'
+    finalContent = await synthesizeAssistantReply(apiMessages, ctx, signal)
+  }
+
+  if (!finalContent) {
+    finalContent = '抱歉,未能生成完整回复。请换一种问法,或点击上方快捷问题重试。'
   }
 
   return { assistantContent: finalContent, pendingActions }

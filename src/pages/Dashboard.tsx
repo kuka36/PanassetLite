@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { RefreshCw, TrendingUp } from 'lucide-react'
 import { useStore } from '../store'
 import { useSummary } from '../hooks/useSummary'
+import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
 import EChart from '../components/EChart'
 import { lightAxis, lightTooltip } from '../components/chartTheme'
 import { Card, CardBody, CardHeader, MetricCard } from '../components/ui/Card'
@@ -16,6 +17,15 @@ export default function Dashboard({ goTo }: { goTo: (page: string) => void }) {
   const refreshPrices = useStore((s) => s.refreshPrices)
   const settings = useStore((s) => s.settings)
   const [msg, setMsg] = useState('')
+
+  const doRefresh = useCallback(async () => {
+    if (refreshing) return
+    setMsg('')
+    const result = await refreshPrices()
+    setMsg(result)
+  }, [refreshPrices, refreshing])
+
+  useKeyboardShortcuts(useMemo(() => [{ key: 'r', action: () => void doRefresh() }], [doRefresh]))
 
   const { history } = summary
   const monthDelta = useMemo(() => {
@@ -132,12 +142,6 @@ export default function Dashboard({ goTo }: { goTo: (page: string) => void }) {
 
   const topAssets = summary.snapshots.filter((s) => s.asset.type !== 'debt' && s.valueCNY > 0).slice(0, 6)
   const hasData = summary.snapshots.length > 0
-
-  const doRefresh = async () => {
-    setMsg('')
-    const result = await refreshPrices()
-    setMsg(result)
-  }
 
   if (!hasData) {
     return (
