@@ -11,7 +11,7 @@ function renderInline(text: string, keyPrefix: string): ReactNode[] {
   return parts.map((part, i) => {
     if (part.startsWith('**') && part.endsWith('**')) {
       return (
-        <strong key={`${keyPrefix}-${i}`} className="font-semibold text-slate-200">
+        <strong key={`${keyPrefix}-${i}`} className="font-semibold text-slate-800">
           {part.slice(2, -2)}
         </strong>
       )
@@ -94,19 +94,19 @@ export default function LightMarkdown({ text }: { text: string }) {
         switch (block.type) {
           case 'h1':
             return (
-              <h2 key={key} className="text-base font-semibold text-slate-100">
+              <h2 key={key} className="text-base font-semibold text-slate-800">
                 {renderInline(block.text, key)}
               </h2>
             )
           case 'h2':
             return (
-              <h3 key={key} className="text-sm font-semibold text-slate-200">
+              <h3 key={key} className="text-sm font-semibold text-slate-800">
                 {renderInline(block.text, key)}
               </h3>
             )
           case 'h3':
             return (
-              <h4 key={key} className="text-sm font-medium text-slate-200">
+              <h4 key={key} className="text-sm font-medium text-slate-700">
                 {renderInline(block.text, key)}
               </h4>
             )

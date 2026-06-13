@@ -1,0 +1,230 @@
+import type { PortfolioSummary, Settings } from '../types'
+import type { AppPageId, ChatMessage, PendingAction } from '../types/assistant'
+import { buildPortfolioBrief } from './ai'
+import { isLocalLlmBaseUrl, postChatCompletions } from './llmClient'
+import {
+  ASSISTANT_TOOL_DEFINITIONS,
+  type AssistantToolContext,
+  executeAssistantTool,
+  isWriteTool,
+} from './assistantTools'
+
+const MAX_TOOL_ITERATIONS = 8
+
+type ApiMessage =
+  | { role: 'system' | 'user' | 'assistant'; content: string }
+  | { role: 'assistant'; content: string | null; tool_calls?: ToolCall[] }
+  | { role: 'tool'; tool_call_id: string; content: string }
+
+interface ToolCall {
+  id: string
+  type: 'function'
+  function: { name: string; arguments: string }
+}
+
+export interface RunAssistantTurnResult {
+  assistantContent: string
+  pendingActions: Array<{ action: PendingAction; summary: string }>
+}
+
+function assertLlmReady(settings: Settings) {
+  const { baseUrl, apiKey } = settings.llm
+  if (!apiKey && !isLocalLlmBaseUrl(baseUrl)) {
+    throw new Error('未配置 LLM API key,请到设置页填写(本地模型可留空 key)')
+  }
+}
+
+function buildSystemPrompt(summary: PortfolioSummary, currentPage: AppPageId): string {
+  return (
+    '你是 PanassetLite 的 AI 助手,帮助用户管理本地个人资产。' +
+    '你可以查询组合、分析风险、导航页面、刷新行情,以及提议添加/修改/删除资产与流水。' +
+    '重要:所有写操作(添加/修改/删除)必须通过工具 propose_* 发起,系统会打开确认表单或对话确认,你不得声称已直接写入。' +
+    '导入导出、清空数据、LLM 配置请用 open_settings 引导用户去设置页手动操作。' +
+    `当前页面:${currentPage}。` +
+    '\n\n当前资产组合摘要:\n' +
+    buildPortfolioBrief(summary)
+  )
+}
+
+function chatHistoryToApi(messages: ChatMessage[]): ApiMessage[] {
+  return messages
+    .filter((m) => m.role === 'user' || m.role === 'assistant')
+    .slice(-20)
+    .map((m) => ({ role: m.role, content: m.content }))
+}
+
+function parseToolArgs(raw: string): Record<string, unknown> {
+  try {
+    return JSON.parse(raw) as Record<string, unknown>
+  } catch {
+    return {}
+  }
+}
+
+/** 无 LLM 时的本地快捷回复 */
+export async function runLocalQuickReply(
+  input: string,
+  ctx: AssistantToolContext,
+): Promise<RunAssistantTurnResult | null> {
+  const text = input.trim().toLowerCase()
+  if (!text) return null
+
+  if (/健康|评分|风险|分析/.test(text)) {
+    const r = await executeAssistantTool('analyze_portfolio', {}, ctx)
+    return { assistantContent: formatAnalyzeResult(r.content), pendingActions: [] }
+  }
+
+  if (/净资产|总资产|负债|多少钱|概况|摘要/.test(text)) {
+    const r = await executeAssistantTool('get_portfolio_summary', {}, ctx)
+    return { assistantContent: formatSummaryResult(r.content), pendingActions: [] }
+  }
+
+  return null
+}
+
+function formatAnalyzeResult(json: string): string {
+  try {
+    const data = JSON.parse(json) as {
+      score: number
+      grade: string
+      insights: Array<{ level: string; title: string; detail: string }>
+    }
+    const lines = [`**健康评分 ${data.score}/100(${data.grade})**`, '']
+    for (const i of data.insights) {
+      lines.push(`- **${i.title}**: ${i.detail}`)
+    }
+    return lines.join('\n')
+  } catch {
+    return json
+  }
+}
+
+function formatSummaryResult(json: string): string {
+  try {
+    const data = JSON.parse(json) as {
+      netWorthCNY: number
+      totalAssetsCNY: number
+      totalDebtCNY: number
+      totalPnlCNY: number
+      byType: Array<{ type: string; valueCNY: number }>
+    }
+    const lines = [
+      `- 净资产: ¥${data.netWorthCNY.toLocaleString()}`,
+      `- 总资产: ¥${data.totalAssetsCNY.toLocaleString()}`,
+      `- 负债: ¥${data.totalDebtCNY.toLocaleString()}`,
+      `- 累计盈亏: ¥${data.totalPnlCNY.toLocaleString()}`,
+      '',
+      '**类别分布:**',
+    ]
+    for (const t of data.byType) {
+      if (t.valueCNY > 0) lines.push(`- ${t.type}: ¥${t.valueCNY.toLocaleString()}`)
+    }
+    return lines.join('\n')
+  } catch {
+    return json
+  }
+}
+
+export async function runAssistantTurn(
+  userInput: string,
+  history: ChatMessage[],
+  ctx: AssistantToolContext,
+  currentPage: AppPageId,
+  signal?: AbortSignal,
+): Promise<RunAssistantTurnResult> {
+  assertLlmReady(ctx.settings)
+
+  const apiMessages: ApiMessage[] = [
+    { role: 'system', content: buildSystemPrompt(ctx.summary, currentPage) },
+    ...chatHistoryToApi(history),
+    { role: 'user', content: userInput },
+  ]
+
+  const pendingActions: Array<{ action: PendingAction; summary: string }> = []
+  let finalContent = ''
+
+  for (let i = 0; i < MAX_TOOL_ITERATIONS; i++) {
+    const res = await postChatCompletions(
+      ctx.settings.llm.baseUrl,
+      ctx.settings.llm.apiKey,
+      {
+        model: ctx.settings.llm.model,
+        messages: apiMessages,
+        tools: ASSISTANT_TOOL_DEFINITIONS,
+        tool_choice: 'auto',
+        temperature: 0.3,
+        stream: false,
+      },
+      signal,
+    )
+
+    if (!res.ok) {
+      const text = await res.text()
+      throw new Error(`LLM 请求失败 (${res.status}): ${text.slice(0, 200)}`)
+    }
+
+    const data = (await res.json()) as {
+      choices?: Array<{ message?: { content?: string | null; tool_calls?: ToolCall[] } }>
+      error?: { message?: string }
+    }
+    if (data.error?.message) throw new Error(data.error.message)
+
+    const message = data.choices?.[0]?.message
+    if (!message) throw new Error('LLM 返回为空')
+
+    if (message.tool_calls?.length) {
+      apiMessages.push({
+        role: 'assistant',
+        content: message.content ?? '',
+        tool_calls: message.tool_calls,
+      })
+
+      for (const tc of message.tool_calls) {
+        const args = parseToolArgs(tc.function.arguments)
+        const result = await executeAssistantTool(tc.function.name, args, ctx, signal)
+
+        if (result.pendingAction && result.pendingSummary) {
+          pendingActions.push({ action: result.pendingAction, summary: result.pendingSummary })
+        }
+
+        apiMessages.push({
+          role: 'tool',
+          tool_call_id: tc.id,
+          content: result.content,
+        })
+      }
+      continue
+    }
+
+    finalContent = message.content?.trim() ?? ''
+    break
+  }
+
+  if (!finalContent && pendingActions.length > 0) {
+    const summaries = pendingActions.map((p) => p.summary).join('、')
+    finalContent = `已为你准备好操作:**${summaries}**。请在下方确认卡片中打开表单完成写入。`
+  }
+
+  if (!finalContent) {
+    finalContent = '已完成操作,还有什么可以帮你的?'
+  }
+
+  return { assistantContent: finalContent, pendingActions }
+}
+
+export async function runLocalAssistantTurn(
+  userInput: string,
+  ctx: AssistantToolContext,
+): Promise<RunAssistantTurnResult> {
+  const quick = await runLocalQuickReply(userInput, ctx)
+  if (quick) return quick
+
+  return {
+    assistantContent:
+      '当前未配置 LLM,仅支持本地快捷查询(如「我的净资产」「健康评分」)。' +
+      '深度对话与自动操作请到**设置**页配置 OpenAI 兼容接口,或点击快捷问题(需 LLM)。',
+    pendingActions: [],
+  }
+}
+
+export { isWriteTool }

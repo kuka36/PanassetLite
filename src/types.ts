@@ -100,7 +100,7 @@ export interface Settings {
   fxRates: Record<string, number>
   fxUpdatedAt?: number
   finnhubKey?: string
-  /** OpenAI 兼容接口配置(可选,用于 AI 顾问增强) */
+  /** OpenAI 兼容接口配置(可选,用于 AI 助手) */
   llm: { baseUrl: string; apiKey: string; model: string }
   /** NL 记一笔时是否将资产名称列表发给 LLM 以辅助匹配;关闭后仅发送用户原文 */
   llmSendAssetNames?: boolean
