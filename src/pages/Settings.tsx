@@ -6,6 +6,9 @@ import { buildDemoData } from '../demoData'
 import { Card, CardBody, CardHeader } from '../components/ui/Card'
 import { btnGhost, btnPrimary, inputCls, labelCls } from '../components/Modal'
 import { color } from '../theme/colors'
+import { formatFxRate, staleUpdateCls } from '../utils/format'
+
+const FX_STALE_DAYS = 7
 
 export default function Settings() {
   const settings = useStore((s) => s.settings)
@@ -16,7 +19,7 @@ export default function Settings() {
   const fileRef = useRef<HTMLInputElement>(null)
 
   const [fx, setFx] = useState<Record<string, string>>(
-    Object.fromEntries(Object.entries(settings.fxRates).map(([k, v]) => [k, String(v)])),
+    Object.fromEntries(Object.entries(settings.fxRates).map(([k, v]) => [k, formatFxRate(v)])),
   )
   const [finnhubKey, setFinnhubKey] = useState(settings.finnhubKey ?? '')
   const [llm, setLlm] = useState(settings.llm)
@@ -31,9 +34,10 @@ export default function Settings() {
     const fxRates: Record<string, number> = {}
     for (const [k, v] of Object.entries(fx)) {
       const n = Number(v)
-      if (n > 0) fxRates[k] = n
+      if (n > 0) fxRates[k] = Number(n.toFixed(4))
     }
     saveSettings({ fxRates })
+    setFx(Object.fromEntries(Object.entries(fxRates).map(([k, v]) => [k, formatFxRate(v)])))
     flash('汇率已保存')
   }
 
@@ -41,7 +45,7 @@ export default function Settings() {
     try {
       const fxRates = await fetchFxRates(settings)
       saveSettings({ fxRates, fxUpdatedAt: Date.now() })
-      setFx(Object.fromEntries(Object.entries(fxRates).map(([k, v]) => [k, v.toFixed(4)])))
+      setFx(Object.fromEntries(Object.entries(fxRates).map(([k, v]) => [k, formatFxRate(v)])))
       flash('汇率已自动更新(Frankfurter/欧洲央行)')
     } catch (e) {
       flash(`自动更新失败:${(e as Error).message}`)
@@ -100,7 +104,7 @@ export default function Settings() {
               <input
                 className={inputCls}
                 type="number"
-                step="any"
+                step="0.0001"
                 value={fx[k]}
                 onChange={(e) => setFx({ ...fx, [k]: e.target.value })}
               />
@@ -115,7 +119,9 @@ export default function Settings() {
             自动获取最新汇率
           </button>
           {settings.fxUpdatedAt && (
-            <span className="text-xs text-slate-500">
+            <span
+              className={`text-xs ${staleUpdateCls(new Date(settings.fxUpdatedAt).toISOString(), FX_STALE_DAYS)}`}
+            >
               上次更新:{new Date(settings.fxUpdatedAt).toLocaleString('zh-CN')}
             </span>
           )}

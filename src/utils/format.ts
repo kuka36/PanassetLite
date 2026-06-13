@@ -32,6 +32,11 @@ export function fmtNum(n: number, maxDigits = 4): string {
   return n.toLocaleString('zh-CN', { maximumFractionDigits: maxDigits })
 }
 
+/** 汇率输入展示:截断至最多 4 位小数,去掉尾随零 */
+export function formatFxRate(n: number, digits = 4): string {
+  return parseFloat(n.toFixed(digits)).toString()
+}
+
 export { isUpdateStale }
 
 /** 「更新于」列文字颜色 */
