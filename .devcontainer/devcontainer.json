@@ -1,0 +1,45 @@
+{
+  "name": "PanassetLite Agent Harness",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": "..",
+    // HTTP_PROXY/HTTPS_PROXY/NO_PROXY 是 Docker 预定义构建参数：经 build.args
+    // 传入后 BuildKit 会自动注入到各 RUN 的环境（apt/curl/npm install -g 都走代理），
+    // 且不写入镜像历史/缓存键。值取自运行 devcontainer 的进程环境——
+    // self-hosted runner 须在自身环境变量里配置代理（如 actions-runner/.env）。
+    "args": {
+      "HTTP_PROXY": "${localEnv:HTTP_PROXY}",
+      "HTTPS_PROXY": "${localEnv:HTTPS_PROXY}",
+      "NO_PROXY": "${localEnv:NO_PROXY}"
+    }
+  },
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached",
+  "workspaceFolder": "/workspace",
+  "remoteUser": "ubuntu",
+  "postCreateCommand": "npm ci",
+  // 全部从宿主进程环境（localEnv）读取，不依赖任何仓库内文件——
+  // 仓库内的 .devcontainer/.env 会被 actions/checkout 的 clean 清掉，不可靠。
+  // 代理与宿主相关，须在 self-hosted runner 的环境变量里配置
+  // （如 actions-runner/.env，runner 服务启动时加载）。
+  // 容器内用 host.docker.internal 指代宿主，且宿主代理须监听 0.0.0.0。
+  "containerEnv": {
+    "GEMINI_API_KEY": "${localEnv:GEMINI_API_KEY}",
+    "API_KEY": "${localEnv:API_KEY}",
+    "GITHUB_TOKEN": "${localEnv:GITHUB_TOKEN}",
+    "HTTP_PROXY": "${localEnv:HTTP_PROXY}",
+    "HTTPS_PROXY": "${localEnv:HTTPS_PROXY}",
+    "NO_PROXY": "${localEnv:NO_PROXY}"
+  },
+  "mounts": [
+    "source=${localEnv:HOME}/.codex,target=/home/ubuntu/.codex,type=bind,consistency=cached"
+  ],
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode"
+      ]
+    }
+  },
+  "forwardPorts": [3000]
+}

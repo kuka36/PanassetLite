@@ -1,0 +1,101 @@
+name: Agent Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  review:
+    if: |
+      contains(github.event.pull_request.labels.*.name, 'ai-generated') ||
+      github.event.pull_request.user.login == 'github-actions[bot]' ||
+      (github.event.action == 'labeled' && github.event.label.name == 'ai-review')
+    runs-on: [self-hosted, panasset-agent]
+    env:
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      # Force a clean container: the self-hosted runner reuses stale devcontainers
+      # by folder label, which never picks up config/mount changes.
+      - name: Remove stale devcontainer
+        run: |
+          docker rm -f $(docker ps -aq \
+            --filter "label=devcontainer.local_folder=${{ github.workspace }}") 2>/dev/null || true
+
+      - name: Build check
+        uses: devcontainers/ci@v0.3
+        with:
+          imageName: panassetlite-agent
+          push: never
+          runCmd: |
+            set -euo pipefail
+            npm run build
+
+      - name: Run reviewer agent
+        uses: devcontainers/ci@v0.3
+        with:
+          imageName: panassetlite-agent
+          push: never
+          env: |
+            GH_TOKEN
+            PR_NUMBER
+          runCmd: |
+            set -euo pipefail
+
+            # /workspace is bind-mounted from the host (different uid than the
+            # container's ubuntu user); whitelist it so any git invocation
+            # (including codex's) doesn't trip git's "dubious ownership" guard.
+            git config --global --add safe.directory /workspace
+
+            test -f "$HOME/.codex/auth.json" || {
+              echo "::error::~/.codex/auth.json missing on self-hosted runner host."
+              exit 3
+            }
+
+            gh pr diff "$PR_NUMBER" > /tmp/diff.patch
+
+            # codex 0.13x `exec` has no --instructions flag: fold the review
+            # instructions and the diff into one prompt fed via stdin.
+            {
+              cat .agent/harness/rules/review-instructions.md
+              printf '\n\n## Diff under review\n\n```diff\n'
+              cat /tmp/diff.patch
+              printf '\n```\n'
+            } > /tmp/review-prompt.md
+
+            # stdout is intentionally NOT redirected, so codex's live progress
+            # streams into the Actions log (you can watch a long run / spot a
+            # hang). --output-last-message additionally captures ONLY the final
+            # message to a file, so CLI banners don't pollute the parsed review.
+            codex exec --sandbox read-only \
+              --output-last-message /tmp/review.md \
+              < /tmp/review-prompt.md
+
+            # If codex was interrupted/crashed the file may be missing or empty;
+            # fail loudly instead of silently posting an empty review.
+            if [ ! -s /tmp/review.md ]; then
+              echo "::error::codex produced no review output (interrupted or failed)."
+              exit 4
+            fi
+
+            verdict=$(awk '/^## Verdict/{flag=1; next} flag && NF{print; exit}' /tmp/review.md | tr -d ' `')
+
+            case "$verdict" in
+              approve)         flag="--approve" ;;
+              request-changes) flag="--request-changes" ;;
+              *)               flag="--comment" ;;
+            esac
+
+            gh pr review "$PR_NUMBER" $flag -F /tmp/review.md || \
+              gh pr comment "$PR_NUMBER" -F /tmp/review.md
