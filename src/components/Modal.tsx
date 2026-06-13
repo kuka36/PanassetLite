@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { createPortal } from 'react-dom'
+import { X } from 'lucide-react'
 
 interface Props {
   title: string
@@ -21,22 +22,21 @@ export default function Modal({ title, onClose, children, size, wide }: Props) {
   const resolved = size ?? (wide ? 'lg' : 'md')
   return createPortal(
     <div
-      className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-sm"
+      className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/50 backdrop-blur-sm"
       onClick={onClose}
     >
-      {/* 外层负责滚动,内层 min-h-full 居中:内容高于视口时从顶部完整滚动,不会被裁切 */}
       <div className="flex min-h-full items-center justify-center p-4 sm:p-6">
         <div
-          className={`fade-up my-6 w-full ${SIZE_CLS[resolved]} rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl`}
+          className={`fade-up my-6 w-full ${SIZE_CLS[resolved]} rounded-2xl border border-slate-100 bg-white p-6 shadow-2xl`}
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-slate-100">{title}</h2>
+          <div className="mb-4 flex items-center justify-between border-b border-slate-100 pb-4">
+            <h2 className="text-lg font-semibold text-slate-800">{title}</h2>
             <button
               onClick={onClose}
-              className="rounded-lg px-2 py-1 text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+              className="rounded-xl p-1.5 text-slate-400 transition-all duration-200 hover:bg-slate-100 hover:text-slate-600 active:scale-95"
             >
-              ✕
+              <X className="h-5 w-5" />
             </button>
           </div>
           {children}
@@ -48,9 +48,12 @@ export default function Modal({ title, onClose, children, size, wide }: Props) {
 }
 
 export const inputCls =
-  'w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none focus:border-sky-500 placeholder:text-slate-600'
-export const labelCls = 'mb-1 block text-xs font-medium text-slate-400'
+  'w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none transition-all duration-200 placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20'
+export const labelCls = 'mb-1 block text-xs font-medium text-slate-500'
+export const formGroupCls = 'rounded-xl border border-slate-100 bg-slate-50 p-4'
 export const btnPrimary =
-  'rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors'
+  'rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm shadow-blue-200 transition-all duration-200 hover:bg-blue-700 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50'
 export const btnGhost =
-  'rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800 transition-colors'
+  'rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700 transition-all duration-200 hover:bg-slate-50 active:scale-95'
+export const btnAi =
+  'rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm shadow-indigo-200 transition-all duration-200 hover:bg-indigo-700 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50'
