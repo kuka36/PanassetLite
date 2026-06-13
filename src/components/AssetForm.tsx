@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { Asset, AssetType, PriceSource } from '../types'
 import { ASSET_TYPE_LABEL } from '../types'
-import { btnGhost, btnPrimary, inputCls, labelCls } from './Modal'
+import { btnGhost, btnPrimary, formGroupCls, inputCls, labelCls } from './Modal'
 
 interface Props {
   initial?: Asset
@@ -89,7 +89,7 @@ export default function AssetForm({ initial, onSubmit, onCancel }: Props) {
       </div>
 
       {canAutoPrice && (
-        <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3 space-y-3">
+        <div className={`${formGroupCls} space-y-3`}>
           <div>
             <label className={labelCls}>行情来源</label>
             <select

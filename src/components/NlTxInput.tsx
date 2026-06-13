@@ -1,9 +1,10 @@
 import { useRef, useState } from 'react'
+import { Sparkles } from 'lucide-react'
 import type { Asset, Settings, Transaction } from '../types'
 import { isLocalLlmBaseUrl } from '../services/llmClient'
 import { parseNaturalLanguageTx, type NlTxParseResult } from '../services/nlTx'
 import { color } from '../theme/colors'
-import { btnGhost, btnPrimary, inputCls } from './Modal'
+import { btnAi, btnGhost, inputCls } from './Modal'
 
 interface Props {
   assets: Asset[]
@@ -70,16 +71,17 @@ export default function NlTxInput({
     <>
       {!embedded && (
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-          <h3 className="text-sm font-medium text-slate-200">自然语言记一笔</h3>
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-4 w-4 text-indigo-600" />
+            <h3 className="text-sm font-medium text-slate-800">自然语言记一笔</h3>
+          </div>
           <span className="text-xs text-slate-500">
             例:今天招商银行存了 2 万 · 支付宝理财更新估值 12 万
           </span>
         </div>
       )}
       {embedded && (
-        <p className="text-xs text-slate-500">
-          用一句话描述这笔交易,AI 解析后请你确认再写入。
-        </p>
+        <p className="text-xs text-slate-500">用一句话描述这笔交易,AI 解析后请你确认再写入。</p>
       )}
       <div className="flex flex-col gap-2 sm:flex-row">
         <input
@@ -97,7 +99,7 @@ export default function NlTxInput({
         />
         <div className="flex shrink-0 gap-2">
           <button
-            className={btnPrimary}
+            className={btnAi}
             disabled={disabled || loading || !canUseLlm || !input.trim()}
             onClick={submit}
           >
@@ -126,7 +128,11 @@ export default function NlTxInput({
   )
 
   if (embedded) return <div className="space-y-3">{body}</div>
-  return <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">{body}</div>
+  return (
+    <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm transition-all duration-200">
+      {body}
+    </div>
+  )
 }
 
 /** 将 NL 解析结果转为 TxForm 可用的 initial */

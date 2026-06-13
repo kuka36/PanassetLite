@@ -1,22 +1,26 @@
 /**
- * 项目唯一调色板 — 与 Tailwind slate/sky/red/emerald/amber 系对齐。
- * ECharts、inline style、CSS 变量均从此取值;UI 优先用语义 class 常量。
+ * 项目唯一调色板 — 浅色主题，与 Tailwind slate/blue/red/green/amber 系对齐。
+ * ECharts、inline style、CSS 变量均从此取值；UI 优先用语义 class 常量。
  */
 export const palette = {
-  bg: '#060a13',
-  surface: '#0f172a',
-  surfaceBorder: '#334155',
-  text: '#e2e8f0',
-  textMuted: '#94a3b8',
-  scrollbar: '#1e293b',
+  bg: '#f8fafc',
+  surface: '#ffffff',
+  surfaceBorder: '#f1f5f9',
+  text: '#334155',
+  textTitle: '#1e293b',
+  textMuted: '#64748b',
+  scrollbar: '#cbd5e1',
   white: '#ffffff',
 
-  sky400: '#38bdf8',
-  sky500: '#0ea5e9',
-  sky600: '#0284c7',
+  blue500: '#3b82f6',
+  blue600: '#2563eb',
+  blue700: '#1d4ed8',
+  indigo600: '#4f46e5',
+  green600: '#16a34a',
+  red500: '#ef4444',
+  red600: '#dc2626',
+  amber500: '#f59e0b',
   emerald400: '#34d399',
-  red400: '#f87171',
-  amber400: '#fbbf24',
   pink400: '#f472b6',
   violet400: '#a78bfa',
   orange400: '#fb923c',
@@ -25,48 +29,51 @@ export const palette = {
 
 /** 资产类别色(ECharts 圆点、饼图等) */
 export const assetTypeHex = {
-  cash: palette.sky400,
-  wealth: palette.emerald400,
+  cash: palette.blue500,
+  wealth: palette.green600,
   stock: palette.pink400,
   fund: palette.violet400,
-  crypto: palette.amber400,
+  crypto: palette.amber500,
   property: palette.orange400,
-  debt: palette.red400,
+  debt: palette.red500,
   other: palette.slate400,
 } as const
 
 /** Tailwind 语义色 class(盈亏、状态、交互) */
 export const color = {
-  pnlUp: 'text-red-400',
-  pnlDown: 'text-emerald-400',
-  pnlFlat: 'text-slate-400',
-  stale: 'text-amber-400',
+  pnlUp: 'text-red-600',
+  pnlDown: 'text-green-600',
+  pnlFlat: 'text-slate-500',
+  stale: 'text-amber-600',
   muted: 'text-slate-500',
-  link: 'text-sky-400',
-  error: 'text-red-400',
-  danger: 'text-red-400/80',
-  accent: 'text-sky-400',
+  link: 'text-blue-600',
+  error: 'text-red-600',
+  danger: 'text-red-600',
+  accent: 'text-blue-600',
+  ai: 'text-indigo-600',
 
-  alertWarn: 'rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300',
-  alertInfo: 'rounded-lg border border-sky-500/30 bg-sky-500/10 px-4 py-2 text-sm text-sky-300',
+  alertWarn:
+    'rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-xs text-amber-700',
+  alertInfo:
+    'rounded-xl border border-blue-100 bg-blue-50 px-4 py-2 text-sm text-blue-700',
   btnDanger:
-    'rounded-lg border border-red-500/40 px-4 py-2 text-sm text-red-400 hover:bg-red-500/10',
+    'rounded-xl border border-red-200 px-4 py-2 text-sm text-red-600 transition-all duration-200 hover:bg-red-50 active:scale-95',
 } as const
 
 /** AI 顾问洞察卡片边框/背景 */
 export const insightLevelCls = {
-  danger: 'border-red-500/30 bg-red-500/5',
-  warn: 'border-amber-500/30 bg-amber-500/5',
-  info: 'border-sky-500/30 bg-sky-500/5',
-  good: 'border-emerald-500/30 bg-emerald-500/5',
+  danger: 'border-red-100 bg-red-50',
+  warn: 'border-amber-100 bg-amber-50',
+  info: 'border-blue-100 bg-blue-50',
+  good: 'border-green-100 bg-green-50',
 } as const
 
 /** 健康评分仪表盘颜色 */
 export function healthScoreHex(score: number): string {
-  if (score >= 85) return palette.emerald400
-  if (score >= 70) return palette.sky400
-  if (score >= 55) return palette.amber400
-  return palette.red400
+  if (score >= 85) return palette.green600
+  if (score >= 70) return palette.blue600
+  if (score >= 55) return palette.amber500
+  return palette.red500
 }
 
 /** hex → rgba,供 ECharts 渐变 */

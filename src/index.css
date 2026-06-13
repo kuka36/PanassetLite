@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 :root {
-  font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui,
+  font-family: Inter, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui,
     -apple-system, sans-serif;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -11,8 +11,8 @@
 /* 与 src/theme/colors.ts 的 palette 保持同步 */
 body {
   margin: 0;
-  background: #060a13; /* palette.bg */
-  color: #e2e8f0; /* palette.text */
+  background: #f8fafc; /* palette.bg */
+  color: #334155; /* palette.text */
 }
 
 ::-webkit-scrollbar {
@@ -20,7 +20,7 @@ body {
   height: 8px;
 }
 ::-webkit-scrollbar-thumb {
-  background: #1e293b; /* palette.scrollbar */
+  background: #cbd5e1; /* palette.scrollbar */
   border-radius: 4px;
 }
 ::-webkit-scrollbar-track {
@@ -30,7 +30,7 @@ body {
 input,
 select,
 textarea {
-  color-scheme: dark;
+  color-scheme: light;
 }
 
 @keyframes fadeUp {
@@ -45,4 +45,16 @@ textarea {
 }
 .fade-up {
   animation: fadeUp 0.25s ease both;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.animate-fade-in {
+  animation: fadeIn 0.25s ease both;
 }

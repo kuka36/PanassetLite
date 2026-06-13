@@ -3,6 +3,7 @@ import { useStore } from '../store'
 import { StorageService } from '../services/storage'
 import { fetchFxRates } from '../services/prices'
 import { buildDemoData } from '../demoData'
+import { Card, CardBody, CardHeader } from '../components/ui/Card'
 import { btnGhost, btnPrimary, inputCls, labelCls } from '../components/Modal'
 import { color } from '../theme/colors'
 
@@ -85,7 +86,7 @@ export default function Settings() {
 
   return (
     <div className="max-w-3xl space-y-6">
-      <h1 className="text-xl font-semibold text-slate-100">设置</h1>
+      <h1 className="text-xl font-semibold text-slate-800">设置</h1>
       {msg && <p className={color.alertInfo}>{msg}</p>}
 
       <Section
@@ -106,9 +107,13 @@ export default function Settings() {
             </div>
           ))}
         </div>
-        <div className="mt-3 flex items-center gap-2">
-          <button className={btnPrimary} onClick={saveFx}>保存汇率</button>
-          <button className={btnGhost} onClick={autoFx}>自动获取最新汇率</button>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <button className={btnPrimary} onClick={saveFx}>
+            保存汇率
+          </button>
+          <button className={btnGhost} onClick={autoFx}>
+            自动获取最新汇率
+          </button>
           {settings.fxUpdatedAt && (
             <span className="text-xs text-slate-500">
               上次更新:{new Date(settings.fxUpdatedAt).toLocaleString('zh-CN')}
@@ -174,10 +179,10 @@ export default function Settings() {
               />
             </div>
           </div>
-          <label className="mt-2 flex cursor-pointer items-start gap-2 text-sm text-slate-300">
+          <label className="mt-2 flex cursor-pointer items-start gap-2 text-sm text-slate-700">
             <input
               type="checkbox"
-              className="mt-0.5 accent-sky-500"
+              className="mt-0.5 accent-indigo-600"
               checked={llmSendAssetNames}
               onChange={(e) => setLlmSendAssetNames(e.target.checked)}
             />
@@ -205,13 +210,16 @@ export default function Settings() {
         desc="所有数据仅保存在当前浏览器的 LocalStorage 中。换设备或清缓存前,请先导出备份。"
       >
         <div className="flex flex-wrap gap-2">
-          <button className={btnPrimary} onClick={exportData}>导出备份(JSON)</button>
-          <button className={btnGhost} onClick={() => fileRef.current?.click()}>导入备份</button>
-          <button className={btnGhost} onClick={loadDemo}>加载演示数据</button>
-          <button
-            className={color.btnDanger}
-            onClick={clearAll}
-          >
+          <button className={btnPrimary} onClick={exportData}>
+            导出备份(JSON)
+          </button>
+          <button className={btnGhost} onClick={() => fileRef.current?.click()}>
+            导入备份
+          </button>
+          <button className={btnGhost} onClick={loadDemo}>
+            加载演示数据
+          </button>
+          <button className={color.btnDanger} onClick={clearAll}>
             清空全部数据
           </button>
           <input
@@ -228,7 +236,7 @@ export default function Settings() {
         </div>
       </Section>
 
-      <p className="pb-6 text-center text-xs text-slate-600">
+      <p className="pb-6 text-center text-xs text-slate-400">
         PanassetLite · 本地优先 · 隐私至上 —— 不注册、不上传,你的财务数据只属于你。
       </p>
     </div>
@@ -237,10 +245,12 @@ export default function Settings() {
 
 function Section({ title, desc, children }: { title: string; desc: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
-      <h3 className="text-sm font-medium text-slate-200">{title}</h3>
-      <p className="mb-4 mt-1 text-xs leading-relaxed text-slate-500">{desc}</p>
-      {children}
-    </div>
+    <Card>
+      <CardHeader>
+        <h3 className="text-sm font-medium text-slate-800">{title}</h3>
+        <p className="mt-1 text-xs leading-relaxed text-slate-500">{desc}</p>
+      </CardHeader>
+      <CardBody className="pt-4">{children}</CardBody>
+    </Card>
   )
 }

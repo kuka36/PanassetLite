@@ -3,6 +3,7 @@ import { useStore } from '../store'
 import Modal, { btnPrimary, inputCls } from '../components/Modal'
 import NlTxInput, { nlResultToTxInitial } from '../components/NlTxInput'
 import TxForm from '../components/TxForm'
+import { Card, CardBody } from '../components/ui/Card'
 import type { Transaction } from '../types'
 import { TX_TYPE_LABEL } from '../types'
 import type { NlTxParseResult } from '../services/nlTx'
@@ -36,9 +37,9 @@ export default function Transactions() {
   )
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-xl font-semibold text-slate-100">交易流水</h1>
+        <h1 className="text-xl font-semibold text-slate-800">交易流水</h1>
         <div className="flex items-center gap-3">
           <select
             className={`${inputCls} w-48`}
@@ -52,7 +53,11 @@ export default function Transactions() {
               </option>
             ))}
           </select>
-          <button className={btnPrimary} onClick={() => setModal({ kind: 'add' })} disabled={assets.length === 0}>
+          <button
+            className={btnPrimary}
+            onClick={() => setModal({ kind: 'add' })}
+            disabled={assets.length === 0}
+          >
             + 记一笔
           </button>
         </div>
@@ -66,65 +71,91 @@ export default function Transactions() {
         onManual={() => setModal({ kind: 'add' })}
       />
 
-      <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/60">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-slate-800 text-left text-xs text-slate-500">
-              <th className="px-4 py-3 font-normal">日期</th>
-              <th className="px-3 py-3 font-normal">资产</th>
-              <th className="px-3 py-3 font-normal">类型</th>
-              <th className="px-3 py-3 font-normal text-right">明细</th>
-              <th className="px-3 py-3 font-normal">备注</th>
-              <th className="px-4 py-3 font-normal text-right"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((t) => {
-              const asset = assetMap.get(t.assetId)
-              const cur = asset?.currency ?? ''
-              return (
-                <tr key={t.id} className="border-t border-slate-800/60 hover:bg-slate-800/30">
-                  <td className="px-4 py-2.5 tabular-nums text-slate-400">{t.date}</td>
-                  <td className="px-3 py-2.5 text-slate-200">{asset?.name ?? '(已删除)'}</td>
-                  <td className="px-3 py-2.5 text-slate-300">{TX_TYPE_LABEL[t.type]}</td>
-                  <td className="px-3 py-2.5 text-right tabular-nums text-slate-300">
-                    {t.quantity != null && t.price != null
-                      ? `${fmtNum(t.quantity)} × ${fmtNum(t.price)} ${cur}`
-                      : t.amount != null
-                        ? `${fmtNum(t.amount, 2)} ${cur}`
-                        : t.value != null
-                          ? `市值 ${fmtNum(t.value, 2)} ${cur}`
-                          : '—'}
-                  </td>
-                  <td className="max-w-40 truncate px-3 py-2.5 text-xs text-slate-500">{t.note}</td>
-                  <td className="px-4 py-2.5 text-right">
-                    <button
-                      className="mr-3 text-xs text-sky-400 hover:underline"
-                      onClick={() => setModal({ kind: 'edit', tx: t })}
-                    >
-                      编辑
-                    </button>
-                    <button
-                      className="text-xs text-slate-500 hover:text-red-400"
-                      onClick={() => {
-                        if (confirm('删除这条记录?')) deleteTransaction(t.id)
-                      }}
-                    >
-                      删除
-                    </button>
+      {/* 桌面端表格 */}
+      <Card className="hidden overflow-hidden md:block">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-slate-100 text-left text-xs text-slate-500">
+                <th className="px-4 py-3 font-medium">日期</th>
+                <th className="px-3 py-3 font-medium">资产</th>
+                <th className="px-3 py-3 font-medium">类型</th>
+                <th className="px-3 py-3 font-medium text-right">明细</th>
+                <th className="px-3 py-3 font-medium">备注</th>
+                <th className="px-4 py-3 font-medium text-right"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((t) => {
+                const asset = assetMap.get(t.assetId)
+                const cur = asset?.currency ?? ''
+                return (
+                  <tr
+                    key={t.id}
+                    className="border-t border-slate-100 transition-colors duration-200 hover:bg-slate-50/50"
+                  >
+                    <td className="px-4 py-2.5 tabular-nums text-slate-500">{t.date}</td>
+                    <td className="px-3 py-2.5 text-slate-700">{asset?.name ?? '(已删除)'}</td>
+                    <td className="px-3 py-2.5">
+                      <span className="rounded-full border border-slate-100 bg-slate-50 px-2 py-0.5 text-xs text-slate-600">
+                        {TX_TYPE_LABEL[t.type]}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2.5 text-right tabular-nums text-slate-700">
+                      {formatDetail(t, cur)}
+                    </td>
+                    <td className="max-w-40 truncate px-3 py-2.5 text-xs text-slate-500">
+                      {t.note}
+                    </td>
+                    <td className="px-4 py-2.5 text-right">
+                      <TxActions t={t} onEdit={() => setModal({ kind: 'edit', tx: t })} onDelete={() => deleteTransaction(t.id)} />
+                    </td>
+                  </tr>
+                )
+              })}
+              {rows.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="px-4 py-12 text-center text-slate-500">
+                    暂无记录。所有财务状态都由这里的事件流计算得出 —— 买入、卖出、存取、估值更新。
                   </td>
                 </tr>
-              )
-            })}
-            {rows.length === 0 && (
-              <tr>
-                <td colSpan={6} className="px-4 py-12 text-center text-slate-500">
-                  暂无记录。所有财务状态都由这里的事件流计算得出 —— 买入、卖出、存取、估值更新。
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      {/* 移动端卡片列表 */}
+      <div className="space-y-3 md:hidden">
+        {rows.map((t) => {
+          const asset = assetMap.get(t.assetId)
+          const cur = asset?.currency ?? ''
+          return (
+            <Card key={t.id}>
+              <CardBody className="space-y-2">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <p className="font-medium text-slate-800">{asset?.name ?? '(已删除)'}</p>
+                    <p className="text-xs text-slate-500">{t.date}</p>
+                  </div>
+                  <span className="shrink-0 rounded-full border border-slate-100 bg-slate-50 px-2 py-0.5 text-xs text-slate-600">
+                    {TX_TYPE_LABEL[t.type]}
+                  </span>
+                </div>
+                <p className="text-sm tabular-nums text-slate-700">{formatDetail(t, cur)}</p>
+                {t.note && <p className="text-xs text-slate-500">{t.note}</p>}
+                <div className="flex justify-end pt-1">
+                  <TxActions t={t} onEdit={() => setModal({ kind: 'edit', tx: t })} onDelete={() => deleteTransaction(t.id)} />
+                </div>
+              </CardBody>
+            </Card>
+          )
+        })}
+        {rows.length === 0 && (
+          <p className="py-12 text-center text-sm text-slate-500">
+            暂无记录。所有财务状态都由这里的事件流计算得出 —— 买入、卖出、存取、估值更新。
+          </p>
+        )}
       </div>
 
       {modal?.kind === 'nlConfirm' && (
@@ -176,5 +207,40 @@ export default function Transactions() {
         </Modal>
       )}
     </div>
+  )
+}
+
+function formatDetail(t: Transaction, cur: string): string {
+  if (t.quantity != null && t.price != null) return `${fmtNum(t.quantity)} × ${fmtNum(t.price)} ${cur}`
+  if (t.amount != null) return `${fmtNum(t.amount, 2)} ${cur}`
+  if (t.value != null) return `市值 ${fmtNum(t.value, 2)} ${cur}`
+  return '—'
+}
+
+function TxActions({
+  onEdit,
+  onDelete,
+}: {
+  t: Transaction
+  onEdit: () => void
+  onDelete: () => void
+}) {
+  return (
+    <>
+      <button
+        className="mr-3 text-xs text-blue-600 transition-colors hover:text-blue-700"
+        onClick={onEdit}
+      >
+        编辑
+      </button>
+      <button
+        className="text-xs text-slate-500 transition-colors hover:text-red-600"
+        onClick={() => {
+          if (confirm('删除这条记录?')) onDelete()
+        }}
+      >
+        删除
+      </button>
+    </>
   )
 }

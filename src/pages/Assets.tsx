@@ -5,6 +5,7 @@ import Modal, { btnGhost, btnPrimary } from '../components/Modal'
 import AssetForm from '../components/AssetForm'
 import NlTxInput, { nlResultToTxInitial } from '../components/NlTxInput'
 import TxForm from '../components/TxForm'
+import { Card, CardHeader } from '../components/ui/Card'
 import type { NlTxParseResult } from '../services/nlTx'
 import type { Asset, AssetSnapshot, AssetType, Transaction, TxLedgerRow, TxType } from '../types'
 import { ASSET_TYPE_COLOR, ASSET_TYPE_LABEL, TX_TYPE_LABEL, isQuantityBased } from '../types'
@@ -59,7 +60,7 @@ export default function Assets() {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-xl font-semibold text-slate-100">资产</h1>
+        <h1 className="text-xl font-semibold text-slate-800">资产</h1>
         <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           <button
             className={btnGhost}
@@ -81,84 +82,68 @@ export default function Assets() {
       )}
 
       {groups.map(([type, snaps]) => (
-        <div key={type} className="rounded-2xl border border-slate-800 bg-slate-900/60">
-          <div className="flex items-center gap-2 border-b border-slate-800 px-4 py-3">
-            <span className="h-2.5 w-2.5 rounded-full" style={{ background: ASSET_TYPE_COLOR[type] }} />
-            <h3 className="text-sm font-medium text-slate-300">{ASSET_TYPE_LABEL[type]}</h3>
-            <span className="ml-auto text-sm tabular-nums text-slate-400">
-              {fmtMoney(snaps.reduce((s, x) => s + x.valueCNY, 0))}
-            </span>
-          </div>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-xs text-slate-500">
-                <th className="px-4 py-2 font-normal">名称</th>
-                <th className="px-2 py-2 font-normal text-right">持有</th>
-                <th className="px-2 py-2 font-normal text-right">市值</th>
-                <th className="px-2 py-2 font-normal text-right">累计盈亏</th>
-                <th className="px-2 py-2 font-normal text-right">年化(XIRR)</th>
-                <th className="px-2 py-2 font-normal text-right">近期年化</th>
-                <th className="px-2 py-2 font-normal text-right">更新于</th>
-                <th className="px-4 py-2 font-normal text-right">操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              {snaps.map((s) => (
-                <tr
-                  key={s.asset.id}
-                  className="cursor-pointer border-t border-slate-800/60 hover:bg-slate-800/40"
-                  onClick={() => setModal({ kind: 'detail', assetId: s.asset.id })}
-                >
-                  <td className="px-4 py-2.5">
-                    <div className="text-slate-200">{s.asset.name}</div>
-                    <div className="text-xs text-slate-500">
-                      {s.asset.platform}
-                      {s.asset.currency !== 'CNY' && ` · ${s.asset.currency}`}
-                      {s.asset.priceSource !== 'manual' && ' · 自动行情'}
-                    </div>
-                  </td>
-                  <td className="px-2 py-2.5 text-right tabular-nums text-slate-400">
-                    {s.quantity > 0 ? fmtNum(s.quantity) : '—'}
-                  </td>
-                  <td className="px-2 py-2.5 text-right tabular-nums text-slate-200">
-                    {fmtMoney(s.valueCNY)}
-                  </td>
-                  <td className={`px-2 py-2.5 text-right tabular-nums ${pnlColor(s.totalPnlCNY)}`}>
-                    {type === 'debt' ? '—' : `${s.totalPnlCNY > 0 ? '+' : ''}${fmtMoney(s.totalPnlCNY)}`}
-                  </td>
-                  <td className={`px-2 py-2.5 text-right tabular-nums ${s.xirr != null ? pnlColor(s.xirr) : 'text-slate-500'}`}>
-                    {s.xirr != null ? fmtPct(s.xirr) : '—'}
-                  </td>
-                  <td className={`px-2 py-2.5 text-right tabular-nums ${s.recentAnnualized != null ? pnlColor(s.recentAnnualized) : 'text-slate-500'}`}>
-                    {s.recentAnnualized != null ? fmtPct(s.recentAnnualized) : '—'}
-                  </td>
-                  <td
-                    className={`px-2 py-2.5 text-right text-xs tabular-nums ${staleUpdateCls(s.lastUpdated)}`}
-                    title={
-                      isUpdateStale(s.lastUpdated) ? '已超过一个月未更新,建议更新估值' : undefined
-                    }
-                  >
-                    {s.lastUpdated ?? '—'}
-                  </td>
-                  <td className="px-4 py-2.5 text-right" onClick={(e) => e.stopPropagation()}>
-                    <button
-                      className="rounded-md px-2 py-1 text-xs text-sky-400 hover:bg-slate-800"
-                      onClick={() => setModal({ kind: 'nlTx', asset: s.asset })}
-                    >
-                      记一笔
-                    </button>
-                    <button
-                      className="rounded-md px-2 py-1 text-xs text-slate-400 hover:bg-slate-800"
-                      onClick={() => setModal({ kind: 'tx', asset: s.asset, defaultType: 'VALUATION' })}
-                    >
-                      更新估值
-                    </button>
-                  </td>
+        <Card key={type}>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <span
+                className="h-2.5 w-2.5 rounded-full"
+                style={{ background: ASSET_TYPE_COLOR[type] }}
+              />
+              <h3 className="text-sm font-medium text-slate-700">{ASSET_TYPE_LABEL[type]}</h3>
+              <span className="ml-auto text-sm tabular-nums text-slate-600">
+                {fmtMoney(snaps.reduce((s, x) => s + x.valueCNY, 0))}
+              </span>
+            </div>
+          </CardHeader>
+
+          {/* 桌面端表格 */}
+          <div className="hidden overflow-x-auto md:block">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-100 text-left text-xs text-slate-500">
+                  <th className="px-4 py-2 font-medium">名称</th>
+                  <th className="px-2 py-2 font-medium text-right">持有</th>
+                  <th className="px-2 py-2 font-medium text-right">市值</th>
+                  <th className="px-2 py-2 font-medium text-right">累计盈亏</th>
+                  <th className="px-2 py-2 font-medium text-right">年化(XIRR)</th>
+                  <th className="px-2 py-2 font-medium text-right">近期年化</th>
+                  <th className="px-2 py-2 font-medium text-right">更新于</th>
+                  <th className="px-4 py-2 font-medium text-right">操作</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {snaps.map((s) => (
+                  <AssetTableRow
+                    key={s.asset.id}
+                    snap={s}
+                    type={type}
+                    onOpen={() => setModal({ kind: 'detail', assetId: s.asset.id })}
+                    onNlTx={() => setModal({ kind: 'nlTx', asset: s.asset })}
+                    onValuation={() =>
+                      setModal({ kind: 'tx', asset: s.asset, defaultType: 'VALUATION' })
+                    }
+                  />
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* 移动端卡片 */}
+          <div className="space-y-2 p-4 md:hidden">
+            {snaps.map((s) => (
+              <AssetMobileCard
+                key={s.asset.id}
+                snap={s}
+                type={type}
+                onOpen={() => setModal({ kind: 'detail', assetId: s.asset.id })}
+                onNlTx={() => setModal({ kind: 'nlTx', asset: s.asset })}
+                onValuation={() =>
+                  setModal({ kind: 'tx', asset: s.asset, defaultType: 'VALUATION' })
+                }
+              />
+            ))}
+          </div>
+        </Card>
       ))}
 
       {modal?.kind === 'add' && (
@@ -225,10 +210,7 @@ export default function Assets() {
             原文:「{modal.rawInput}」{!modal.asset && ' — 请核对字段后记录'}
           </p>
           {modal.result.warnings.map((w) => (
-            <p
-              key={w}
-              className={`mb-2 ${color.alertWarn}`}
-            >
+            <p key={w} className={`mb-2 ${color.alertWarn}`}>
               {w}
             </p>
           ))}
@@ -297,6 +279,129 @@ export default function Assets() {
   )
 }
 
+function AssetTableRow({
+  snap: s,
+  type,
+  onOpen,
+  onNlTx,
+  onValuation,
+}: {
+  snap: AssetSnapshot
+  type: AssetType
+  onOpen: () => void
+  onNlTx: () => void
+  onValuation: () => void
+}) {
+  return (
+    <tr
+      className="cursor-pointer border-t border-slate-100 transition-colors duration-200 hover:bg-slate-50/50"
+      onClick={onOpen}
+    >
+      <td className="px-4 py-2.5">
+        <div className="text-slate-700">{s.asset.name}</div>
+        <div className="text-xs text-slate-500">
+          {s.asset.platform}
+          {s.asset.currency !== 'CNY' && ` · ${s.asset.currency}`}
+          {s.asset.priceSource !== 'manual' && ' · 自动行情'}
+        </div>
+      </td>
+      <td className="px-2 py-2.5 text-right tabular-nums text-slate-500">
+        {s.quantity > 0 ? fmtNum(s.quantity) : '—'}
+      </td>
+      <td className="px-2 py-2.5 text-right tabular-nums text-slate-700">{fmtMoney(s.valueCNY)}</td>
+      <td className={`px-2 py-2.5 text-right tabular-nums ${pnlColor(s.totalPnlCNY)}`}>
+        {type === 'debt' ? '—' : `${s.totalPnlCNY > 0 ? '+' : ''}${fmtMoney(s.totalPnlCNY)}`}
+      </td>
+      <td
+        className={`px-2 py-2.5 text-right tabular-nums ${s.xirr != null ? pnlColor(s.xirr) : 'text-slate-500'}`}
+      >
+        {s.xirr != null ? fmtPct(s.xirr) : '—'}
+      </td>
+      <td
+        className={`px-2 py-2.5 text-right tabular-nums ${s.recentAnnualized != null ? pnlColor(s.recentAnnualized) : 'text-slate-500'}`}
+      >
+        {s.recentAnnualized != null ? fmtPct(s.recentAnnualized) : '—'}
+      </td>
+      <td
+        className={`px-2 py-2.5 text-right text-xs tabular-nums ${staleUpdateCls(s.lastUpdated)}`}
+        title={isUpdateStale(s.lastUpdated) ? '已超过一个月未更新,建议更新估值' : undefined}
+      >
+        {s.lastUpdated ?? '—'}
+      </td>
+      <td className="px-4 py-2.5 text-right" onClick={(e) => e.stopPropagation()}>
+        <button
+          className="rounded-lg px-2 py-1 text-xs text-blue-600 transition-colors hover:bg-blue-50"
+          onClick={onNlTx}
+        >
+          记一笔
+        </button>
+        <button
+          className="rounded-lg px-2 py-1 text-xs text-slate-500 transition-colors hover:bg-slate-50"
+          onClick={onValuation}
+        >
+          更新估值
+        </button>
+      </td>
+    </tr>
+  )
+}
+
+function AssetMobileCard({
+  snap: s,
+  type,
+  onOpen,
+  onNlTx,
+  onValuation,
+}: {
+  snap: AssetSnapshot
+  type: AssetType
+  onOpen: () => void
+  onNlTx: () => void
+  onValuation: () => void
+}) {
+  return (
+    <div
+      className="rounded-xl border border-slate-100 bg-slate-50/50 p-3 transition-colors duration-200 active:bg-slate-50"
+      onClick={onOpen}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <p className="font-medium text-slate-800">{s.asset.name}</p>
+          <p className="text-xs text-slate-500">
+            {s.asset.platform}
+            {s.asset.currency !== 'CNY' && ` · ${s.asset.currency}`}
+          </p>
+        </div>
+        <p className="text-sm font-semibold tabular-nums text-slate-800">{fmtMoney(s.valueCNY)}</p>
+      </div>
+      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs">
+        {type !== 'debt' && (
+          <span className={pnlColor(s.totalPnlCNY)}>
+            盈亏 {s.totalPnlCNY > 0 ? '+' : ''}
+            {fmtMoney(s.totalPnlCNY)}
+          </span>
+        )}
+        {s.xirr != null && <span className={pnlColor(s.xirr)}>XIRR {fmtPct(s.xirr)}</span>}
+        <span className={staleUpdateCls(s.lastUpdated)}>更新 {s.lastUpdated ?? '—'}</span>
+      </div>
+      <div className="mt-2 flex gap-2" onClick={(e) => e.stopPropagation()}>
+        <button
+          className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-blue-600"
+          onClick={onNlTx}
+        >
+          记一笔
+        </button>
+        <button
+          className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600"
+          onClick={onValuation}
+        >
+          更新估值
+        </button>
+      </div>
+    </div>
+  )
+}
+
 function AssetDetail({
   assetId,
   onClose,
@@ -318,10 +423,7 @@ function AssetDetail({
   const deleteTransaction = useStore((s) => s.deleteTransaction)
   const snap = summary.snapshots.find((s) => s.asset.id === assetId)
   const asset = snap?.asset
-  const ledger = useMemo(
-    () => (asset ? engine.txLedger(asset) : []),
-    [engine, asset],
-  )
+  const ledger = useMemo(() => (asset ? engine.txLedger(asset) : []), [engine, asset])
   if (!snap || !asset) return null
 
   const qtyBased = isQuantityBased(asset.type)
@@ -338,68 +440,72 @@ function AssetDetail({
           value={asset.type === 'debt' ? '—' : fmtMoney(snap.totalPnlCNY)}
           cls={pnlColor(snap.totalPnlCNY)}
         />
-        <Mini label="年化 XIRR" value={snap.xirr != null ? fmtPct(snap.xirr) : '—'} cls={snap.xirr != null ? pnlColor(snap.xirr) : ''} />
+        <Mini
+          label="年化 XIRR"
+          value={snap.xirr != null ? fmtPct(snap.xirr) : '—'}
+          cls={snap.xirr != null ? pnlColor(snap.xirr) : ''}
+        />
         <Mini
           label={snap.quantity > 0 ? '持有数量' : '净投入'}
           value={snap.quantity > 0 ? fmtNum(snap.quantity) : fmtMoney(snap.netInvestedCNY)}
         />
       </div>
 
-      <div className="mb-4 max-h-[min(50vh,28rem)] overflow-x-auto overflow-y-auto rounded-xl border border-slate-800">
+      <div className="mb-4 max-h-[min(50vh,28rem)] overflow-x-auto overflow-y-auto rounded-xl border border-slate-100">
         <table className="w-full text-sm">
-          <thead className="sticky top-0 bg-slate-900">
-            <tr className="text-left text-xs text-slate-500">
-              <th className="px-3 py-2 font-normal">日期</th>
-              <th className="px-3 py-2 font-normal">类型</th>
+          <thead className="sticky top-0 bg-white">
+            <tr className="border-b border-slate-100 text-left text-xs text-slate-500">
+              <th className="px-3 py-2 font-medium">日期</th>
+              <th className="px-3 py-2 font-medium">类型</th>
               {qtyBased && (
                 <>
-                  <th className="px-3 py-2 font-normal text-right">数量</th>
-                  <th className="px-3 py-2 font-normal text-right">单价</th>
+                  <th className="px-3 py-2 font-medium text-right">数量</th>
+                  <th className="px-3 py-2 font-medium text-right">单价</th>
                 </>
               )}
-              <th className="px-3 py-2 font-normal text-right">发生额</th>
-              {showFx && <th className="px-3 py-2 font-normal text-right">折合 CNY</th>}
-              <th className="px-3 py-2 font-normal text-right">交易后余额</th>
-              <th className="px-3 py-2 font-normal">备注</th>
-              <th className="px-3 py-2 font-normal text-right"></th>
+              <th className="px-3 py-2 font-medium text-right">发生额</th>
+              {showFx && <th className="px-3 py-2 font-medium text-right">折合 CNY</th>}
+              <th className="px-3 py-2 font-medium text-right">交易后余额</th>
+              <th className="px-3 py-2 font-medium">备注</th>
+              <th className="px-3 py-2 font-medium text-right"></th>
             </tr>
           </thead>
           <tbody>
             {ledger.map(({ tx, amountNative, balanceAfter, balanceLabel }) => (
-              <tr key={tx.id} className="border-t border-slate-800/60">
-                <td className="px-3 py-2 tabular-nums text-slate-400">{tx.date}</td>
-                <td className="px-3 py-2 text-slate-300">{TX_TYPE_LABEL[tx.type]}</td>
+              <tr key={tx.id} className="border-t border-slate-100 hover:bg-slate-50/50">
+                <td className="px-3 py-2 tabular-nums text-slate-500">{tx.date}</td>
+                <td className="px-3 py-2 text-slate-700">{TX_TYPE_LABEL[tx.type]}</td>
                 {qtyBased && (
                   <>
-                    <td className="px-3 py-2 text-right tabular-nums text-slate-300">
+                    <td className="px-3 py-2 text-right tabular-nums text-slate-700">
                       {tx.quantity != null ? fmtNum(tx.quantity) : '—'}
                     </td>
-                    <td className="px-3 py-2 text-right tabular-nums text-slate-300">
+                    <td className="px-3 py-2 text-right tabular-nums text-slate-700">
                       {tx.price != null ? `${fmtNum(tx.price)} ${asset.currency}` : '—'}
                     </td>
                   </>
                 )}
-                <td className="px-3 py-2 text-right tabular-nums text-slate-300">
+                <td className="px-3 py-2 text-right tabular-nums text-slate-700">
                   {formatTxAmount(amountNative, asset.currency)}
                 </td>
                 {showFx && (
-                  <td className="px-3 py-2 text-right tabular-nums text-slate-400">
+                  <td className="px-3 py-2 text-right tabular-nums text-slate-500">
                     {amountNative != null ? fmtMoney(amountNative * fx) : '—'}
                   </td>
                 )}
-                <td className="px-3 py-2 text-right tabular-nums text-slate-300">
+                <td className="px-3 py-2 text-right tabular-nums text-slate-700">
                   {formatTxBalance(balanceAfter, balanceLabel, asset.currency)}
                 </td>
                 <td className="max-w-32 truncate px-3 py-2 text-xs text-slate-500">{tx.note}</td>
                 <td className="px-3 py-2 text-right">
                   <button
-                    className="mr-3 text-xs text-sky-400 hover:underline"
+                    className="mr-3 text-xs text-blue-600 hover:underline"
                     onClick={() => onEditTx(tx)}
                   >
                     编辑
                   </button>
                   <button
-                    className="text-xs text-slate-500 hover:text-red-400"
+                    className="text-xs text-slate-500 hover:text-red-600"
                     onClick={() => {
                       if (confirm('删除这条记录?')) deleteTransaction(tx.id)
                     }}
@@ -420,10 +526,10 @@ function AssetDetail({
         </table>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-800 pt-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4">
         <button
           type="button"
-          className="text-sm text-red-400/80 transition-colors hover:text-red-400"
+          className="text-sm text-red-600 transition-colors hover:text-red-700"
           onClick={() => onDelete(asset)}
         >
           删除资产
@@ -455,9 +561,9 @@ function formatTxBalance(
   return `${fmtNum(balance, 2)} ${currency}`
 }
 
-function Mini({ label, value, cls = 'text-slate-200' }: { label: string; value: string; cls?: string }) {
+function Mini({ label, value, cls = 'text-slate-800' }: { label: string; value: string; cls?: string }) {
   return (
-    <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+    <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
       <p className="text-xs text-slate-500">{label}</p>
       <p className={`mt-0.5 text-sm font-semibold tabular-nums ${cls}`}>{value}</p>
     </div>
