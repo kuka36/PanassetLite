@@ -21,16 +21,16 @@ jobs:
       PR_NUMBER: ${{ github.event.pull_request.number }}
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
-      - name: Configure gh auth
-        run: |
-          source .agent/harness/gh-auth.sh
-          echo "GH_TOKEN=${GH_TOKEN}" >> "$GITHUB_ENV"
-
       - name: Checkout PR head
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
+
+      - name: Configure gh auth
+        run: |
+          source .agent/harness/gh-auth.sh
+          echo "GH_TOKEN=${GH_TOKEN}" >> "$GITHUB_ENV"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
