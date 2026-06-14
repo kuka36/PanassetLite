@@ -28,6 +28,12 @@ npm run dev
 
 打开后到「设置 → 加载演示数据」可立即体验全部功能。
 
+## 构建部署
+
+```bash
+npm run build
+```
+
 ## 架构原则
 
 - **Event Sourcing**:所有财务状态由 `src/engine/portfolio.ts` 从交易历史计算

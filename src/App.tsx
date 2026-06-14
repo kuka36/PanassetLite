@@ -1,4 +1,5 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { initAnalytics, reportPageView } from './services/analytics'
 import {
   ArrowLeftRight,
   ChevronLeft,
@@ -44,8 +45,13 @@ export default function App() {
   const addAssistantMessage = useAssistantStore((s) => s.addMessage)
   const toggleAssistant = useAssistantStore((s) => s.toggle)
 
+  useEffect(() => {
+    initAnalytics('dashboard')
+  }, [])
+
   const goTo = useCallback((id: PageId) => {
     setPage(id)
+    reportPageView(id)
     setMobileOpen(false)
   }, [])
 
