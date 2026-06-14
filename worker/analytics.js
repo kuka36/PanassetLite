@@ -6,10 +6,12 @@
  *   session:{sid}          → 活跃会话，TTL 5 分钟（心跳续期）
  *   hit:{ts}:{sid_prefix}  → 历史访问记录，TTL 30 天
  *   counter:total          → 累积总访问数（永久）
- *   counter:day:{YYYY-MM-DD} → 每日访问数，TTL 366 天
+ *   counter:day:{YYYY-MM-DD} → 每日访问数，TTL 365 天
  */
 
 const ALLOWED_ORIGIN = 'https://kuka36.github.io';
+/** KV expirationTtl 上限为 365 天（秒） */
+const DAY_COUNTER_TTL = 31536000;
 
 const CORS = (origin) => ({
   'Access-Control-Allow-Origin': origin === ALLOWED_ORIGIN ? ALLOWED_ORIGIN : '',
@@ -48,10 +50,17 @@ function todayKey() {
   return new Date().toISOString().slice(0, 10); // YYYY-MM-DD (UTC)
 }
 
+async function kvPut(env, key, value, ttl) {
+  if (ttl) {
+    await env.KV.put(key, value, { expirationTtl: ttl });
+  } else {
+    await env.KV.put(key, value);
+  }
+}
+
 async function increment(env, key, ttl) {
   const cur = parseInt((await env.KV.get(key)) || '0', 10);
-  const opts = ttl ? { expirationTtl: ttl } : undefined;
-  await env.KV.put(key, String(cur + 1), opts);
+  await kvPut(env, key, String(cur + 1), ttl);
   return cur + 1;
 }
 
@@ -75,41 +84,47 @@ export default {
 
     // ── /hit  记录一次访问 / 心跳 ──────────────────────
     if (url.pathname === '/hit') {
-      const sid     = url.searchParams.get('sid') || crypto.randomUUID();
-      const path    = url.searchParams.get('p')   || '/';
-      const ref     = url.searchParams.get('r')   || '';
-      const country = request.cf?.country          || '?';
-      const ua      = request.headers.get('user-agent') || '';
-      const ts      = Date.now();
-      const { device, browser, os } = parseUA(ua);
+      const debug = url.searchParams.get('debug') === '1';
+      try {
+        if (!env.KV) throw new Error('KV binding missing');
 
-      const sessionData = { path, ref, country, device, browser, os, ts };
+        const sid     = url.searchParams.get('sid') || crypto.randomUUID();
+        const path    = url.searchParams.get('p')   || '/';
+        const ref     = url.searchParams.get('r')   || '';
+        const country = request.cf?.country          || '?';
+        const ua      = request.headers.get('user-agent') || '';
+        const ts      = Date.now();
+        const { device, browser, os } = parseUA(ua);
 
-      // 活跃会话：5 分钟 TTL，心跳续期
-      await env.KV.put(
-        `session:${sid}`,
-        JSON.stringify(sessionData),
-        { expirationTtl: 300 }
-      );
+        const sessionData = { path, ref, country, device, browser, os, ts };
+        const payload = JSON.stringify(sessionData);
 
-      // 首次访问：写历史记录 + 累积计数
-      const isNew = url.searchParams.get('new') === '1';
-      if (isNew) {
-        await Promise.all([
-          // 历史明细，保留 30 天
-          env.KV.put(
-            `hit:${ts}:${sid.slice(0, 8)}`,
-            JSON.stringify(sessionData),
-            { expirationTtl: 86400 * 30 }
-          ),
-          // 累积总量（永久）
-          increment(env, 'counter:total'),
-          // 当日计数（保留 366 天）
-          increment(env, `counter:day:${todayKey()}`, 86400 * 366),
-        ]);
+        // 活跃会话：5 分钟 TTL，心跳续期
+        await kvPut(env, `session:${sid}`, payload, 300);
+
+        // 首次访问：写历史记录 + 累积计数（失败不阻断心跳）
+        const isNew = url.searchParams.get('new') === '1';
+        if (isNew) {
+          const results = await Promise.allSettled([
+            kvPut(env, `hit:${ts}:${sid.slice(0, 8)}`, payload, 86400 * 30),
+            increment(env, 'counter:total'),
+            increment(env, `counter:day:${todayKey()}`, DAY_COUNTER_TTL),
+          ]);
+          const failed = results.filter((r) => r.status === 'rejected');
+          if (failed.length) {
+            console.error('/hit new writes failed:', failed.map((r) => r.reason));
+          }
+        }
+
+        return json({ sid, ok: true }, 200, cors);
+      } catch (err) {
+        console.error('/hit failed:', err);
+        const body = debug
+          ? { ok: false, error: err instanceof Error ? err.message : String(err) }
+          : { ok: false };
+        // 统计为尽力而为：避免前端网络面板持续报 500
+        return json(body, 200, cors);
       }
-
-      return json({ sid }, 200, cors);
     }
 
     // ── /leave  主动离线 ───────────────────────────────
@@ -259,6 +274,12 @@ function fmt(ts){
   return new Date(ts).toLocaleString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'});
 }
 function deviceTag(d){return '<span class="tag '+d+'">'+d+'</span>';}
+const PAGE_LABEL={dashboard:'总览',assets:'资产',transactions:'流水',settings:'设置'};
+function fmtPage(p){
+  const m=p.match(/(?:#\\/|\\/)([^/]+)$/);
+  const id=m?m[1]:'';
+  return PAGE_LABEL[id]?PAGE_LABEL[id]+' <span class="ts">'+p+'</span>':p;
+}
 
 function renderTrend(trend){
   const max=Math.max(...trend.map(t=>t.count),1);
@@ -290,7 +311,7 @@ async function load(){
     }else{
       sb.innerHTML=d.activeSessions.map(s=>\`<tr>
         <td>\${deviceTag(s.device)}</td><td>\${s.browser}</td><td>\${s.os}</td>
-        <td>\${s.country}</td><td style="color:#38bdf8">\${s.path}</td>
+        <td>\${s.country}</td><td style="color:#38bdf8">\${fmtPage(s.path)}</td>
         <td class="ts">\${fmt(s.ts)}</td>
       </tr>\`).join('');
     }
@@ -299,7 +320,7 @@ async function load(){
     document.getElementById('hits').innerHTML=d.recentHits.map(h=>\`<tr>
       <td class="ts">\${fmt(h.ts)}</td><td>\${deviceTag(h.device)}</td>
       <td>\${h.browser}</td><td>\${h.os}</td>
-      <td>\${h.country}</td><td style="color:#38bdf8">\${h.path}</td>
+      <td>\${h.country}</td><td style="color:#38bdf8">\${fmtPage(h.path)}</td>
     </tr>\`).join('');
   }catch(e){console.error(e);}
 }

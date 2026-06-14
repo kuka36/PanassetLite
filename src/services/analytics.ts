@@ -5,7 +5,7 @@
 
 const WORKER = 'https://panassetlite-analytics.panassetlite.workers.dev'
 const SID_KEY = '__pa_sid'
-const HEARTBEAT_MS = 120_000
+const NEW_KEY = '__pa_new'
 
 let currentPage = ''
 
@@ -18,9 +18,21 @@ function getSid(): string {
   return sid
 }
 
+/** 与 Vite base 对齐的逻辑路径，如 /PanassetLite/dashboard（非 hash，非真实 URL） */
 function pagePath(): string {
-  const base = location.pathname.replace(/\/$/, '') || '/'
-  return currentPage ? `${base}#/${currentPage}` : location.pathname + location.hash
+  const base = import.meta.env.BASE_URL.replace(/\/$/, '')
+  if (!currentPage) return base || '/'
+  return base ? `${base}/${currentPage}` : `/${currentPage}`
+}
+
+function isFirstHitInSession(): boolean {
+  try {
+    if (sessionStorage.getItem(NEW_KEY)) return false
+    sessionStorage.setItem(NEW_KEY, '1')
+    return true
+  } catch {
+    return false
+  }
 }
 
 function hit(isNew: boolean) {
@@ -46,10 +58,9 @@ export function reportPageView(page: string, isNew = false) {
   hit(isNew)
 }
 
-/** 应用启动：首次访问 + 心跳 + 离线 */
+/** 应用启动：本会话首次计为访问，页面切换时由 reportPageView 续期会话 */
 export function initAnalytics(initialPage: string) {
   currentPage = initialPage
-  hit(true)
-  setInterval(() => hit(false), HEARTBEAT_MS)
+  hit(isFirstHitInSession())
   window.addEventListener('pagehide', leave)
 }
