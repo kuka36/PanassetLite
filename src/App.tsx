@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { initAnalytics, reportPageView } from './services/analytics'
 import {
   ArrowLeftRight,
+  BookOpen,
   ChevronLeft,
   ChevronRight,
   LayoutDashboard,
@@ -36,6 +37,7 @@ const SIDEBAR_EXPANDED = 'w-56'
 const SIDEBAR_COLLAPSED = 'w-[4.5rem]'
 const MAIN_EXPANDED = 'md:ml-56'
 const MAIN_COLLAPSED = 'md:ml-[4.5rem]'
+const ABOUT_URL = 'https://mp.weixin.qq.com/s/du0wh1As2s-casSadFAgZQ'
 
 export default function App() {
   const [page, setPage] = useState<PageId>('dashboard')
@@ -155,13 +157,30 @@ export default function App() {
           })}
         </nav>
 
-        {!collapsed && (
-          <p className="px-4 pb-4 text-[10px] leading-relaxed text-slate-400">
-            数据仅存于本地浏览器
-            <br />
-            无注册 · 无上传 · 隐私至上
-          </p>
-        )}
+        <div className={`${collapsed ? 'mx-3 mb-2' : 'px-4 pb-2'} text-[10px] leading-relaxed text-slate-400`}>
+          {!collapsed && (
+            <p>
+              数据仅存于本地浏览器
+              <br />
+              无注册 · 无上传 · 隐私至上
+            </p>
+          )}
+          <a
+            href={ABOUT_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            title="关于 PanassetLite"
+            aria-label="关于 PanassetLite"
+            className={`text-slate-500 transition-colors hover:text-slate-700 ${
+              collapsed
+                ? 'flex items-center justify-center rounded-xl py-2.5 transition-all duration-200 hover:bg-slate-50'
+                : 'mt-2 inline-flex items-center gap-1.5'
+            }`}
+          >
+            <BookOpen className="h-[18px] w-[18px] shrink-0" />
+            {!collapsed && <span>关于 PanassetLite</span>}
+          </a>
+        </div>
 
         <button
           type="button"
