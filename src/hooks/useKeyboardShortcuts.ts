@@ -8,7 +8,10 @@ export interface ShortcutDef extends KeySpec {
 
 export function useKeyboardShortcuts(shortcuts: ShortcutDef[], enabled = true) {
   const shortcutsRef = useRef(shortcuts)
-  shortcutsRef.current = shortcuts
+
+  useEffect(() => {
+    shortcutsRef.current = shortcuts
+  })
 
   useEffect(() => {
     if (!enabled) return
