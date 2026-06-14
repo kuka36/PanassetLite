@@ -19,7 +19,8 @@ jobs:
     # Only the repo owner may kick off an agent run: the 'ai-task' label must be
     # applied by the owner themselves, not by collaborators or outside contributors.
     if: github.event.label.name == 'ai-task' && github.actor == github.repository_owner
-    # Runs on a self-hosted runner with Codex CLI and `codex login` auth (~/.codex/auth.json).
+    # Runs on a self-hosted runner. Agent backend: AGENT_BACKEND=cursor|codex (default cursor).
+    #   cursor → CURSOR_API_KEY in runner env; codex → ~/.codex/auth.json from `codex login`
     runs-on: [self-hosted, panasset-agent]
     env:
       ISSUE_NUMBER: ${{ github.event.issue.number }}
@@ -68,14 +69,14 @@ jobs:
           set -euo pipefail
           printf '# Issue #%s: %s\n\n%s\n' "$ISSUE_NUMBER" "$ISSUE_TITLE" "$ISSUE_BODY" > /tmp/task.md
           { cat .github/agent-instructions.md; echo; cat /tmp/task.md; } > /tmp/prompt.md
-          bash .agent/harness/run-codex-exec.sh /tmp/prompt.md
+          bash .agent/harness/run-agent-exec.sh /tmp/prompt.md
 
-      - name: Upload Codex log
+      - name: Upload agent log
         if: always() && steps.agent.conclusion != 'skipped'
         uses: actions/upload-artifact@v4
         with:
-          name: codex-log-issue-${{ env.ISSUE_NUMBER }}-${{ github.run_id }}
-          path: /tmp/codex.log
+          name: agent-log-issue-${{ env.ISSUE_NUMBER }}-${{ github.run_id }}
+          path: /tmp/agent.log
           if-no-files-found: ignore
           retention-days: 14
 
@@ -99,11 +100,12 @@ jobs:
       - name: Commit
         id: commit
         run: |
+          co_author=$(bash -c 'source .agent/harness/agent-backend.sh; agent_co_author_trailer')
           git add -A
           git commit \
             -m "feat: address issue #${ISSUE_NUMBER}" \
             -m "Closes #${ISSUE_NUMBER}" \
-            -m "Co-Authored-By: Codex Agent <agent@panassetlite.local>"
+            -m "$co_author"
 
       - name: Report failure
         if: failure()
@@ -112,13 +114,13 @@ jobs:
           body+=$'\n\n'
 
           if [ "${{ steps.agent.conclusion }}" = "failure" ]; then
-            body+=$'**失败阶段**: Codex 执行\n\n'
-            if [ -f /tmp/codex.log ]; then
+            body+=$'**失败阶段**: Agent 执行\n\n'
+            if [ -f /tmp/agent.log ]; then
               body+=$'```\n'
-              body+=$(tail -n 40 /tmp/codex.log)
+              body+=$(tail -n 40 /tmp/agent.log)
               body+=$'\n```\n\n'
             fi
-            body+=$'完整日志见 Actions Artifacts（codex-log）或 [Run agent 步骤](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}).\n\n'
+            body+=$'完整日志见 Actions Artifacts（agent-log）或 [Run agent 步骤](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}).\n\n'
           fi
           if [ "${{ steps.lint.conclusion }}" = "failure" ]; then
             body+=$'**失败阶段**: lint\n\n'

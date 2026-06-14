@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "permissions": {
+    "allow": [
+      "Read(**/*)",
+      "Shell(grep)",
+      "Shell(find)",
+      "Shell(cat)",
+      "Shell(head)",
+      "Shell(tail)",
+      "Shell(wc)",
+      "Shell(diff)"
+    ],
+    "deny": [
+      "Write(**/*)",
+      "Shell(git)",
+      "Shell(gh)",
+      "Shell(npm)",
+      "Shell(rm)",
+      "Shell(mv)",
+      "Shell(cp)"
+    ]
+  }
+}

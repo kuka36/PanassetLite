@@ -15,6 +15,7 @@ jobs:
       contains(github.event.pull_request.labels.*.name, 'ai-generated') ||
       github.event.pull_request.user.login == 'github-actions[bot]' ||
       (github.event.action == 'labeled' && github.event.label.name == 'ai-review')
+    # Agent backend: AGENT_BACKEND=cursor|codex (default cursor) on self-hosted runner.
     runs-on: [self-hosted, panasset-agent]
     env:
       PR_NUMBER: ${{ github.event.pull_request.number }}
@@ -45,11 +46,6 @@ jobs:
         run: |
           set -euo pipefail
 
-          test -f "$HOME/.codex/auth.json" || {
-            echo "::error::~/.codex/auth.json missing on self-hosted runner host."
-            exit 3
-          }
-
           gh pr diff "$PR_NUMBER" > /tmp/diff.patch
 
           {
@@ -59,14 +55,7 @@ jobs:
             printf '\n```\n'
           } > /tmp/review-prompt.md
 
-          codex exec --sandbox read-only \
-            --output-last-message /tmp/review.md \
-            < /tmp/review-prompt.md
-
-          if [ ! -s /tmp/review.md ]; then
-            echo "::error::codex produced no review output (interrupted or failed)."
-            exit 4
-          fi
+          bash .agent/harness/run-agent-review.sh /tmp/review-prompt.md /tmp/review.md
 
           verdict=$(awk '/^## Verdict/{flag=1; next} flag && NF{print; exit}' /tmp/review.md | tr -d ' `')
 

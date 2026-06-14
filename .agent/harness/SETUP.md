@@ -1,24 +1,74 @@
 # Agent Harness Setup
 
-本仓库为 **公有 repo**，ChatGPT 登录凭证（`~/.codex/auth.json`）不能放到 GitHub Secrets。
+本仓库为 **公有 repo**，Agent 凭证不能放到 GitHub Secrets。
 我们采用 **GitHub Actions + 本地 self-hosted runner** 方案：
 
 - GitHub 负责触发（Issue label → workflow）和承载结果（PR、Pages）
-- Codex 实际跑在你本地一台 self-hosted runner 上，凭证文件**从不离开本机**
+- Agent 实际跑在你本地一台 self-hosted runner 上，凭证**从不离开本机**
 - Pages 部署和 CI 仍在 GitHub-hosted runner 上执行（无需凭证）
 
-Agent workflow **直接在 runner 宿主机**执行 `npm ci`、`codex exec`、`npm run lint/build`，**不使用 devcontainer**。
+Agent workflow **直接在 runner 宿主机**执行 `npm ci`、agent 任务、`npm run lint/build`，**不使用 devcontainer**。
 本地调试请用 `.agent/harness/run-local.sh`，与线上一致。
+
+---
+
+## Agent 后端切换
+
+通过 runner 本机环境变量 `AGENT_BACKEND` 选择后端（**默认 `cursor`**）：
+
+| `AGENT_BACKEND` | CLI | 认证 |
+|-----------------|-----|------|
+| `cursor`（默认） | Cursor CLI（`agent`） | `CURSOR_API_KEY` |
+| `codex` | Codex CLI（`codex exec`） | `~/.codex/auth.json`（`codex login`） |
+
+可选环境变量：
+
+| 变量 | 说明 |
+|------|------|
+| `CURSOR_AGENT_MODEL` | Cursor 模型，默认 `composer-2.5` |
+| `AGENT_VERBOSE=1` | 透传完整 agent 输出 |
+| `INSTALL_ALL_AGENT_BACKENDS=1` | `install-tools.sh` 时同时安装两套 CLI |
+
+在 runner 的 `~/.bashrc`、systemd 单元或 launchd 环境里设置，例如：
+
+```bash
+export AGENT_BACKEND=cursor
+export CURSOR_API_KEY="cursor_..."
+export PATH="$HOME/.cursor/bin:$HOME/.local/bin:$PATH"
+```
+
+切回 Codex：
+
+```bash
+export AGENT_BACKEND=codex
+# 确保已 codex login
+```
 
 ---
 
 ## 一次性配置
 
-### 1. 本地登录 Codex CLI
+### 1. 安装 Agent CLI（推荐 Cursor）
 
 ```bash
+export AGENT_BACKEND=cursor   # 可省略，已是默认值
+.agent/harness/install-tools.sh
+```
+
+或手动：
+
+```bash
+curl https://cursor.com/install -fsS | bash
+# 在 Cursor Dashboard → Integrations 创建 API Key
+export CURSOR_API_KEY="cursor_..."
+```
+
+**Codex 备选：**
+
+```bash
+export AGENT_BACKEND=codex
 npm i -g @openai/codex
-codex login            # 浏览器走 ChatGPT OAuth
+codex login
 ls -l ~/.codex/auth.json
 ```
 
@@ -31,12 +81,12 @@ ls -l ~/.codex/auth.json
 self-hosted, panasset-agent
 ```
 
-把 runner 装在**已经执行过 `codex login` 的同一个用户账户下**，这样 `$HOME/.codex/auth.json` 直接可用。
+把 runner 装在**已经配置好 `CURSOR_API_KEY`（或 `codex login`）的同一个用户账户下**。
 
 ### 3. Runner 主机依赖
 
 - **Node.js 20+**（与 `agent-run.yml` 中 `setup-node` 一致）
-- **Codex CLI**（`npm i -g @openai/codex`，或运行 `.agent/harness/install-tools.sh`）
+- **Cursor CLI**（`agent`）或 **Codex CLI**（按 `AGENT_BACKEND`）
 - `git`、`gh`
 
 首次在仓库根目录执行一次 `npm ci`，确认依赖可安装。
@@ -53,7 +103,7 @@ sudo ./svc.sh start
 
 ### 5. 代理（国内网络必需）
 
-Codex 运行时要访问 `chatgpt.com`。在 **runner 宿主机的 shell 环境**中配置代理（例如写入启动 runner 的 systemd 单元或 `~/.bashrc`）：
+Cursor / Codex 运行时要访问外部 API。在 **runner 宿主机的 shell 环境**中配置代理（例如写入启动 runner 的 systemd 单元或 `~/.bashrc`）：
 
 ```bash
 export HTTP_PROXY=http://127.0.0.1:7897
@@ -64,9 +114,9 @@ export NO_PROXY=localhost,127.0.0.1,::1,.local
 要点：
 
 - 代理需对本机进程可用；runner 以哪个用户运行，就在该用户环境里设置。
-- 验证宿主机能出网：
+- 验证宿主机能出网（Cursor 示例）：
   ```bash
-  curl -sS -o /dev/null -w '%{http_code}\n' https://chatgpt.com
+  curl -sS -o /dev/null -w '%{http_code}\n' https://cursor.com
   ```
 
 ### 6. GitHub 仓库设置（无需任何 secret）
@@ -81,7 +131,7 @@ export NO_PROXY=localhost,127.0.0.1,::1,.local
 
 1. 用 `AI Task` Issue 模板新建 Issue（默认带 `ai-task` label）
 2. `agent-run.yml` 被触发 → 在 self-hosted runner **宿主机**上执行
-3. Codex 读取 `.github/agent-instructions.md` + Issue 内容改代码 → `lint` / `build` → 路径校验 → commit
+3. Agent 读取 `.github/agent-instructions.md` + Issue 内容改代码 → `lint` / `build` → 路径校验 → commit
 4. 推分支 `ai/{issue}-{slug}` → 开/更新 PR（`ai-generated` label，描述含变更与验证摘要）
 5. `agent-review.yml` 同样在 self-hosted runner 上自动 review PR
 6. 你 review/merge → `deploy-pages.yml` 在 GitHub-hosted runner 上构建并部署
@@ -94,6 +144,7 @@ export NO_PROXY=localhost,127.0.0.1,::1,.local
 
 ```bash
 .agent/harness/run-local.sh preflight
+.agent/harness/run-local.sh probe "say hi"
 .agent/harness/run-local.sh task "测试标题" "需求描述"
 ```
 
@@ -101,15 +152,15 @@ export NO_PROXY=localhost,127.0.0.1,::1,.local
 
 ## 观察 Agent 输出
 
-- **Actions 网页**：`Run agent` 步骤默认只打印 Agent 最终总结（中间过程写入 `/tmp/codex.log`）
-- **完整日志**：Actions run 页 → **Artifacts** → 下载 `codex-log-issue-*`
-- **本地 verbose**：`CODEX_VERBOSE=1 .agent/harness/run-local.sh task "标题" "需求"`
+- **Actions 网页**：`Run agent` 步骤默认只打印 Agent 最终总结（中间过程写入 `/tmp/agent.log`）
+- **完整日志**：Actions run 页 → **Artifacts** → 下载 `agent-log-issue-*`
+- **本地 verbose**：`AGENT_VERBOSE=1 .agent/harness/run-local.sh task "标题" "需求"`
 
 ---
 
 ## 安全模型
 
-- ChatGPT 凭证仅存在于 self-hosted runner 主机的 `~/.codex/auth.json`
+- Agent 凭证仅存在于 self-hosted runner 主机（`CURSOR_API_KEY` 或 `~/.codex/auth.json`）
 - Agent **不能**通过路径 gate 修改 `.github/workflows/`、`.cursor/`、agent 指令文件、`.env`
 - 公有仓库的 PR / Issue 触发的 workflow 默认**不会**注入仓库 secrets 到 fork 来源的 PR，但本方案不依赖 secrets 已天然规避
 - 仅 repo owner 贴 `ai-task` label 才会触发 agent（见 workflow `if` 条件）
