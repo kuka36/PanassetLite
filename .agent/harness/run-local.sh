@@ -46,7 +46,8 @@ task() {
   build_prompt "local" "$title" "$body"
 
   echo "→ codex 执行任务（与线上一致的 agent-instructions + issue）…"
-  codex exec --sandbox workspace-write < /tmp/prompt.md
+  echo "  设 CODEX_VERBOSE=1 可查看完整输出"
+  bash "$HARNESS/run-codex-exec.sh" /tmp/prompt.md
 
   echo "→ npm run lint…"
   npm run lint 2>&1 | tee /tmp/lint.log

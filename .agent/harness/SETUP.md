@@ -99,6 +99,12 @@ export NO_PROXY=localhost,127.0.0.1,::1,.local
 
 `task` 与 `agent-run.yml` 使用同一份 `.github/agent-instructions.md`，并执行 `lint` + `build` + 路径校验。
 
+## 观察 Agent 输出
+
+- **Actions 网页**：`Run agent` 步骤默认只打印 Agent 最终总结（中间过程写入 `/tmp/codex.log`）
+- **完整日志**：Actions run 页 → **Artifacts** → 下载 `codex-log-issue-*`
+- **本地 verbose**：`CODEX_VERBOSE=1 .agent/harness/run-local.sh task "标题" "需求"`
+
 ---
 
 ## 安全模型

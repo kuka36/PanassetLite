@@ -66,15 +66,18 @@ jobs:
         id: agent
         run: |
           set -euo pipefail
-
-          test -f "$HOME/.codex/auth.json" || {
-            echo "::error::~/.codex/auth.json missing — run 'codex login' on the self-hosted runner host."
-            exit 3
-          }
-
           printf '# Issue #%s: %s\n\n%s\n' "$ISSUE_NUMBER" "$ISSUE_TITLE" "$ISSUE_BODY" > /tmp/task.md
           { cat .github/agent-instructions.md; echo; cat /tmp/task.md; } > /tmp/prompt.md
-          codex exec --sandbox workspace-write < /tmp/prompt.md
+          bash .agent/harness/run-codex-exec.sh /tmp/prompt.md
+
+      - name: Upload Codex log
+        if: always() && steps.agent.conclusion != 'skipped'
+        uses: actions/upload-artifact@v4
+        with:
+          name: codex-log-issue-${{ env.ISSUE_NUMBER }}-${{ github.run_id }}
+          path: /tmp/codex.log
+          if-no-files-found: ignore
+          retention-days: 14
 
       - name: Lint
         id: lint
@@ -109,8 +112,13 @@ jobs:
           body+=$'\n\n'
 
           if [ "${{ steps.agent.conclusion }}" = "failure" ]; then
-            body+=$'**失败阶段**: Codex 执行\n'
-            body+=$'Codex 未正常完成，请查看 Actions 日志中的 Run agent 步骤。\n\n'
+            body+=$'**失败阶段**: Codex 执行\n\n'
+            if [ -f /tmp/codex.log ]; then
+              body+=$'```\n'
+              body+=$(tail -n 40 /tmp/codex.log)
+              body+=$'\n```\n\n'
+            fi
+            body+=$'完整日志见 Actions Artifacts（codex-log）或 [Run agent 步骤](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}).\n\n'
           fi
           if [ "${{ steps.lint.conclusion }}" = "failure" ]; then
             body+=$'**失败阶段**: lint\n\n'
