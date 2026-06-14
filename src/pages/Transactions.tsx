@@ -2,25 +2,16 @@ import { useMemo, useState } from 'react'
 import { useStore } from '../store'
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
 import Modal, { btnPrimary, inputCls } from '../components/Modal'
-import NlTxInput from '../components/NlTxInput'
-import { nlResultToTxInitial } from '../services/nlTx'
 import TxForm from '../components/TxForm'
 import { Card, CardBody } from '../components/ui/Card'
 import type { Transaction } from '../types'
 import { TX_TYPE_LABEL } from '../types'
-import type { NlTxParseResult } from '../services/nlTx'
-import { color } from '../theme/colors'
 import { fmtNum } from '../utils/format'
 
-type ModalState =
-  | { kind: 'add' }
-  | { kind: 'edit'; tx: Transaction }
-  | { kind: 'nlConfirm'; result: NlTxParseResult; rawInput: string }
-  | null
+type ModalState = { kind: 'add' } | { kind: 'edit'; tx: Transaction } | null
 
 export default function Transactions() {
   const assets = useStore((s) => s.assets)
-  const settings = useStore((s) => s.settings)
   const transactions = useStore((s) => s.transactions)
   const addTransaction = useStore((s) => s.addTransaction)
   const updateTransaction = useStore((s) => s.updateTransaction)
@@ -79,14 +70,6 @@ export default function Transactions() {
           </button>
         </div>
       </div>
-
-      <NlTxInput
-        assets={assets}
-        settings={settings}
-        disabled={assets.length === 0}
-        onParsed={(result, rawInput) => setModal({ kind: 'nlConfirm', result, rawInput })}
-        onManual={() => setModal({ kind: 'add' })}
-      />
 
       {/* 桌面端表格 */}
       <Card className="hidden overflow-hidden md:block">
@@ -174,28 +157,6 @@ export default function Transactions() {
           </p>
         )}
       </div>
-
-      {modal?.kind === 'nlConfirm' && (
-        <Modal title="确认 AI 解析结果" onClose={() => setModal(null)}>
-          <p className="mb-3 text-xs text-slate-500">
-            原文:「{modal.rawInput}」— 请核对字段后记录,数据仅保存在本地。
-          </p>
-          {modal.result.warnings.map((w) => (
-            <p key={w} className={`mb-2 ${color.alertWarn}`}>
-              {w}
-            </p>
-          ))}
-          <TxForm
-            assets={assets}
-            initial={nlResultToTxInitial(modal.result, assets)}
-            onSubmit={(t) => {
-              addTransaction(t)
-              setModal(null)
-            }}
-            onCancel={() => setModal(null)}
-          />
-        </Modal>
-      )}
 
       {modal?.kind === 'add' && (
         <Modal title="记一笔" onClose={() => setModal(null)}>
