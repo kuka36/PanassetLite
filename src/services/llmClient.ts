@@ -66,10 +66,12 @@ async function llmFetch(
     if (shouldUseLlmProxy(baseUrl)) {
       throw new Error(
         `无法连接本地 LLM (${baseUrl})。请确认 LM Studio / Ollama 等服务已启动,且 Vite 开发服务器正在运行。`,
+        { cause: err },
       )
     }
     throw new Error(
       `LLM 请求失败: ${(err as Error).message}。若使用本地模型,请将 Base URL 设为 http://127.0.0.1:端口/v1 并通过 npm run dev 访问应用。`,
+      { cause: err },
     )
   }
 }

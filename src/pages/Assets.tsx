@@ -4,14 +4,22 @@ import { usePortfolioEngine, useSummary } from '../hooks/useSummary'
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
 import Modal, { btnGhost, btnPrimary } from '../components/Modal'
 import AssetForm from '../components/AssetForm'
-import NlTxInput, { nlResultToTxInitial } from '../components/NlTxInput'
+import NlTxInput from '../components/NlTxInput'
 import TxForm from '../components/TxForm'
 import { Card, CardHeader } from '../components/ui/Card'
 import type { NlTxParseResult } from '../services/nlTx'
+import { nlResultToTxInitial } from '../services/nlTx'
 import type { Asset, AssetSnapshot, AssetType, Transaction, TxLedgerRow, TxType } from '../types'
 import { ASSET_TYPE_COLOR, ASSET_TYPE_LABEL, TX_TYPE_LABEL, isQuantityBased } from '../types'
 import { color } from '../theme/colors'
 import { fmtMoney, fmtNum, fmtPct, isUpdateStale, pnlColor, staleUpdateCls } from '../utils/format'
+
+const assetTheadCls = 'bg-slate-50/80'
+const assetTheadRowCls = 'border-b border-slate-200/70 text-left text-xs text-slate-500'
+const assetThBase = 'py-2.5 font-medium whitespace-nowrap'
+const assetThName = `px-4 ${assetThBase}`
+const assetThNum = `px-2 ${assetThBase} text-right`
+const assetThAction = `px-4 ${assetThBase} text-right`
 
 type ModalState =
   | { kind: 'add' }
@@ -116,16 +124,36 @@ export default function Assets() {
           {/* 桌面端表格 */}
           <div className="hidden overflow-x-auto md:block">
             <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-slate-100 text-left text-xs text-slate-500">
-                  <th className="px-4 py-2 font-medium">名称</th>
-                  <th className="px-2 py-2 font-medium text-right">持有</th>
-                  <th className="px-2 py-2 font-medium text-right">市值</th>
-                  <th className="px-2 py-2 font-medium text-right">累计盈亏</th>
-                  <th className="px-2 py-2 font-medium text-right">年化(XIRR)</th>
-                  <th className="px-2 py-2 font-medium text-right">近期年化</th>
-                  <th className="px-2 py-2 font-medium text-right">更新于</th>
-                  <th className="px-4 py-2 font-medium text-right">操作</th>
+              <thead className={assetTheadCls}>
+                <tr className={assetTheadRowCls}>
+                  <th scope="col" className={assetThName}>
+                    名称
+                  </th>
+                  <th scope="col" className={assetThNum}>
+                    持有
+                  </th>
+                  <th scope="col" className={assetThNum}>
+                    市值
+                  </th>
+                  <th scope="col" className={assetThNum}>
+                    累计盈亏
+                  </th>
+                  <th scope="col" className={assetThNum} title="年化内部收益率（XIRR）">
+                    XIRR
+                  </th>
+                  <th scope="col" className={assetThNum} title="近 30 天年化收益率">
+                    近期
+                  </th>
+                  <th
+                    scope="col"
+                    className={assetThNum}
+                    title="最近估值或行情更新日期；超过一个月未更新时数据行会标黄"
+                  >
+                    更新于
+                  </th>
+                  <th scope="col" className={assetThAction}>
+                    操作
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -440,7 +468,10 @@ function AssetDetail({
   const deleteTransaction = useStore((s) => s.deleteTransaction)
   const snap = summary.snapshots.find((s) => s.asset.id === assetId)
   const asset = snap?.asset
-  const ledger = useMemo(() => (asset ? engine.txLedger(asset) : []), [engine, asset])
+  const ledger = useMemo(
+    () => (asset ? engine.txLedger(asset) : []),
+    [engine, asset?.id],
+  )
   if (!snap || !asset) return null
 
   const qtyBased = isQuantityBased(asset.type)

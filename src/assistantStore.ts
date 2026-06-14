@@ -183,3 +183,7 @@ export function findQueueIdByAction(action: PendingAction, queue: QueuedAction[]
   )
   return match?.id
 }
+
+export function openAssistant() {
+  useAssistantStore.getState().setOpen(true)
+}

@@ -1,4 +1,4 @@
-import type { Asset, Settings, TxType } from '../types'
+import type { Asset, Settings, Transaction, TxType } from '../types'
 import { ASSET_TYPE_LABEL } from '../types'
 import { isLocalLlmBaseUrl, postChatCompletions } from './llmClient'
 import { today } from './storage'
@@ -329,4 +329,26 @@ export async function parseNaturalLanguageTx(
   }
 
   return { draft, assetId, warnings }
+}
+
+/** 将 NL 解析结果转为 TxForm 可用的 initial */
+export function nlResultToTxInitial(
+  result: NlTxParseResult,
+  assets: Asset[],
+  fixedAssetId?: string,
+): Transaction {
+  const active = assets.filter((a) => !a.archived)
+  const { draft, assetId } = result
+  return {
+    id: '',
+    assetId: fixedAssetId ?? assetId ?? active[0]?.id ?? '',
+    type: draft.type,
+    date: draft.date,
+    amount: draft.amount,
+    quantity: draft.quantity,
+    price: draft.price,
+    value: draft.value,
+    note: draft.note,
+    createdAt: 0,
+  }
 }

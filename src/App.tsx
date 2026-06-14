@@ -229,7 +229,3 @@ function LogoMark({ className }: { className?: string }) {
     </svg>
   )
 }
-
-export function openAssistant() {
-  useAssistantStore.getState().setOpen(true)
-}

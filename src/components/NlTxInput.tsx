@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { Sparkles } from 'lucide-react'
-import type { Asset, Settings, Transaction } from '../types'
+import type { Asset, Settings } from '../types'
 import { isLocalLlmBaseUrl } from '../services/llmClient'
 import { parseNaturalLanguageTx, type NlTxParseResult } from '../services/nlTx'
 import { color } from '../theme/colors'
@@ -133,26 +133,4 @@ export default function NlTxInput({
       {body}
     </div>
   )
-}
-
-/** 将 NL 解析结果转为 TxForm 可用的 initial */
-export function nlResultToTxInitial(
-  result: NlTxParseResult,
-  assets: Asset[],
-  fixedAssetId?: string,
-): Transaction {
-  const active = assets.filter((a) => !a.archived)
-  const { draft, assetId } = result
-  return {
-    id: '',
-    assetId: fixedAssetId ?? assetId ?? active[0]?.id ?? '',
-    type: draft.type,
-    date: draft.date,
-    amount: draft.amount,
-    quantity: draft.quantity,
-    price: draft.price,
-    value: draft.value,
-    note: draft.note,
-    createdAt: 0,
-  }
 }
