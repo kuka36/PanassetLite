@@ -4,6 +4,11 @@ on:
   issues:
     types: [labeled]
 
+# 同一 Issue 重复触发时取消旧 run，避免 ai/{n}-* 分支互相 force-push 踩踏
+concurrency:
+  group: agent-issue-${{ github.event.issue.number }}
+  cancel-in-progress: true
+
 permissions:
   contents: write
   pull-requests: write
@@ -51,14 +56,16 @@ jobs:
           gh issue comment "$ISSUE_NUMBER" --body \
             ":robot: Agent run started on branch \`${{ steps.slug.outputs.branch }}\` ([run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}))."
 
+      - name: Prepare branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B "${{ steps.slug.outputs.branch }}"
+
       - name: Run agent
         id: agent
         run: |
           set -euo pipefail
-
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git checkout -B "${{ steps.slug.outputs.branch }}"
 
           test -f "$HOME/.codex/auth.json" || {
             echo "::error::~/.codex/auth.json missing — run 'codex login' on the self-hosted runner host."
@@ -66,53 +73,92 @@ jobs:
           }
 
           printf '# Issue #%s: %s\n\n%s\n' "$ISSUE_NUMBER" "$ISSUE_TITLE" "$ISSUE_BODY" > /tmp/task.md
-
           { cat .github/agent-instructions.md; echo; cat /tmp/task.md; } > /tmp/prompt.md
           codex exec --sandbox workspace-write < /tmp/prompt.md
 
-          npm run lint 2>&1 | tee /tmp/lint.log
-          npm run build 2>&1 | tee /tmp/build.log
+      - name: Lint
+        id: lint
+        run: npm run lint 2>&1 | tee /tmp/lint.log
 
+      - name: Build
+        id: build
+        run: npm run build 2>&1 | tee /tmp/build.log
+
+      - name: Gate paths
+        id: gate
+        run: |
           if [ -z "$(git status --porcelain)" ]; then
             echo "::error::Agent produced no changes."
             exit 2
           fi
+          bash .agent/harness/gate-paths.sh
 
+      - name: Commit
+        id: commit
+        run: |
           git add -A
           git commit \
             -m "feat: address issue #${ISSUE_NUMBER}" \
             -m "Closes #${ISSUE_NUMBER}" \
-            -m "Co-Authored-By: Codex Agent <agent@panassetlite.local>" \
-            || true
+            -m "Co-Authored-By: Codex Agent <agent@panassetlite.local>"
 
       - name: Report failure
-        if: failure() && steps.agent.conclusion == 'failure'
+        if: failure()
         run: |
-          body=":x: Agent run failed. See [logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})."
+          body=":x: **Agent run failed** — [完整日志](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
+          body+=$'\n\n'
+
+          if [ "${{ steps.agent.conclusion }}" = "failure" ]; then
+            body+=$'**失败阶段**: Codex 执行\n'
+            body+=$'Codex 未正常完成，请查看 Actions 日志中的 Run agent 步骤。\n\n'
+          fi
+          if [ "${{ steps.lint.conclusion }}" = "failure" ]; then
+            body+=$'**失败阶段**: lint\n\n'
+            if [ -f /tmp/lint.log ]; then
+              body+=$'```\n'
+              body+=$(tail -n 40 /tmp/lint.log)
+              body+=$'\n```\n\n'
+            fi
+          fi
+          if [ "${{ steps.build.conclusion }}" = "failure" ]; then
+            body+=$'**失败阶段**: build\n\n'
+            if [ -f /tmp/build.log ]; then
+              body+=$'```\n'
+              body+=$(tail -n 40 /tmp/build.log)
+              body+=$'\n```\n\n'
+            fi
+          fi
+          if [ "${{ steps.gate.conclusion }}" = "failure" ]; then
+            body+=$'**失败阶段**: 路径校验\n'
+            body+=$'Agent 修改了禁止变更的路径（如 \`.github/workflows\`、\`.cursor/\`），或没有产生有效改动。\n\n'
+          fi
+          if [ "${{ steps.commit.conclusion }}" = "failure" ]; then
+            body+=$'**失败阶段**: git commit\n'
+            body+=$'提交失败（可能是 pre-commit hook、git 配置或索引问题）。\n\n'
+          fi
+
           gh issue comment "$ISSUE_NUMBER" --body "$body"
 
       - name: Push branch
         if: success()
         run: git push --force origin "${{ steps.slug.outputs.branch }}"
 
-      - name: Open PR
+      - name: Open or update PR
         if: success()
         env:
           BRANCH: ${{ steps.slug.outputs.branch }}
         run: |
-          if [ -n "$(gh pr list --head "$BRANCH" --state open --json number -q '.[0].number')" ]; then
-            echo "PR for $BRANCH already open; skipping create."
-            exit 0
+          bash .agent/harness/generate-pr-body.sh "$ISSUE_NUMBER" "$ISSUE_TITLE" > /tmp/pr-body.md
+
+          pr_num=$(gh pr list --head "$BRANCH" --state open --json number -q '.[0].number' || true)
+          if [ -n "$pr_num" ]; then
+            echo "Updating PR #$pr_num for $BRANCH"
+            gh pr edit "$pr_num" --body-file /tmp/pr-body.md
+          else
+            gh pr create \
+              --base main \
+              --head "$BRANCH" \
+              --title "${ISSUE_TITLE}" \
+              --body-file /tmp/pr-body.md \
+              --label ai-generated
           fi
-
-          {
-            cat .github/PULL_REQUEST_TEMPLATE.md
-            printf '\n\n---\nCloses #%s\n' "$ISSUE_NUMBER"
-          } > /tmp/pr-body.md
-
-          gh pr create \
-            --base main \
-            --head "$BRANCH" \
-            --title "${ISSUE_TITLE}" \
-            --body-file /tmp/pr-body.md \
-            --label ai-generated
