@@ -128,7 +128,7 @@ export NO_PROXY=localhost,127.0.0.1,::1,.local
   2. **或**：**Settings → Actions → General** → 勾选 **Allow GitHub Actions to create and approve pull requests**（允许 `GITHUB_TOKEN` 开 PR）。
 - 可选：在仓库 **Labels** 中创建 `ai-generated`（没有也能开 PR，只是不会自动打标）、`release`（合并前打上才会自动发布）。
 - 可选 secret（仅当 Agent 任务需要访问外部 API）：`GEMINI_API_KEY`、`ALPHAVANTAGE_API_KEY`
-- **自动发布必需**：`RELEASE_TOKEN`（owner 的 classic/fine-grained PAT，需 `Contents` 写权限；用于绕过 `protect-version-tags` 规则推送 `v*` 标签）
+- **自动发布与标签规则**：规则集 `protect-version-tags` 应对 `v*` 标签**取消 Restrict creations**，保留 **Restrict updates** / **Restrict deletions**，`release-on-merge.yml` 即可用 `GITHUB_TOKEN` 推送新日期标签。
 
 ---
 

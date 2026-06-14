@@ -27,18 +27,14 @@ jobs:
       - name: Create and push date tag
         env:
           MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
-          RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
         run: |
           set -euo pipefail
-          if [ -z "${RELEASE_TOKEN}" ]; then
-            echo "::error::缺少 RELEASE_TOKEN secret（owner PAT，需可创建 v* 标签；仓库 protect-version-tags 规则会拒绝 GITHUB_TOKEN）"
-            exit 1
-          fi
           git fetch --tags origin
 
           DATE=$(date -u +%Y.%m.%d)
           PREFIX="v${DATE}"
-          LAST=$(git tag -l "${PREFIX}.*" | sort -V | tail -n1)
+          # 只统计 vYYYY.MM.DD.N（N 为数字），避免 v*.test 等非发布标签干扰序号
+          LAST=$(git tag -l "${PREFIX}.[0-9]*" | sort -V | tail -n1)
           if [ -z "$LAST" ]; then
             TAG="${PREFIX}.1"
           else
@@ -49,7 +45,6 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git tag "$TAG" "$MERGE_SHA"
-          git remote set-url origin "https://x-access-token:${RELEASE_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           git push origin "$TAG"
           echo "TAG=$TAG" >> "$GITHUB_ENV"
 
