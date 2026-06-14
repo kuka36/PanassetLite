@@ -47,11 +47,8 @@ task() {
   echo "  设 AGENT_VERBOSE=1 可查看完整输出"
   bash "$HARNESS/run-agent-exec.sh" /tmp/prompt.md
 
-  echo "→ npm run lint…"
-  npm run lint 2>&1 | tee /tmp/lint.log
-
-  echo "→ npm run build…"
-  npm run build 2>&1 | tee /tmp/build.log
+  echo "→ 校验 lint/build（失败时自动修复，与线上一致）…"
+  AGENT_FIX_MAX_ROUNDS="${AGENT_FIX_MAX_ROUNDS:-2}" bash "$HARNESS/verify-and-fix.sh"
 
   if [ -z "$(git status --porcelain)" ]; then
     echo "::error::Agent 未产生任何改动"

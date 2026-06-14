@@ -30,16 +30,18 @@
 - 金额/百分比用 `src/utils/format.ts`（`fmtMoney`、`fmtPct`、`pnlColor`）。
 - 新页面：同步更新 `src/App.tsx` 的 `NAV` 数组与 `<main>` 条件渲染（无 react-router）。
 
-## 验证
+## 验证（硬性门禁）
 
-完成后必须执行：
+**在宣布任务完成之前**，必须在仓库根目录执行并确保**两项均 exit 0**：
 
 ```bash
 npm run lint
 npm run build
 ```
 
-若 UI 有改动，在 PR 描述中说明需手动验证的路径。
+- 任一项失败则任务**未完成**；须修复后重新运行，直至全部通过。
+- 错误可能出现在你未改动的文件（仓库基线问题）；仍须修复，否则 CI 与 Agent Run 会失败。
+- 若 UI 有改动，在 PR 描述中说明需手动验证的路径。
 
 ## 输出
 

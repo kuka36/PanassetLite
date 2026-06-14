@@ -187,8 +187,15 @@ run_agent_exec() {
   local prompt_file="${1:?prompt file path}"
   ensure_agent_auth
 
-  : >"$AGENT_LOG"
-  : >"$AGENT_SUMMARY"
+  if [ "${AGENT_APPEND_LOG:-0}" != 1 ]; then
+    : >"$AGENT_LOG"
+    : >"$AGENT_SUMMARY"
+  else
+    {
+      echo ""
+      echo "=== Agent fix round ($(date -u +%Y-%m-%dT%H:%M:%SZ)) ==="
+    } >>"$AGENT_LOG"
+  fi
 
   case "$AGENT_BACKEND" in
     cursor)

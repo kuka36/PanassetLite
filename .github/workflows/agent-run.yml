@@ -80,13 +80,11 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
-      - name: Lint
-        id: lint
-        run: npm run lint 2>&1 | tee /tmp/lint.log
-
-      - name: Build
-        id: build
-        run: npm run build 2>&1 | tee /tmp/build.log
+      - name: Verify quality
+        id: verify
+        env:
+          AGENT_FIX_MAX_ROUNDS: 2
+        run: bash .agent/harness/verify-and-fix.sh
 
       - name: Gate paths
         id: gate
@@ -122,18 +120,15 @@ jobs:
             fi
             body+=$'完整日志见 Actions Artifacts（agent-log）或 [Run agent 步骤](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}).\n\n'
           fi
-          if [ "${{ steps.lint.conclusion }}" = "failure" ]; then
-            body+=$'**失败阶段**: lint\n\n'
+          if [ "${{ steps.verify.conclusion }}" = "failure" ]; then
+            body+=$'**失败阶段**: lint/build 校验（含自动修复轮次）\n\n'
             if [ -f /tmp/lint.log ]; then
-              body+=$'```\n'
+              body+=$'**Lint**\n```\n'
               body+=$(tail -n 40 /tmp/lint.log)
               body+=$'\n```\n\n'
             fi
-          fi
-          if [ "${{ steps.build.conclusion }}" = "failure" ]; then
-            body+=$'**失败阶段**: build\n\n'
             if [ -f /tmp/build.log ]; then
-              body+=$'```\n'
+              body+=$'**Build**\n```\n'
               body+=$(tail -n 40 /tmp/build.log)
               body+=$'\n```\n\n'
             fi
