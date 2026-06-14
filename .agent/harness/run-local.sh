@@ -40,6 +40,7 @@ probe_once() {
 task() {
   local title="${1:?用法: run-local.sh task \"标题\" \"需求正文\"}"
   local body="${2:-}"
+  bash "$HARNESS/preflight-harness.sh"
   preflight_agent_backend
   build_prompt "local" "$title" "$body"
 

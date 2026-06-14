@@ -40,6 +40,10 @@ jobs:
           source .agent/harness/gh-auth.sh
           echo "GH_TOKEN=${GH_TOKEN}" >> "$GITHUB_ENV"
 
+      - name: Validate harness
+        id: validate
+        run: bash .agent/harness/preflight-harness.sh
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -104,12 +108,23 @@ jobs:
       - name: Commit
         id: commit
         run: |
-          co_author=$(bash -c 'source .agent/harness/agent-backend.sh; agent_co_author_trailer')
+          harness="$(pwd)/.agent/harness"
+          co_author=$(bash -c "source \"$harness/agent-backend.sh\"; agent_co_author_trailer")
           git add -A
           git commit \
             -m "feat: address issue #${ISSUE_NUMBER}" \
             -m "Closes #${ISSUE_NUMBER}" \
             -m "$co_author"
+
+      - name: Push branch
+        if: success()
+        id: push
+        run: git push --force origin "${{ steps.slug.outputs.branch }}"
+
+      - name: Open or update PR
+        if: success()
+        id: open_pr
+        run: bash .agent/harness/open-or-update-pr.sh "$ISSUE_NUMBER" "$ISSUE_TITLE" "${{ steps.slug.outputs.branch }}"
 
       - name: Report failure
         if: failure()
@@ -117,6 +132,10 @@ jobs:
           body=":x: **Agent run failed** — [完整日志](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
           body+=$'\n\n'
 
+          if [ "${{ steps.validate.conclusion }}" = "failure" ]; then
+            body+=$'**失败阶段**: harness 文件校验\n'
+            body+=$'仓库缺少 \`.agent/harness/\` 下的必需脚本（如 \`generate-pr-body.sh\`），请合并修复后重试。\n\n'
+          fi
           if [ "${{ steps.agent.conclusion }}" = "failure" ]; then
             body+=$'**失败阶段**: Agent 执行\n\n'
             if [ -f /tmp/agent.log ]; then
@@ -147,13 +166,13 @@ jobs:
             body+=$'**失败阶段**: git commit\n'
             body+=$'提交失败（可能是 pre-commit hook、git 配置或索引问题）。\n\n'
           fi
+          if [ "${{ steps.push.conclusion }}" = "failure" ]; then
+            body+=$'**失败阶段**: git push\n'
+            body+=$'推送分支失败（检查 runner 的 git 凭据与 \`GH_TOKEN\` 权限）。\n\n'
+          fi
+          if [ "${{ steps.open_pr.conclusion }}" = "failure" ]; then
+            body+=$'**失败阶段**: 开/更新 PR\n'
+            body+=$'常见原因：缺少 \`.agent/harness/generate-pr-body.sh\`、\`gh\` 无 PR 写权限。\n\n'
+          fi
 
           gh issue comment "$ISSUE_NUMBER" --body "$body"
-
-      - name: Push branch
-        if: success()
-        run: git push --force origin "${{ steps.slug.outputs.branch }}"
-
-      - name: Open or update PR
-        if: success()
-        run: bash .agent/harness/open-or-update-pr.sh "$ISSUE_NUMBER" "$ISSUE_TITLE" "${{ steps.slug.outputs.branch }}"
