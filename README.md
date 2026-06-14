@@ -30,10 +30,14 @@ npm run dev
 
 ## 构建部署
 
+**自动发布**（推荐）：PR 合并到 `main` 前打上 `release` 标签，由 owner merge 后会自动创建日期版本标签（如 `v2026.06.15.1`）并部署 GitHub Pages。
+
+**手动发布**（回滚或重发）：
+
 ```bash
 npm run build
-git tag v0.1.1
-git push origin v0.1.1
+git tag v2026.06.15.1
+git push origin v2026.06.15.1
 ```
 
 ## 架构原则

@@ -19,9 +19,11 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    # Only the repo owner can ship a release: guards both the v* tag push and the
-    # manual workflow_dispatch. A tag pushed by anyone else is skipped, not deployed.
-    if: github.actor == github.repository_owner
+    # Owner can ship manually (workflow_dispatch or tag push). Automated tags from
+    # release-on-merge.yml are pushed by github-actions[bot] and must be allowed too.
+    if: |
+      github.actor == github.repository_owner ||
+      (github.event_name == 'push' && github.actor == 'github-actions[bot]' && startsWith(github.ref_name, 'v'))
     steps:
       - name: Checkout
         uses: actions/checkout@v4

@@ -1,0 +1,55 @@
+name: Release on merge
+
+# When a PR labeled `release` is merged to main by the repo owner, create a
+# date-based version tag (vYYYY.MM.DD.N) and push it. deploy-pages.yml deploys on v* tags.
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  tag:
+    if: |
+      github.event.pull_request.merged == true &&
+      contains(github.event.pull_request.labels.*.name, 'release') &&
+      github.event.pull_request.merged_by.login == github.repository_owner
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Create and push date tag
+        env:
+          MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+        run: |
+          set -euo pipefail
+          git fetch --tags origin
+
+          DATE=$(date -u +%Y.%m.%d)
+          PREFIX="v${DATE}"
+          LAST=$(git tag -l "${PREFIX}.*" | sort -V | tail -n1)
+          if [ -z "$LAST" ]; then
+            TAG="${PREFIX}.1"
+          else
+            N=${LAST##*.}
+            TAG="${PREFIX}.$((N + 1))"
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag "$TAG" "$MERGE_SHA"
+          git push origin "$TAG"
+          echo "TAG=$TAG" >> "$GITHUB_ENV"
+
+      - name: Comment on PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr comment "${{ github.event.pull_request.number }}" --body \
+            ":rocket: Released as \`${TAG}\` — [deploy run](${{ github.server_url }}/${{ github.repository }}/actions/workflows/deploy-pages.yml)"
