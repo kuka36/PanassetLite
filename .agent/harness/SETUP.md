@@ -126,7 +126,7 @@ export NO_PROXY=localhost,127.0.0.1,::1,.local
 - **创建 PR 权限（二选一）**：
   1. **推荐（self-hosted）**：在 runner 宿主机执行 `gh auth login`，或在 runner 服务环境里设置 `GH_TOKEN`（fine-grained PAT，需 `Contents` + `Pull requests` + `Issues` 写权限）。workflow 会优先使用该 token，不受下方开关限制。
   2. **或**：**Settings → Actions → General** → 勾选 **Allow GitHub Actions to create and approve pull requests**（允许 `GITHUB_TOKEN` 开 PR）。
-- 可选：在仓库 **Labels** 中创建 `ai-generated`（没有也能开 PR，只是不会自动打标）。
+- 可选：在仓库 **Labels** 中创建 `ai-generated`（没有也能开 PR，只是不会自动打标）、`release`（合并前打上才会自动发布）。
 - 可选 secret（仅当 Agent 任务需要访问外部 API）：`GEMINI_API_KEY`、`ALPHAVANTAGE_API_KEY`
 
 ---
@@ -138,7 +138,7 @@ export NO_PROXY=localhost,127.0.0.1,::1,.local
 3. Agent 读取 `.github/agent-instructions.md` + Issue 内容改代码 → `lint` / `build` → 路径校验 → commit
 4. 推分支 `ai/{issue}-{slug}` → 开/更新 PR（`ai-generated` label，描述含变更与验证摘要）
 5. `agent-review.yml` 同样在 self-hosted runner 上自动 review PR
-6. 你 review/merge → `deploy-pages.yml` 在 GitHub-hosted runner 上构建并部署
+6. 你 review 通过后，在 PR 上打 `release` 标签，再由 owner merge → `release-on-merge.yml` 自动打日期标签（如 `v2026.06.15.1`）→ `deploy-pages.yml` 构建并部署 GitHub Pages（未打 `release` 的 merge 不会上线）
 
 同一 Issue 重复触发时，workflow 的 `concurrency` 会取消进行中的旧 run，避免分支互相覆盖。
 

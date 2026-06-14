@@ -44,11 +44,8 @@ jobs:
         id: validate
         run: bash .agent/harness/preflight-harness.sh
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
+      - name: Verify Node.js
+        run: node --version && npm --version
 
       - name: Install dependencies
         run: npm ci
