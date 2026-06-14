@@ -119,10 +119,14 @@ export NO_PROXY=localhost,127.0.0.1,::1,.local
   curl -sS -o /dev/null -w '%{http_code}\n' https://cursor.com
   ```
 
-### 6. GitHub 仓库设置（无需任何 secret）
+### 6. GitHub 仓库设置
 
 - **Settings → Actions → General → Workflow permissions**：`Read and write permissions`
 - **Settings → Pages → Source**：`GitHub Actions`
+- **创建 PR 权限（二选一）**：
+  1. **推荐（self-hosted）**：在 runner 宿主机执行 `gh auth login`，或在 runner 服务环境里设置 `GH_TOKEN`（fine-grained PAT，需 `Contents` + `Pull requests` + `Issues` 写权限）。workflow 会优先使用该 token，不受下方开关限制。
+  2. **或**：**Settings → Actions → General** → 勾选 **Allow GitHub Actions to create and approve pull requests**（允许 `GITHUB_TOKEN` 开 PR）。
+- 可选：在仓库 **Labels** 中创建 `ai-generated`（没有也能开 PR，只是不会自动打标）。
 - 可选 secret（仅当 Agent 任务需要访问外部 API）：`GEMINI_API_KEY`、`ALPHAVANTAGE_API_KEY`
 
 ---

@@ -19,8 +19,13 @@ jobs:
     runs-on: [self-hosted, panasset-agent]
     env:
       PR_NUMBER: ${{ github.event.pull_request.number }}
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
+      - name: Configure gh auth
+        run: |
+          source .agent/harness/gh-auth.sh
+          echo "GH_TOKEN=${GH_TOKEN}" >> "$GITHUB_ENV"
+
       - name: Checkout PR head
         uses: actions/checkout@v4
         with:

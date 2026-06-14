@@ -26,8 +26,14 @@ jobs:
       ISSUE_NUMBER: ${{ github.event.issue.number }}
       ISSUE_TITLE: ${{ github.event.issue.title }}
       ISSUE_BODY: ${{ github.event.issue.body }}
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # GH_TOKEN 不在此覆盖：优先用 runner 宿主机 token（可创建 PR），见 Configure gh auth
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
+      - name: Configure gh auth
+        run: |
+          source .agent/harness/gh-auth.sh
+          echo "GH_TOKEN=${GH_TOKEN}" >> "$GITHUB_ENV"
+
       - name: Checkout
         uses: actions/checkout@v4
         with:
@@ -150,20 +156,4 @@ jobs:
 
       - name: Open or update PR
         if: success()
-        env:
-          BRANCH: ${{ steps.slug.outputs.branch }}
-        run: |
-          bash .agent/harness/generate-pr-body.sh "$ISSUE_NUMBER" "$ISSUE_TITLE" > /tmp/pr-body.md
-
-          pr_num=$(gh pr list --head "$BRANCH" --state open --json number -q '.[0].number' || true)
-          if [ -n "$pr_num" ]; then
-            echo "Updating PR #$pr_num for $BRANCH"
-            gh pr edit "$pr_num" --body-file /tmp/pr-body.md
-          else
-            gh pr create \
-              --base main \
-              --head "$BRANCH" \
-              --title "${ISSUE_TITLE}" \
-              --body-file /tmp/pr-body.md \
-              --label ai-generated
-          fi
+        run: bash .agent/harness/open-or-update-pr.sh "$ISSUE_NUMBER" "$ISSUE_TITLE" "${{ steps.slug.outputs.branch }}"
