@@ -32,6 +32,8 @@ npm run dev
 
 ```bash
 npm run build
+git tag v0.1.1
+git push origin v0.1.1
 ```
 
 ## 架构原则

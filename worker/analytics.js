@@ -2,16 +2,16 @@
  * PanassetLite Analytics Worker
  * Cloudflare Worker + KV 自建访问统计
  *
- * KV 结构：
- *   session:{sid}          → 活跃会话，TTL 5 分钟（心跳续期）
- *   hit:{ts}:{sid_prefix}  → 历史访问记录，TTL 30 天
- *   counter:total          → 累积总访问数（永久）
- *   counter:day:{YYYY-MM-DD} → 每日访问数，TTL 365 天
+ * KV 免费版每日仅约 1000 次 put；合并为单 key 读写，且仅在 new=1 时写入。
+ *
+ *   stats:bundle → { total, days, sessions, recent }
  */
 
 const ALLOWED_ORIGIN = 'https://kuka36.github.io';
-/** KV expirationTtl 上限为 365 天（秒） */
-const DAY_COUNTER_TTL = 31536000;
+const BUNDLE_KEY = 'stats:bundle';
+const RECENT_MAX = 200;
+const SESSION_TTL_MS = 300_000;
+const TREND_DAYS = 30;
 
 const CORS = (origin) => ({
   'Access-Control-Allow-Origin': origin === ALLOWED_ORIGIN ? ALLOWED_ORIGIN : '',
@@ -50,18 +50,82 @@ function todayKey() {
   return new Date().toISOString().slice(0, 10); // YYYY-MM-DD (UTC)
 }
 
-async function kvPut(env, key, value, ttl) {
-  if (ttl) {
-    await env.KV.put(key, value, { expirationTtl: ttl });
-  } else {
-    await env.KV.put(key, value);
-  }
+function emptyBundle() {
+  return { total: 0, days: {}, sessions: {}, recent: [] };
 }
 
-async function increment(env, key, ttl) {
-  const cur = parseInt((await env.KV.get(key)) || '0', 10);
-  await kvPut(env, key, String(cur + 1), ttl);
-  return cur + 1;
+function pruneSessions(raw, cutoff = Date.now() - SESSION_TTL_MS) {
+  for (const sid of Object.keys(raw)) {
+    if (!raw[sid]?.ts || raw[sid].ts < cutoff) delete raw[sid];
+  }
+  return raw;
+}
+
+function pruneOldDays(days) {
+  const cutoff = new Date();
+  cutoff.setUTCDate(cutoff.getUTCDate() - TREND_DAYS);
+  const min = cutoff.toISOString().slice(0, 10);
+  for (const date of Object.keys(days)) {
+    if (date < min) delete days[date];
+  }
+  return days;
+}
+
+/** 从旧版分散 key 迁移（一次性，读到即写入 bundle） */
+async function migrateLegacyBundle(env) {
+  const bundle = emptyBundle();
+  bundle.total = parseInt((await env.KV.get('counter:total')) || '0', 10);
+
+  const now = new Date();
+  for (let i = TREND_DAYS - 1; i >= 0; i--) {
+    const d = new Date(now);
+    d.setUTCDate(d.getUTCDate() - i);
+    const date = d.toISOString().slice(0, 10);
+    const count = parseInt((await env.KV.get(`counter:day:${date}`)) || '0', 10);
+    if (count) bundle.days[date] = count;
+  }
+
+  bundle.sessions = (await env.KV.get('stats:sessions', 'json')) || {};
+  bundle.recent = (await env.KV.get('stats:recent', 'json')) || [];
+  return bundle;
+}
+
+async function loadBundle(env) {
+  const raw = await env.KV.get(BUNDLE_KEY, 'json');
+  if (raw && typeof raw === 'object') {
+    return {
+      total: raw.total || 0,
+      days: raw.days || {},
+      sessions: raw.sessions || {},
+      recent: Array.isArray(raw.recent) ? raw.recent : [],
+    };
+  }
+  return migrateLegacyBundle(env);
+}
+
+async function saveBundle(env, bundle) {
+  await env.KV.put(BUNDLE_KEY, JSON.stringify(bundle));
+}
+
+/** 新访问：单次 put 更新会话、近期记录与计数 */
+async function recordNewVisit(env, sid, data) {
+  const bundle = await loadBundle(env);
+  pruneSessions(bundle.sessions);
+  bundle.sessions[sid] = data;
+  bundle.recent.unshift(data);
+  if (bundle.recent.length > RECENT_MAX) bundle.recent.length = RECENT_MAX;
+  bundle.total += 1;
+  const day = todayKey();
+  bundle.days[day] = (bundle.days[day] || 0) + 1;
+  pruneOldDays(bundle.days);
+  await saveBundle(env, bundle);
+}
+
+async function removeSession(env, sid) {
+  const bundle = await loadBundle(env);
+  if (!bundle.sessions[sid]) return;
+  delete bundle.sessions[sid];
+  await saveBundle(env, bundle);
 }
 
 function json(data, status = 200, extraHeaders = {}) {
@@ -96,24 +160,11 @@ export default {
         const ts      = Date.now();
         const { device, browser, os } = parseUA(ua);
 
-        const sessionData = { path, ref, country, device, browser, os, ts };
-        const payload = JSON.stringify(sessionData);
-
-        // 活跃会话：5 分钟 TTL，心跳续期
-        await kvPut(env, `session:${sid}`, payload, 300);
-
-        // 首次访问：写历史记录 + 累积计数（失败不阻断心跳）
         const isNew = url.searchParams.get('new') === '1';
+        // 免费 KV 每日 put 约 1000 次：仅 new=1（本会话首次）写入，页面切换不落库
         if (isNew) {
-          const results = await Promise.allSettled([
-            kvPut(env, `hit:${ts}:${sid.slice(0, 8)}`, payload, 86400 * 30),
-            increment(env, 'counter:total'),
-            increment(env, `counter:day:${todayKey()}`, DAY_COUNTER_TTL),
-          ]);
-          const failed = results.filter((r) => r.status === 'rejected');
-          if (failed.length) {
-            console.error('/hit new writes failed:', failed.map((r) => r.reason));
-          }
+          const sessionData = { sid, path, ref, country, device, browser, os, ts };
+          await recordNewVisit(env, sid, sessionData);
         }
 
         return json({ sid, ok: true }, 200, cors);
@@ -130,65 +181,67 @@ export default {
     // ── /leave  主动离线 ───────────────────────────────
     if (url.pathname === '/leave') {
       const sid = url.searchParams.get('sid');
-      if (sid) await env.KV.delete(`session:${sid}`);
+      if (sid) {
+        try {
+          await removeSession(env, sid);
+        } catch (err) {
+          console.error('/leave failed:', err);
+        }
+      }
       return new Response('ok', { headers: cors });
     }
 
     // ── /stats  实时统计数据（JSON）─────────────────────
     if (url.pathname === '/stats') {
-      // 当前在线
-      const sessionList = await env.KV.list({ prefix: 'session:' });
-      const sessions = await Promise.all(
-        sessionList.keys.map((k) => env.KV.get(k.name, 'json'))
-      );
-      const activeSessions = sessions.filter(Boolean);
+      try {
+        if (!env.KV) throw new Error('KV binding missing');
 
-      // 近期历史（最多取 200 条）
-      const hitList = await env.KV.list({ prefix: 'hit:', limit: 200 });
-      const hits    = await Promise.all(
-        hitList.keys.map((k) => env.KV.get(k.name, 'json'))
-      );
-      const recentHits = hits.filter(Boolean).sort((a, b) => b.ts - a.ts);
+        const bundle = await loadBundle(env);
+        const activeSessions = Object.values(pruneSessions(bundle.sessions));
+        const recentHits = [...bundle.recent].sort((a, b) => b.ts - a.ts);
 
-      // 近 24h 聚合
-      const since24h = Date.now() - 86400_000;
-      const daily    = recentHits.filter((h) => h.ts > since24h);
+        const since24h = Date.now() - 86400_000;
+        const daily = recentHits.filter((h) => h.ts > since24h);
 
-      const countBy = (arr, key) =>
-        arr.reduce((acc, h) => {
-          acc[h[key]] = (acc[h[key]] || 0) + 1;
-          return acc;
-        }, {});
+        const countBy = (arr, key) =>
+          arr.reduce((acc, h) => {
+            acc[h[key]] = (acc[h[key]] || 0) + 1;
+            return acc;
+          }, {});
 
-      // 累积计数
-      const totalVisits = parseInt((await env.KV.get('counter:total')) || '0', 10);
-      const todayVisits = parseInt((await env.KV.get(`counter:day:${todayKey()}`)) || '0', 10);
+        const totalVisits = bundle.total;
+        const todayVisits = bundle.days[todayKey()] || 0;
 
-      // 近 30 天每日趋势
-      const trend = [];
-      const now = new Date();
-      for (let i = 29; i >= 0; i--) {
-        const d = new Date(now);
-        d.setUTCDate(d.getUTCDate() - i);
-        const key = d.toISOString().slice(0, 10);
-        const val = parseInt((await env.KV.get(`counter:day:${key}`)) || '0', 10);
-        trend.push({ date: key, count: val });
+        const now = new Date();
+        const trend = Array.from({ length: TREND_DAYS }, (_, i) => {
+          const d = new Date(now);
+          d.setUTCDate(d.getUTCDate() - (TREND_DAYS - 1 - i));
+          const date = d.toISOString().slice(0, 10);
+          return { date, count: bundle.days[date] || 0 };
+        });
+
+        return json({
+          activeCount  : activeSessions.length,
+          activeSessions,
+          totalVisits,
+          todayVisits,
+          last24hCount : daily.length,
+          trend,
+          byPage       : countBy(daily, 'path'),
+          byDevice     : countBy(daily, 'device'),
+          byBrowser    : countBy(daily, 'browser'),
+          byOS         : countBy(daily, 'os'),
+          byCountry    : countBy(daily, 'country'),
+          recentHits   : recentHits.slice(0, 50),
+        }, 200, cors);
+      } catch (err) {
+        console.error('/stats failed:', err);
+        return json(
+          { ok: false, error: err instanceof Error ? err.message : String(err) },
+          503,
+          cors
+        );
       }
-
-      return json({
-        activeCount  : activeSessions.length,
-        activeSessions,
-        totalVisits,
-        todayVisits,
-        last24hCount : daily.length,
-        trend,
-        byPage       : countBy(daily, 'path'),
-        byDevice     : countBy(daily, 'device'),
-        byBrowser    : countBy(daily, 'browser'),
-        byOS         : countBy(daily, 'os'),
-        byCountry    : countBy(daily, 'country'),
-        recentHits   : recentHits.slice(0, 50),
-      }, 200, cors);
     }
 
     // ── /  内置面板 HTML ────────────────────────────────
@@ -325,7 +378,7 @@ async function load(){
   }catch(e){console.error(e);}
 }
 load();
-setInterval(load,15000);
+setInterval(load,60000);
 </script>
 </body>
 </html>`;

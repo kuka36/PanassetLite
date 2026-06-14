@@ -52,13 +52,12 @@ function leave() {
   navigator.sendBeacon(WORKER + '/leave?sid=' + encodeURIComponent(getSid()))
 }
 
-/** 页面切换时上报当前虚拟路径（SPA 无路由 URL 变化） */
-export function reportPageView(page: string, isNew = false) {
+/** 页面切换时更新本地路径（统计仅在会话首次访问时上报） */
+export function reportPageView(page: string) {
   currentPage = page
-  hit(isNew)
 }
 
-/** 应用启动：本会话首次计为访问，页面切换时由 reportPageView 续期会话 */
+/** 应用启动：本会话首次访问上报一次 */
 export function initAnalytics(initialPage: string) {
   currentPage = initialPage
   hit(isFirstHitInSession())
