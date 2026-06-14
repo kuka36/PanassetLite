@@ -36,18 +36,7 @@ jobs:
         id: validate
         run: bash .agent/harness/preflight-harness.sh
 
-      - name: Verify Node.js
-        run: node --version && npm --version
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build check
-        run: |
-          set -euo pipefail
-          npm run lint
-          npm run build
-
+      # lint / tsc / build 由 ci.yml 在 PR 上独立执行，此处不再重复
       - name: Run reviewer agent
         run: |
           set -euo pipefail

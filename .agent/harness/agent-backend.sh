@@ -112,6 +112,7 @@ cursor_prompt_from_file() {
 install_cursor_review_cli_config() {
   local ws="${1:?workspace root}"
   local repo_cursor="$ws/.cursor"
+  # 项目级 .cursor/cli.json 仅允许 permissions 字段（无 version），见 Cursor CLI 文档。
   mkdir -p "$repo_cursor"
   if [ -f "$repo_cursor/cli.json" ]; then
     cp "$repo_cursor/cli.json" "$repo_cursor/cli.json.agent-harness-bak"
