@@ -20,7 +20,7 @@ jobs:
     # applied by the owner themselves, not by collaborators or outside contributors.
     if: github.event.label.name == 'ai-task' && github.actor == github.repository_owner
     # Runs on a self-hosted runner with Codex CLI and `codex login` auth (~/.codex/auth.json).
-    runs-on: [self-hosted, panassetlite-agent]
+    runs-on: [self-hosted, panasset-agent]
     env:
       ISSUE_NUMBER: ${{ github.event.issue.number }}
       ISSUE_TITLE: ${{ github.event.issue.title }}

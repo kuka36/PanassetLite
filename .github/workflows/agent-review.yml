@@ -15,7 +15,7 @@ jobs:
       contains(github.event.pull_request.labels.*.name, 'ai-generated') ||
       github.event.pull_request.user.login == 'github-actions[bot]' ||
       (github.event.action == 'labeled' && github.event.label.name == 'ai-review')
-    runs-on: [self-hosted, panassetlite-agent]
+    runs-on: [self-hosted, panasset-agent]
     env:
       PR_NUMBER: ${{ github.event.pull_request.number }}
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
