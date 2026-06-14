@@ -138,11 +138,19 @@ export default function Assets() {
                   <th scope="col" className={assetThNum}>
                     累计盈亏
                   </th>
-                  <th scope="col" className={assetThNum} title="年化内部收益率（XIRR）">
-                    XIRR
+                  <th
+                    scope="col"
+                    className={assetThNum}
+                    title="年化内部收益率（XIRR）：自持有以来的内部收益率，与「近期年化」口径不同"
+                  >
+                    年化(XIRR)
                   </th>
-                  <th scope="col" className={assetThNum} title="近 30 天年化收益率">
-                    近期
+                  <th
+                    scope="col"
+                    className={assetThNum}
+                    title="最近两次估值之间的区间年化（已扣除区间内存取），非固定天数"
+                  >
+                    近期年化
                   </th>
                   <th
                     scope="col"
@@ -426,7 +434,19 @@ function AssetMobileCard({
             {fmtMoney(s.totalPnlCNY)}
           </span>
         )}
-        {s.xirr != null && <span className={pnlColor(s.xirr)}>XIRR {fmtPct(s.xirr)}</span>}
+        {s.xirr != null && (
+          <span className={pnlColor(s.xirr)} title="自持有以来的内部收益率（XIRR）">
+            年化(XIRR) {fmtPct(s.xirr)}
+          </span>
+        )}
+        {s.recentAnnualized != null && (
+          <span
+            className={pnlColor(s.recentAnnualized)}
+            title="最近两次估值之间的区间年化（已扣除区间内存取）"
+          >
+            近期年化 {fmtPct(s.recentAnnualized)}
+          </span>
+        )}
         <span className={staleUpdateCls(s.lastUpdated)}>更新 {s.lastUpdated ?? '—'}</span>
       </div>
       <div className="mt-2 flex gap-2" onClick={(e) => e.stopPropagation()}>
@@ -489,7 +509,8 @@ function AssetDetail({
           cls={pnlColor(snap.totalPnlCNY)}
         />
         <Mini
-          label="年化 XIRR"
+          label="年化(XIRR)"
+          title="自持有以来的内部收益率，与「近期年化」口径不同"
           value={snap.xirr != null ? fmtPct(snap.xirr) : '—'}
           cls={snap.xirr != null ? pnlColor(snap.xirr) : ''}
         />
@@ -609,9 +630,19 @@ function formatTxBalance(
   return `${fmtNum(balance, 2)} ${currency}`
 }
 
-function Mini({ label, value, cls = 'text-slate-800' }: { label: string; value: string; cls?: string }) {
+function Mini({
+  label,
+  value,
+  cls = 'text-slate-800',
+  title,
+}: {
+  label: string
+  value: string
+  cls?: string
+  title?: string
+}) {
   return (
-    <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
+    <div className="rounded-xl border border-slate-100 bg-slate-50 p-3" title={title}>
       <p className="text-xs text-slate-500">{label}</p>
       <p className={`mt-0.5 text-sm font-semibold tabular-nums ${cls}`}>{value}</p>
     </div>
