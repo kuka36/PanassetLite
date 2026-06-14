@@ -104,6 +104,11 @@ export interface Settings {
   llm: { baseUrl: string; apiKey: string; model: string }
   /** NL 记一笔时是否将资产名称列表发给 LLM 以辅助匹配;关闭后仅发送用户原文 */
   llmSendAssetNames?: boolean
+  /**
+   * AI 助手/顾问发送给 LLM 的组合上下文粒度。
+   * summary=仅汇总数字与类别占比;detailed=另含持仓明细(资产名、市值、盈亏、年化)。
+   */
+  llmContextPrivacy?: 'summary' | 'detailed'
   pricesUpdatedAt?: number
 }
 
@@ -112,6 +117,7 @@ export const DEFAULT_SETTINGS: Settings = {
   fxRates: { USD: 7.2, HKD: 0.92, EUR: 7.8, USDT: 7.2 },
   llm: { baseUrl: 'https://api.openai.com/v1', apiKey: '', model: 'gpt-4o-mini' },
   llmSendAssetNames: true,
+  llmContextPrivacy: 'detailed',
 }
 
 // ── 引擎输出 ────────────────────────────────────────────────────────────────

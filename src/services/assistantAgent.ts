@@ -1,5 +1,5 @@
 import type { PortfolioSummary, Settings } from '../types'
-import type { AppPageId, ChatMessage, PendingAction } from '../types/assistant'
+import type { AppPageId, ChatMessage, LlmContextPrivacy, PendingAction } from '../types/assistant'
 import { buildPortfolioBrief } from './ai'
 import { isLocalLlmBaseUrl, postChatCompletions } from './llmClient'
 import {
@@ -34,16 +34,29 @@ function assertLlmReady(settings: Settings) {
   }
 }
 
-function buildSystemPrompt(summary: PortfolioSummary, currentPage: AppPageId): string {
+function resolveContextPrivacy(settings: Settings): LlmContextPrivacy {
+  return settings.llmContextPrivacy === 'summary' ? 'summary' : 'detailed'
+}
+
+function buildSystemPrompt(
+  summary: PortfolioSummary,
+  currentPage: AppPageId,
+  settings: Settings,
+): string {
+  const privacy = resolveContextPrivacy(settings)
+  const privacyNote =
+    privacy === 'summary'
+      ? '当前用户已选择「仅汇总」隐私模式,系统上下文不含具体持仓名称与单项盈亏。'
+      : '当前用户已选择「含明细」模式,系统上下文包含持仓名称、市值与盈亏。'
   return (
     '你是 PanassetLite 的 AI 助手,帮助用户管理本地个人资产。' +
     '你可以查询组合、分析风险、导航页面、刷新行情,以及提议添加/修改/删除资产与流水。' +
     '重要:所有写操作(添加/修改/删除)必须通过工具 propose_* 发起,系统会打开确认表单或对话确认,你不得声称已直接写入。' +
     '调用工具后必须用自然语言向用户解释结果,禁止只调用工具而不给出文字回复。' +
     '导入导出、清空数据、LLM 配置请用 open_settings 引导用户去设置页手动操作。' +
-    `当前页面:${currentPage}。` +
+    `当前页面:${currentPage}。${privacyNote}` +
     '\n\n当前资产组合摘要:\n' +
-    buildPortfolioBrief(summary)
+    buildPortfolioBrief(summary, privacy)
   )
 }
 
@@ -138,6 +151,51 @@ export async function runLocalQuickReply(
     return { assistantContent: formatSummaryResult(r.content), pendingActions: [] }
   }
 
+  if (/资产列表|有哪些资产|列出资产/.test(text)) {
+    const r = await executeAssistantTool('list_assets', {}, ctx)
+    try {
+      const data = JSON.parse(r.content) as {
+        assets: Array<{ name: string; type: string; valueCNY: number }>
+      }
+      const lines = ['**资产列表**', '']
+      for (const a of data.assets) {
+        lines.push(`- ${a.name}(${a.type}): ¥${a.valueCNY.toLocaleString()}`)
+      }
+      if (data.assets.length === 0) lines.push('暂无资产')
+      return { assistantContent: lines.join('\n'), pendingActions: [] }
+    } catch {
+      return { assistantContent: r.content, pendingActions: [] }
+    }
+  }
+
+  if (/刷新行情|更新价格|汇率/.test(text)) {
+    const r = await executeAssistantTool('refresh_prices', {}, ctx)
+    try {
+      const data = JSON.parse(r.content) as { message?: string }
+      return {
+        assistantContent: data.message ?? '行情已刷新',
+        pendingActions: [],
+      }
+    } catch {
+      return { assistantContent: '行情已刷新', pendingActions: [] }
+    }
+  }
+
+  if (/打开设置|去设置/.test(text)) {
+    await executeAssistantTool('open_settings', {}, ctx)
+    return { assistantContent: '已打开设置页。', pendingActions: [] }
+  }
+
+  if (/打开资产|资产页/.test(text)) {
+    await executeAssistantTool('navigate', { page: 'assets' }, ctx)
+    return { assistantContent: '已切换到资产页。', pendingActions: [] }
+  }
+
+  if (/打开流水|交易页/.test(text)) {
+    await executeAssistantTool('navigate', { page: 'transactions' }, ctx)
+    return { assistantContent: '已切换到流水页。', pendingActions: [] }
+  }
+
   return null
 }
 
@@ -195,7 +253,7 @@ export async function runAssistantTurn(
 
   const historyMessages = dedupeTrailingUserMessage(chatHistoryToApi(history), userInput)
   const apiMessages: ApiMessage[] = [
-    { role: 'system', content: buildSystemPrompt(ctx.summary, currentPage) },
+    { role: 'system', content: buildSystemPrompt(ctx.summary, currentPage, ctx.settings) },
     ...historyMessages,
     { role: 'user', content: userInput },
   ]

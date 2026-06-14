@@ -49,6 +49,8 @@ interface Props {
 export default function AssistantConfirmModals({ onSuccess }: Props) {
   const pendingAction = useAssistantStore((s) => s.pendingAction)
   const setPendingAction = useAssistantStore((s) => s.setPendingAction)
+  const completeQueueItem = useAssistantStore((s) => s.completeQueueItem)
+  const actionQueue = useAssistantStore((s) => s.actionQueue)
 
   const assets = useStore((s) => s.assets)
   const transactions = useStore((s) => s.transactions)
@@ -59,23 +61,29 @@ export default function AssistantConfirmModals({ onSuccess }: Props) {
 
   if (!pendingAction) return null
 
-  const close = () => setPendingAction(null)
+  const activeQueueId = actionQueue.find((q) => q.status === 'active')?.id
+
+  const close = (cancelled = true) => {
+    if (activeQueueId) completeQueueItem(activeQueueId, cancelled)
+    else setPendingAction(null)
+  }
 
   const notify = (msg: string) => {
-    close()
+    if (activeQueueId) completeQueueItem(activeQueueId, false)
+    else setPendingAction(null)
     onSuccess?.(msg)
   }
 
   if (pendingAction.kind === 'addAsset') {
     return (
-      <Modal title={modalTitle(pendingAction, assets)} onClose={close}>
+      <Modal title={modalTitle(pendingAction, assets)} onClose={() => close(true)}>
         <AssetForm
           initial={draftToAssetInitial(pendingAction.initial)}
           onSubmit={(a) => {
             addAsset(a)
             notify(`已添加资产「${a.name}」`)
           }}
-          onCancel={close}
+          onCancel={() => close(true)}
         />
       </Modal>
     )
@@ -85,14 +93,14 @@ export default function AssistantConfirmModals({ onSuccess }: Props) {
     const asset = assets.find((a) => a.id === pendingAction.assetId)
     if (!asset) return null
     return (
-      <Modal title={modalTitle(pendingAction, assets)} onClose={close}>
+      <Modal title={modalTitle(pendingAction, assets)} onClose={() => close(true)}>
         <AssetForm
           initial={asset}
           onSubmit={(a) => {
             updateAsset(asset.id, a)
             notify(`已更新资产「${a.name}」`)
           }}
-          onCancel={close}
+          onCancel={() => close(true)}
         />
       </Modal>
     )
@@ -100,7 +108,7 @@ export default function AssistantConfirmModals({ onSuccess }: Props) {
 
   if (pendingAction.kind === 'addTx') {
     return (
-      <Modal title={modalTitle(pendingAction, assets)} onClose={close}>
+      <Modal title={modalTitle(pendingAction, assets)} onClose={() => close(true)}>
         {pendingAction.rawInput && (
           <p className="mb-3 text-xs text-slate-500">原文:「{pendingAction.rawInput}」— 请核对字段后记录</p>
         )}
@@ -118,7 +126,7 @@ export default function AssistantConfirmModals({ onSuccess }: Props) {
             const asset = assets.find((a) => a.id === t.assetId)
             notify(`已记录流水(${asset?.name ?? ''})`)
           }}
-          onCancel={close}
+          onCancel={() => close(true)}
         />
       </Modal>
     )
@@ -128,7 +136,7 @@ export default function AssistantConfirmModals({ onSuccess }: Props) {
     const tx = transactions.find((t) => t.id === pendingAction.txId)
     if (!tx) return null
     return (
-      <Modal title={modalTitle(pendingAction, assets)} onClose={close}>
+      <Modal title={modalTitle(pendingAction, assets)} onClose={() => close(true)}>
         <TxForm
           assets={assets}
           fixedAssetId={tx.assetId}
@@ -137,7 +145,7 @@ export default function AssistantConfirmModals({ onSuccess }: Props) {
             updateTransaction(tx.id, t)
             notify('已更新流水')
           }}
-          onCancel={close}
+          onCancel={() => close(true)}
         />
       </Modal>
     )

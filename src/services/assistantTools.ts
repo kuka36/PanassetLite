@@ -5,6 +5,8 @@ import { analyzePortfolio } from './ai'
 import { parseNaturalLanguageTx } from './nlTx'
 import { nlResultToTxInitial } from '../components/NlTxInput'
 import { today } from './storage'
+import { appendAuditEntry } from './assistantAudit'
+import { validateToolArgs } from './assistantToolSchema'
 
 export interface AssistantToolContext {
   assets: Asset[]
@@ -235,6 +237,27 @@ export async function executeAssistantTool(
   ctx: AssistantToolContext,
   signal?: AbortSignal,
 ): Promise<ToolExecutionResult> {
+  const validated = validateToolArgs(name, args)
+  if (!validated.ok) {
+    appendAuditEntry({
+      kind: 'tool_validation_error',
+      toolName: name,
+      summary: `参数校验失败: ${name}`,
+      detail: validated.errors.join('; '),
+    })
+    return {
+      content: JSON.stringify({ error: '参数校验失败', details: validated.errors }),
+    }
+  }
+  const safeArgs = validated.args
+
+  appendAuditEntry({
+    kind: 'tool_call',
+    toolName: name,
+    summary: `调用工具 ${name}`,
+    detail: JSON.stringify(safeArgs).slice(0, 500),
+  })
+
   switch (name) {
     case 'get_portfolio_summary': {
       const { summary } = ctx
@@ -278,7 +301,7 @@ export async function executeAssistantTool(
     }
 
     case 'list_assets': {
-      const includeArchived = args.includeArchived === true
+      const includeArchived = safeArgs.includeArchived === true
       const list = ctx.assets
         .filter((a) => includeArchived || !a.archived)
         .map((a) => ({
@@ -294,8 +317,8 @@ export async function executeAssistantTool(
     }
 
     case 'list_transactions': {
-      const limit = typeof args.limit === 'number' ? args.limit : 20
-      const assetId = typeof args.assetId === 'string' ? args.assetId : undefined
+      const limit = typeof safeArgs.limit === 'number' ? safeArgs.limit : 20
+      const assetId = typeof safeArgs.assetId === 'string' ? safeArgs.assetId : undefined
       let txs = [...ctx.transactions].sort((a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt)
       if (assetId) txs = txs.filter((t) => t.assetId === assetId)
       const list = txs.slice(0, limit).map((t) => {
@@ -317,7 +340,7 @@ export async function executeAssistantTool(
     }
 
     case 'navigate': {
-      const page = args.page as AppPageId
+      const page = safeArgs.page as AppPageId
       if (!['dashboard', 'assets', 'transactions', 'settings'].includes(page)) {
         return { content: JSON.stringify({ error: '无效页面' }) }
       }
@@ -341,15 +364,16 @@ export async function executeAssistantTool(
     }
 
     case 'propose_add_asset': {
-      const nameArg = String(args.name ?? '').trim()
+      const nameArg = String(safeArgs.name ?? '').trim()
       if (!nameArg) return { content: JSON.stringify({ error: '缺少资产名称' }) }
+      const assetType = (safeArgs.type as Asset['type']) ?? 'cash'
       const initial: Partial<Omit<Asset, 'id' | 'createdAt'>> = {
         name: nameArg,
-        type: (args.type as Asset['type']) ?? 'cash',
-        currency: (args.currency as string) ?? 'CNY',
-        platform: typeof args.platform === 'string' ? args.platform : undefined,
-        symbol: typeof args.symbol === 'string' ? args.symbol : undefined,
-        note: typeof args.note === 'string' ? args.note : undefined,
+        type: assetType,
+        currency: (safeArgs.currency as string) ?? 'CNY',
+        platform: typeof safeArgs.platform === 'string' ? safeArgs.platform : undefined,
+        symbol: typeof safeArgs.symbol === 'string' ? safeArgs.symbol : undefined,
+        note: typeof safeArgs.note === 'string' ? safeArgs.note : undefined,
         priceSource: 'manual',
       }
       const action: PendingAction = { kind: 'addAsset', initial }
@@ -361,7 +385,7 @@ export async function executeAssistantTool(
     }
 
     case 'propose_edit_asset': {
-      const assetId = String(args.assetId ?? '')
+      const assetId = String(safeArgs.assetId ?? '')
       const asset = findAsset(ctx, assetId)
       if (!asset) return { content: JSON.stringify({ error: '未找到资产' }) }
       const action: PendingAction = { kind: 'editAsset', assetId }
@@ -373,22 +397,22 @@ export async function executeAssistantTool(
     }
 
     case 'propose_add_transaction': {
-      if (typeof args.naturalLanguage === 'string' && args.naturalLanguage.trim()) {
+      if (typeof safeArgs.naturalLanguage === 'string' && safeArgs.naturalLanguage.trim()) {
         try {
           const result = await parseNaturalLanguageTx(
-            args.naturalLanguage.trim(),
+            safeArgs.naturalLanguage.trim(),
             ctx.assets,
             ctx.settings,
             signal,
           )
           const fixedAssetId =
-            typeof args.assetId === 'string' ? args.assetId : result.assetId
+            typeof safeArgs.assetId === 'string' ? safeArgs.assetId : result.assetId
           const initial = nlResultToTxInitial(result, ctx.assets, fixedAssetId)
           const action: PendingAction = {
             kind: 'addTx',
             initial,
             fixedAssetId,
-            rawInput: args.naturalLanguage.trim(),
+            rawInput: safeArgs.naturalLanguage.trim(),
             warnings: result.warnings,
           }
           return {
@@ -406,20 +430,23 @@ export async function executeAssistantTool(
         }
       }
 
-      const assetId = typeof args.assetId === 'string' ? args.assetId : ctx.assets.find((a) => !a.archived)?.id
+      const assetId =
+        typeof safeArgs.assetId === 'string'
+          ? safeArgs.assetId
+          : ctx.assets.find((a) => !a.archived)?.id
       if (!assetId) return { content: JSON.stringify({ error: '没有可用资产,请先添加资产' }) }
-      const txType = args.type as Transaction['type']
+      const txType = safeArgs.type as Transaction['type']
       if (!txType) return { content: JSON.stringify({ error: '请提供 type 或 naturalLanguage' }) }
 
       const initial: Omit<Transaction, 'id' | 'createdAt'> = {
         assetId,
         type: txType,
-        date: typeof args.date === 'string' ? args.date : today(),
-        amount: typeof args.amount === 'number' ? args.amount : undefined,
-        quantity: typeof args.quantity === 'number' ? args.quantity : undefined,
-        price: typeof args.price === 'number' ? args.price : undefined,
-        value: typeof args.value === 'number' ? args.value : undefined,
-        note: typeof args.note === 'string' ? args.note : undefined,
+        date: typeof safeArgs.date === 'string' ? safeArgs.date : today(),
+        amount: typeof safeArgs.amount === 'number' ? safeArgs.amount : undefined,
+        quantity: typeof safeArgs.quantity === 'number' ? safeArgs.quantity : undefined,
+        price: typeof safeArgs.price === 'number' ? safeArgs.price : undefined,
+        value: typeof safeArgs.value === 'number' ? safeArgs.value : undefined,
+        note: typeof safeArgs.note === 'string' ? safeArgs.note : undefined,
       }
       const action: PendingAction = {
         kind: 'addTx',
@@ -434,7 +461,7 @@ export async function executeAssistantTool(
     }
 
     case 'propose_edit_transaction': {
-      const txId = String(args.txId ?? '')
+      const txId = String(safeArgs.txId ?? '')
       const tx = findTx(ctx, txId)
       if (!tx) return { content: JSON.stringify({ error: '未找到流水' }) }
       const action: PendingAction = { kind: 'editTx', txId }
@@ -446,7 +473,7 @@ export async function executeAssistantTool(
     }
 
     case 'propose_delete_asset': {
-      const assetId = String(args.assetId ?? '')
+      const assetId = String(safeArgs.assetId ?? '')
       const asset = findAsset(ctx, assetId)
       if (!asset) return { content: JSON.stringify({ error: '未找到资产' }) }
       const action: PendingAction = { kind: 'deleteAsset', assetId }
@@ -462,7 +489,7 @@ export async function executeAssistantTool(
     }
 
     case 'propose_delete_transaction': {
-      const txId = String(args.txId ?? '')
+      const txId = String(safeArgs.txId ?? '')
       const tx = findTx(ctx, txId)
       if (!tx) return { content: JSON.stringify({ error: '未找到流水' }) }
       const asset = findAsset(ctx, tx.assetId)

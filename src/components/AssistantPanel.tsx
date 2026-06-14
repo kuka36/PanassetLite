@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Send, Trash2, X } from 'lucide-react'
-import { useAssistantStore } from '../assistantStore'
+import { ClipboardList, Send, Trash2, X } from 'lucide-react'
+import { findQueueIdByAction, useAssistantStore } from '../assistantStore'
 import { useStore } from '../store'
 import { useSummary } from '../hooks/useSummary'
 import LightMarkdown from './LightMarkdown'
@@ -14,7 +14,8 @@ import { ADVISOR_PRESETS, DEFAULT_ADVISOR_PROMPT, resolveAdvisorPrompt, streamLl
 import { runAssistantTurn, runLocalAssistantTurn } from '../services/assistantAgent'
 import type { AssistantToolContext } from '../services/assistantTools'
 import { isLocalLlmBaseUrl } from '../services/llmClient'
-import type { AppPageId, PendingAction } from '../types/assistant'
+import type { AppPageId, AuditLogEntry, PendingAction } from '../types/assistant'
+import { clearAuditLog, getAuditLog } from '../services/assistantAudit'
 import { color } from '../theme/colors'
 
 interface Props {
@@ -33,6 +34,9 @@ export default function AssistantPanel({ currentPage, onNavigate }: Props) {
   const addMessage = useAssistantStore((s) => s.addMessage)
   const updateMessage = useAssistantStore((s) => s.updateMessage)
   const setPendingAction = useAssistantStore((s) => s.setPendingAction)
+  const enqueueActions = useAssistantStore((s) => s.enqueueActions)
+  const openQueuedAction = useAssistantStore((s) => s.openQueuedAction)
+  const actionQueue = useAssistantStore((s) => s.actionQueue)
   const loading = useAssistantStore((s) => s.loading)
   const setLoading = useAssistantStore((s) => s.setLoading)
   const error = useAssistantStore((s) => s.error)
@@ -46,6 +50,8 @@ export default function AssistantPanel({ currentPage, onNavigate }: Props) {
   const summary = useSummary()
 
   const [input, setInput] = useState('')
+  const [auditOpen, setAuditOpen] = useState(false)
+  const [auditEntries, setAuditEntries] = useState<AuditLogEntry[]>([])
   const listRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const abortRef = useRef<AbortController | null>(null)
@@ -93,8 +99,13 @@ export default function AssistantPanel({ currentPage, onNavigate }: Props) {
     refreshPrices,
   })
 
+  const pendingCount = actionQueue.filter((q) => q.status === 'pending' || q.status === 'active').length
+  const privacyMode = settings.llmContextPrivacy === 'summary' ? '仅汇总' : '含明细'
+
   const openFormAction = (action: PendingAction) => {
-    setPendingAction(action)
+    const queueId = findQueueIdByAction(action, useAssistantStore.getState().actionQueue)
+    if (queueId) openQueuedAction(queueId)
+    else setPendingAction(action)
   }
 
   const attachPendingToMessage = (
@@ -107,10 +118,7 @@ export default function AssistantPanel({ currentPage, onNavigate }: Props) {
       pendingAction: first.action,
       pendingSummary: first.summary,
     })
-    const formAction = pending.find(
-      (p) => p.action.kind !== 'deleteAsset' && p.action.kind !== 'deleteTx',
-    )
-    if (formAction) openFormAction(formAction.action)
+    enqueueActions(pending, msgId)
   }
 
   const sendUserMessage = async (text: string) => {
@@ -151,9 +159,6 @@ export default function AssistantPanel({ currentPage, onNavigate }: Props) {
               pendingAction: p.action,
               pendingSummary: p.summary,
             })
-            if (p.action.kind !== 'deleteAsset' && p.action.kind !== 'deleteTx') {
-              openFormAction(p.action)
-            }
           }
         }
       } else {
@@ -199,9 +204,18 @@ export default function AssistantPanel({ currentPage, onNavigate }: Props) {
     }
   }
 
-  const handleDeleteDone = (msgId: string, message: string) => {
+  const handleDeleteDone = (msgId: string, message: string, action?: PendingAction) => {
     updateMessage(msgId, { pendingAction: undefined, pendingSummary: undefined })
+    if (action) {
+      const queueId = findQueueIdByAction(action, useAssistantStore.getState().actionQueue)
+      if (queueId) useAssistantStore.getState().completeQueueItem(queueId, message.includes('取消'))
+    }
     addMessage({ role: 'assistant', content: message })
+  }
+
+  const openAudit = () => {
+    setAuditEntries(getAuditLog().slice().reverse())
+    setAuditOpen(true)
   }
 
   if (!open) return null
@@ -221,9 +235,21 @@ export default function AssistantPanel({ currentPage, onNavigate }: Props) {
         <header className="flex shrink-0 items-center justify-between border-b border-slate-100 px-4 py-3">
           <div>
             <h2 className="text-sm font-semibold text-slate-800">AI 助手</h2>
-            <p className="text-[10px] text-slate-500">对话操作 · 写操作需确认</p>
+            <p className="text-[10px] text-slate-500">
+              对话操作 · 写操作需确认
+              {llmReady && ` · LLM 上下文:${privacyMode}`}
+              {pendingCount > 0 && ` · 待确认 ${pendingCount} 项`}
+            </p>
           </div>
           <div className="flex items-center gap-1">
+            <button
+              type="button"
+              className="rounded-xl p-2 text-slate-400 hover:bg-slate-100"
+              onClick={openAudit}
+              title="操作审计"
+            >
+              <ClipboardList className="h-4 w-4" />
+            </button>
             <button
               type="button"
               className="rounded-xl p-2 text-slate-400 hover:bg-slate-100"
@@ -272,7 +298,7 @@ export default function AssistantPanel({ currentPage, onNavigate }: Props) {
                       <DeleteConfirmCard
                         action={msg.pendingAction}
                         summary={msg.pendingSummary}
-                        onDone={(m) => handleDeleteDone(msg.id, m)}
+                        onDone={(m) => handleDeleteDone(msg.id, m, msg.pendingAction)}
                       />
                     )}
                     {msg.pendingAction.kind !== 'deleteAsset' &&
@@ -341,8 +367,70 @@ export default function AssistantPanel({ currentPage, onNavigate }: Props) {
               去设置页配置 LLM
             </button>
           )}
+          {llmReady && settings.llmContextPrivacy === 'summary' && (
+            <p className="mt-2 text-[10px] text-slate-500">
+              当前为「仅汇总」隐私模式,发送给 LLM 的上下文不含持仓名称与单项盈亏。
+            </p>
+          )}
         </div>
       </aside>
+
+      {auditOpen &&
+        createPortal(
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
+            <div
+              className="max-h-[70vh] w-full max-w-md overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+                <h3 className="text-sm font-semibold text-slate-800">操作审计</h3>
+                <button
+                  type="button"
+                  className="rounded-lg p-1 text-slate-400 hover:bg-slate-100"
+                  onClick={() => setAuditOpen(false)}
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <div className="max-h-[50vh] space-y-2 overflow-y-auto p-4 text-xs">
+                {auditEntries.length === 0 ? (
+                  <p className="text-slate-500">暂无审计记录</p>
+                ) : (
+                  auditEntries.map((e) => (
+                    <div key={e.id} className="rounded-lg border border-slate-100 bg-slate-50 p-2">
+                      <div className="flex justify-between text-slate-500">
+                        <span>{e.kind}</span>
+                        <span>{new Date(e.timestamp).toLocaleString()}</span>
+                      </div>
+                      <p className="mt-1 text-slate-700">{e.summary}</p>
+                      {e.detail && (
+                        <p className="mt-0.5 truncate text-slate-500" title={e.detail}>
+                          {e.detail}
+                        </p>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+              <div className="flex justify-end gap-2 border-t border-slate-100 px-4 py-3">
+                <button
+                  type="button"
+                  className={btnGhost}
+                  onClick={() => {
+                    clearAuditLog()
+                    setAuditEntries([])
+                  }}
+                >
+                  清空
+                </button>
+                <button type="button" className={btnGhost} onClick={() => setAuditOpen(false)}>
+                  关闭
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )}
     </>,
     document.body,
   )

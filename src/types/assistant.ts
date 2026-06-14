@@ -26,3 +26,33 @@ export interface ToolExecutionResult {
   pendingAction?: PendingAction
   pendingSummary?: string
 }
+
+/** LLM 上下文隐私:仅汇总数字 vs 含持仓明细(资产名、盈亏等) */
+export type LlmContextPrivacy = 'summary' | 'detailed'
+
+export type AuditEventKind =
+  | 'tool_call'
+  | 'tool_validation_error'
+  | 'action_queued'
+  | 'action_confirmed'
+  | 'action_cancelled'
+
+export interface AuditLogEntry {
+  id: string
+  timestamp: number
+  kind: AuditEventKind
+  toolName?: string
+  summary: string
+  detail?: string
+}
+
+export type QueuedActionStatus = 'pending' | 'active' | 'done' | 'cancelled'
+
+export interface QueuedAction {
+  id: string
+  action: PendingAction
+  summary: string
+  messageId?: string
+  status: QueuedActionStatus
+  createdAt: number
+}
