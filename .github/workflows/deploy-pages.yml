@@ -37,10 +37,16 @@ jobs:
 
       # Self-gate: a tag may point at any commit, so re-verify quality here
       # instead of trusting that CI ran on this exact ref.
+      - name: Lint
+        run: npm run lint
+
       - name: Typecheck
-        run: npx tsc --noEmit
+        run: npx tsc -b --noEmit
 
       - name: Build
+        env:
+          # GitHub Pages project site: https://<owner>.github.io/<repo>/
+          VITE_BASE: /${{ github.event.repository.name }}/
         run: npm run build
 
       - name: Configure Pages

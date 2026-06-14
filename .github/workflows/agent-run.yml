@@ -14,9 +14,8 @@ jobs:
     # Only the repo owner may kick off an agent run: the 'ai-task' label must be
     # applied by the owner themselves, not by collaborators or outside contributors.
     if: github.event.label.name == 'ai-task' && github.actor == github.repository_owner
-    # Runs on the user's self-hosted runner so Codex ChatGPT login (~/.codex/auth.json)
-    # stays on the local box. Public repo: never expose CODEX_AUTH_JSON as a secret.
-    runs-on: [self-hosted, panasset-agent]
+    # Runs on a self-hosted runner with Codex CLI and `codex login` auth (~/.codex/auth.json).
+    runs-on: [self-hosted, panassetlite-agent]
     env:
       ISSUE_NUMBER: ${{ github.event.issue.number }}
       ISSUE_TITLE: ${{ github.event.issue.title }}
@@ -28,6 +27,15 @@ jobs:
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
 
       - name: Compute branch slug
         id: slug
@@ -43,72 +51,41 @@ jobs:
           gh issue comment "$ISSUE_NUMBER" --body \
             ":robot: Agent run started on branch \`${{ steps.slug.outputs.branch }}\` ([run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}))."
 
-      # Self-hosted runner persists Docker state between runs. `devcontainer up`
-      # reuses a container matching this folder by label and never re-applies
-      # config/mount changes, so a once-broken container stays broken forever.
-      # Remove it up front to force a clean recreate every run.
-      - name: Remove stale devcontainer
-        run: |
-          docker rm -f $(docker ps -aq \
-            --filter "label=devcontainer.local_folder=${{ github.workspace }}") 2>/dev/null || true
-
-      - name: Run agent in devcontainer
+      - name: Run agent
         id: agent
-        uses: devcontainers/ci@v0.3
-        with:
-          imageName: panassetlite-agent
-          push: never
-          env: |
-            GH_TOKEN
-            ISSUE_NUMBER
-            ISSUE_TITLE
-            ISSUE_BODY
-          runCmd: |
-            set -euo pipefail
-            # /workspace is bind-mounted from the host and owned by a different
-            # uid than the container's `ubuntu` user, so git rejects it as
-            # "dubious ownership". Whitelist it before any git command.
-            git config --global --add safe.directory /workspace
-            # Commit as the GitHub Actions bot so commits get a real avatar and
-            # are clearly attributable to automation (not a human contributor).
-            git config --global user.name "github-actions[bot]"
-            git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            # -B (not -b): the self-hosted runner's .git persists between runs,
-            # so a same-named branch from a prior run already exists. -B resets
-            # it onto the freshly checked-out main instead of erroring out.
-            git checkout -B "${{ steps.slug.outputs.branch }}"
+        run: |
+          set -euo pipefail
 
-            # Codex auth comes from the host's ~/.codex/auth.json mounted by
-            # devcontainer.json (mounts:). No secret required.
-            test -f "$HOME/.codex/auth.json" || {
-              echo "::error::~/.codex/auth.json missing — run 'codex login' on the self-hosted runner host."
-              exit 3
-            }
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B "${{ steps.slug.outputs.branch }}"
 
-            printf '# Issue #%s: %s\n\n%s\n' "$ISSUE_NUMBER" "$ISSUE_TITLE" "$ISSUE_BODY" > /tmp/task.md
+          test -f "$HOME/.codex/auth.json" || {
+            echo "::error::~/.codex/auth.json missing — run 'codex login' on the self-hosted runner host."
+            exit 3
+          }
 
-            # codex 0.13x `exec` has no --instructions flag: prepend the harness
-            # instructions to the prompt and feed via stdin (avoids arg-length and
-            # shell-quoting limits on large issue bodies). --full-auto is also
-            # deprecated in favour of --sandbox workspace-write.
-            { cat .agent/harness/rules/panasset-instructions.md; echo; cat /tmp/task.md; } > /tmp/prompt.md
-            codex exec --sandbox workspace-write < /tmp/prompt.md
+          printf '# Issue #%s: %s\n\n%s\n' "$ISSUE_NUMBER" "$ISSUE_TITLE" "$ISSUE_BODY" > /tmp/task.md
 
-            npm run build 2>&1 | tee /tmp/build.log
+          { cat .github/agent-instructions.md; echo; cat /tmp/task.md; } > /tmp/prompt.md
+          codex exec --sandbox workspace-write < /tmp/prompt.md
 
-            if [ -z "$(git status --porcelain)" ]; then
-              echo "::error::Agent produced no changes."
-              exit 2
-            fi
+          npm run lint 2>&1 | tee /tmp/lint.log
+          npm run build 2>&1 | tee /tmp/build.log
 
-            git add -A
-            git commit \
-              -m "feat: address issue #${ISSUE_NUMBER}" \
-              -m "Closes #${ISSUE_NUMBER}" \
-              -m "Co-Authored-By: Codex Agent <agent@panassetlite.local>" \
-              || true
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "::error::Agent produced no changes."
+            exit 2
+          fi
 
-      - name: Report build failure
+          git add -A
+          git commit \
+            -m "feat: address issue #${ISSUE_NUMBER}" \
+            -m "Closes #${ISSUE_NUMBER}" \
+            -m "Co-Authored-By: Codex Agent <agent@panassetlite.local>" \
+            || true
+
+      - name: Report failure
         if: failure() && steps.agent.conclusion == 'failure'
         run: |
           body=":x: Agent run failed. See [logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})."
@@ -116,8 +93,6 @@ jobs:
 
       - name: Push branch
         if: success()
-        # --force: agent branches are disposable and a prior run may have left a
-        # diverged remote branch, which would reject a normal push.
         run: git push --force origin "${{ steps.slug.outputs.branch }}"
 
       - name: Open PR
@@ -125,15 +100,13 @@ jobs:
         env:
           BRANCH: ${{ steps.slug.outputs.branch }}
         run: |
-          # Idempotent: a re-run may already have an open PR for this head branch,
-          # in which case `gh pr create` would error. Skip creation if one exists.
           if [ -n "$(gh pr list --head "$BRANCH" --state open --json number -q '.[0].number')" ]; then
             echo "PR for $BRANCH already open; skipping create."
             exit 0
           fi
 
           {
-            cat .agent/harness/PULL_REQUEST_TEMPLATE.md
+            cat .github/PULL_REQUEST_TEMPLATE.md
             printf '\n\n---\nCloses #%s\n' "$ISSUE_NUMBER"
           } > /tmp/pr-body.md
 

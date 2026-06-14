@@ -1,6 +1,6 @@
-# 镜像构建只需要 .agent/harness/install-tools.sh，其余都排除以加速构建、避免泄密。
+# 镜像构建上下文：Agent/devcontainer 相关文件即可，其余排除以加速构建、避免泄密。
 
-# 依赖与构建产物（最大头）
+# 依赖与构建产物
 node_modules
 dist
 dist-ssr
@@ -9,14 +9,15 @@ dist-ssr
 .git
 .github
 
-# 密钥 / 环境变量（绝不进 build context）
+# 密钥 / 环境变量
 .env
 .env.*
 *.local
 
-# 容器相关备份与本机配置
+# 本机配置
 .devcontainer-back
 .claude
+.cursor
 .idea
 .vscode
 
