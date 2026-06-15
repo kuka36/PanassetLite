@@ -1,0 +1,33 @@
+# 镜像构建上下文：Agent/devcontainer 相关文件即可，其余排除以加速构建、避免泄密。
+
+# 依赖与构建产物
+node_modules
+dist
+dist-ssr
+
+# 版本控制与 CI
+.git
+.github
+
+# 密钥 / 环境变量
+.env
+.env.*
+*.local
+
+# 本机配置
+.devcontainer-back
+.claude
+.cursor
+.idea
+.vscode
+
+# 日志
+logs
+*.log
+
+# 系统与杂项
+.DS_Store
+.playwright-cli
+
+# 文档（构建用不到）
+*.md

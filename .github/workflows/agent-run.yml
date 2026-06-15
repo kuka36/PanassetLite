@@ -1,0 +1,175 @@
+name: Agent Run
+
+on:
+  issues:
+    types: [labeled]
+
+# 同一 Issue 重复触发时取消旧 run，避免 ai/{n}-* 分支互相 force-push 踩踏
+concurrency:
+  group: agent-issue-${{ github.event.issue.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  run-agent:
+    # Only the repo owner may kick off an agent run: the 'ai-task' label must be
+    # applied by the owner themselves, not by collaborators or outside contributors.
+    if: github.event.label.name == 'ai-task' && github.actor == github.repository_owner
+    # Runs on a self-hosted runner. Agent backend: AGENT_BACKEND=cursor|codex (default cursor).
+    #   cursor → CURSOR_API_KEY in runner env; codex → ~/.codex/auth.json from `codex login`
+    runs-on: [self-hosted, panasset-agent]
+    env:
+      ISSUE_NUMBER: ${{ github.event.issue.number }}
+      ISSUE_TITLE: ${{ github.event.issue.title }}
+      ISSUE_BODY: ${{ github.event.issue.body }}
+      # GH_TOKEN 不在此覆盖：优先用 runner 宿主机 token（可创建 PR），见 Configure gh auth
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure gh auth
+        run: |
+          source .agent/harness/gh-auth.sh
+          echo "GH_TOKEN=${GH_TOKEN}" >> "$GITHUB_ENV"
+
+      - name: Validate harness
+        id: validate
+        run: bash .agent/harness/preflight-harness.sh
+
+      - name: Verify Node.js
+        run: node --version && npm --version
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Compute branch slug
+        id: slug
+        run: |
+          slug=$(echo "$ISSUE_TITLE" | tr '[:upper:]' '[:lower:]' \
+            | sed -E 's/[^a-z0-9]+/-/g; s/^-+|-+$//g' | cut -c1-40)
+          [ -z "$slug" ] && slug="task"
+          branch="ai/${ISSUE_NUMBER}-${slug}"
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+
+      - name: Acknowledge on issue
+        run: |
+          gh issue comment "$ISSUE_NUMBER" --body \
+            ":robot: Agent run started on branch \`${{ steps.slug.outputs.branch }}\` ([run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}))."
+
+      - name: Prepare branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B "${{ steps.slug.outputs.branch }}"
+
+      - name: Run agent
+        id: agent
+        run: |
+          set -euo pipefail
+          printf '# Issue #%s: %s\n\n%s\n' "$ISSUE_NUMBER" "$ISSUE_TITLE" "$ISSUE_BODY" > /tmp/task.md
+          { cat .github/agent-instructions.md; echo; cat /tmp/task.md; } > /tmp/prompt.md
+          bash .agent/harness/run-agent-exec.sh /tmp/prompt.md
+
+      - name: Upload agent log
+        if: always() && steps.agent.conclusion != 'skipped'
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-log-issue-${{ env.ISSUE_NUMBER }}-${{ github.run_id }}
+          path: /tmp/agent.log
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Verify quality
+        id: verify
+        env:
+          AGENT_FIX_MAX_ROUNDS: 2
+        run: bash .agent/harness/verify-and-fix.sh
+
+      - name: Gate paths
+        id: gate
+        run: |
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "::error::Agent produced no changes."
+            exit 2
+          fi
+          bash .agent/harness/gate-paths.sh
+
+      - name: Commit
+        id: commit
+        run: |
+          harness="$(pwd)/.agent/harness"
+          co_author=$(bash -c "source \"$harness/agent-backend.sh\"; agent_co_author_trailer")
+          git add -A
+          git commit \
+            -m "feat: address issue #${ISSUE_NUMBER}" \
+            -m "Closes #${ISSUE_NUMBER}" \
+            -m "$co_author"
+
+      - name: Push branch
+        if: success()
+        id: push
+        run: git push --force origin "${{ steps.slug.outputs.branch }}"
+
+      - name: Open or update PR
+        if: success()
+        id: open_pr
+        run: bash .agent/harness/open-or-update-pr.sh "$ISSUE_NUMBER" "$ISSUE_TITLE" "${{ steps.slug.outputs.branch }}"
+
+      - name: Report failure
+        if: failure()
+        run: |
+          body=":x: **Agent run failed** — [完整日志](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
+          body+=$'\n\n'
+
+          if [ "${{ steps.validate.conclusion }}" = "failure" ]; then
+            body+=$'**失败阶段**: harness 文件校验\n'
+            body+=$'仓库缺少 \`.agent/harness/\` 下的必需脚本（如 \`generate-pr-body.sh\`），请合并修复后重试。\n\n'
+          fi
+          if [ "${{ steps.agent.conclusion }}" = "failure" ]; then
+            body+=$'**失败阶段**: Agent 执行\n\n'
+            if [ -f /tmp/agent.log ]; then
+              body+=$'```\n'
+              body+=$(tail -n 40 /tmp/agent.log)
+              body+=$'\n```\n\n'
+            fi
+            body+=$'完整日志见 Actions Artifacts（agent-log）或 [Run agent 步骤](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}).\n\n'
+          fi
+          if [ "${{ steps.verify.conclusion }}" = "failure" ]; then
+            body+=$'**失败阶段**: lint/build 校验（含自动修复轮次）\n\n'
+            if [ -f /tmp/lint.log ]; then
+              body+=$'**Lint**\n```\n'
+              body+=$(tail -n 40 /tmp/lint.log)
+              body+=$'\n```\n\n'
+            fi
+            if [ -f /tmp/build.log ]; then
+              body+=$'**Build**\n```\n'
+              body+=$(tail -n 40 /tmp/build.log)
+              body+=$'\n```\n\n'
+            fi
+          fi
+          if [ "${{ steps.gate.conclusion }}" = "failure" ]; then
+            body+=$'**失败阶段**: 路径校验\n'
+            body+=$'Agent 修改了禁止变更的路径（如 \`.github/workflows\`、\`.cursor/\`），或没有产生有效改动。\n\n'
+          fi
+          if [ "${{ steps.commit.conclusion }}" = "failure" ]; then
+            body+=$'**失败阶段**: git commit\n'
+            body+=$'提交失败（可能是 pre-commit hook、git 配置或索引问题）。\n\n'
+          fi
+          if [ "${{ steps.push.conclusion }}" = "failure" ]; then
+            body+=$'**失败阶段**: git push\n'
+            body+=$'推送分支失败（检查 runner 的 git 凭据与 \`GH_TOKEN\` 权限）。\n\n'
+          fi
+          if [ "${{ steps.open_pr.conclusion }}" = "failure" ]; then
+            body+=$'**失败阶段**: 开/更新 PR\n'
+            body+=$'常见原因：缺少 \`.agent/harness/generate-pr-body.sh\`、\`gh\` 无 PR 写权限。\n\n'
+          fi
+
+          gh issue comment "$ISSUE_NUMBER" --body "$body"

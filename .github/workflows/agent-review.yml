@@ -1,0 +1,64 @@
+name: Agent Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  review:
+    if: |
+      contains(github.event.pull_request.labels.*.name, 'ai-generated') ||
+      github.event.pull_request.user.login == 'github-actions[bot]' ||
+      (github.event.action == 'labeled' && github.event.label.name == 'ai-review')
+    # Agent backend: AGENT_BACKEND=cursor|codex (default cursor) on self-hosted runner.
+    runs-on: [self-hosted, panasset-agent]
+    env:
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Configure gh auth
+        run: |
+          source .agent/harness/gh-auth.sh
+          echo "GH_TOKEN=${GH_TOKEN}" >> "$GITHUB_ENV"
+
+      - name: Validate harness
+        id: validate
+        run: bash .agent/harness/preflight-harness.sh
+
+      # lint / tsc / build 由 ci.yml 在 PR 上独立执行，此处不再重复
+      - name: Run reviewer agent
+        run: |
+          set -euo pipefail
+
+          gh pr diff "$PR_NUMBER" > /tmp/diff.patch
+
+          {
+            cat .github/agent-review-instructions.md
+            printf '\n\n## Diff under review\n\n```diff\n'
+            cat /tmp/diff.patch
+            printf '\n```\n'
+          } > /tmp/review-prompt.md
+
+          bash .agent/harness/run-agent-review.sh /tmp/review-prompt.md /tmp/review.md
+
+          verdict=$(awk '/^## Verdict/{flag=1; next} flag && NF{print; exit}' /tmp/review.md | tr -d ' `')
+
+          case "$verdict" in
+            approve)         flag="--approve" ;;
+            request-changes) flag="--request-changes" ;;
+            *)               flag="--comment" ;;
+          esac
+
+          gh pr review "$PR_NUMBER" $flag -F /tmp/review.md || \
+            gh pr comment "$PR_NUMBER" -F /tmp/review.md

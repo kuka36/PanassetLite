@@ -1,0 +1,35 @@
+name: AI Task
+description: 委派给自动化 Agent 执行的任务
+title: "[ai-task] "
+labels: ["ai-task"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        填写**目标**与**验收标准**后提交。owner 打上 `ai-task` 标签后触发 Agent Run（需 self-hosted runner）。
+
+  - type: textarea
+    id: goal
+    attributes:
+      label: 目标
+      placeholder: 在资产列表页添加按类型筛选，选中后列表实时过滤。
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 验收标准
+      value: |
+        - [ ] `npm run build` 通过
+        - [ ] `npm run lint` 通过
+    validations:
+      required: true
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: 补充说明（可选）
+      placeholder: 相关文件路径、注意事项等
+    validations:
+      required: false

@@ -1,0 +1,27 @@
+---
+description: React 组件 UI 模式：弹窗必须用 portal，注意 fade-up transform 陷阱
+globs: "**/*.tsx"
+alwaysApply: false
+---
+
+# UI 模式
+
+## 弹窗 / 全屏覆盖层必须用 createPortal
+
+页面容器普遍带 `fade-up` 动画类（`src/index.css`），它使用 `transform`，会创建新的包含块，导致子元素的 `fixed` 定位相对容器而非视口，弹窗会被遮挡或错位。
+
+```tsx
+// ❌ BAD：fixed 元素直接渲染在带 transform 的容器内
+return <div className="fixed inset-0 z-50">...</div>
+
+// ✅ GOOD：通过 portal 挂到 document.body
+import { createPortal } from 'react-dom'
+return createPortal(<div className="fixed inset-0 z-50">...</div>, document.body)
+```
+
+新弹窗优先复用 `src/components/Modal.tsx`（已内置 portal、遮罩点击关闭、内容滚动居中）。
+
+## 层级约定
+
+- 侧边栏 `z-40`，弹窗遮罩 `z-50`。
+- 弹窗内容点击需 `e.stopPropagation()` 防止触发遮罩的 onClose。

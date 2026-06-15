@@ -1,0 +1,39 @@
+---
+description: 开发通用约束：改动范围、分层、依赖与类型
+alwaysApply: true
+---
+
+# 开发最佳实践
+
+## 改动原则
+
+- **最小 diff**：只改任务相关代码，不顺手重构、不加无关功能。
+- **复用优先**：改前先找现有组件/工具（`Modal`、`useSummary`、`utils/format.ts`），避免重复实现。
+- **不引入新依赖**：除非现有栈无法合理解决，且改动收益明确。
+
+## 分层职责
+
+| 层 | 目录 | 职责 |
+|---|---|---|
+| 页面 | `src/pages/` | 布局、交互、组合组件；不写财务计算 |
+| 组件 | `src/components/` | 可复用 UI 与表单 |
+| 状态 | `src/store.ts` | 增删改 + 持久化入口 |
+| 计算 | `src/engine/` | 纯函数/类，由事件重放推导组合状态 |
+| 服务 | `src/services/` | localStorage、行情、LLM 等 I/O |
+| 类型 | `src/types.ts` | 领域模型、常量映射（标签/颜色） |
+
+页面通过 `useStore` 读写数据，通过 `useSummary()` 获取组合快照，**不要在组件内手写市值/盈亏公式**。
+
+## TypeScript
+
+- 领域类型放 `src/types.ts`，避免页面内联重复定义。
+- 对外 API（store action、service 函数）保持显式参数/返回类型。
+- 用户可见错误用 `throw new Error('中文说明')`，UI 层 catch 后展示。
+
+## 格式化与展示
+
+金额、百分比统一用 `src/utils/format.ts`（`fmtMoney`、`fmtPct`、`pnlColor`），不在页面散落 `toFixed`。
+
+## 验证
+
+改完跑 `npm run build` 确认 TypeScript 通过；涉及 UI 时在浏览器手动验证关键路径。
