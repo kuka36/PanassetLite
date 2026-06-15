@@ -50,6 +50,9 @@ jobs:
         env:
           # GitHub Pages project site: https://<owner>.github.io/<repo>/
           VITE_BASE: /${{ github.event.repository.name }}/
+          # Repository variable: FC HTTP 触发器地址（见 worker-fc/README.md）
+          VITE_ANALYTICS_URL: ${{ vars.VITE_ANALYTICS_URL }}
+          VITE_ANALYTICS_FALLBACK: ${{ vars.VITE_ANALYTICS_FALLBACK }}
         run: npm run build
 
       - name: Configure Pages

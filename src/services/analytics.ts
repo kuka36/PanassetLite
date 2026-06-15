@@ -1,11 +1,22 @@
 /**
- * PanassetLite 访问统计（Cloudflare Worker）
+ * PanassetLite 访问统计
+ * 默认走阿里云 FC；可通过环境变量配置主/备端点。
  * 仅上报页面路径、来源、设备 UA；不上传资产数据。
  */
 
-const WORKER = 'https://panassetlite-analytics.panassetlite.workers.dev'
+const CF_FALLBACK = 'https://panassetlite-analytics.panassetlite.workers.dev'
 const SID_KEY = '__pa_sid'
 const NEW_KEY = '__pa_new'
+
+function analyticsEndpoints(): string[] {
+  const primary = import.meta.env.VITE_ANALYTICS_URL as string | undefined
+  const fallback = import.meta.env.VITE_ANALYTICS_FALLBACK as string | undefined
+  const urls = [primary, fallback].filter(
+    (url): url is string => typeof url === 'string' && url.length > 0,
+  )
+  if (urls.length > 0) return urls.map((url) => url.replace(/\/$/, ''))
+  return [CF_FALLBACK]
+}
 
 let currentPage = ''
 
@@ -35,21 +46,30 @@ function isFirstHitInSession(): boolean {
   }
 }
 
-function hit(isNew: boolean) {
-  const url =
-    WORKER +
-    '/hit?sid=' +
+function hitQuery(isNew: boolean): string {
+  return (
+    'sid=' +
     encodeURIComponent(getSid()) +
     '&p=' +
     encodeURIComponent(pagePath()) +
     '&r=' +
     encodeURIComponent(document.referrer) +
     (isNew ? '&new=1' : '')
-  fetch(url).catch(() => {})
+  )
+}
+
+function hit(isNew: boolean) {
+  const qs = hitQuery(isNew)
+  for (const base of analyticsEndpoints()) {
+    fetch(`${base}/hit?${qs}`).catch(() => {})
+  }
 }
 
 function leave() {
-  navigator.sendBeacon(WORKER + '/leave?sid=' + encodeURIComponent(getSid()))
+  const qs = 'sid=' + encodeURIComponent(getSid())
+  for (const base of analyticsEndpoints()) {
+    navigator.sendBeacon(`${base}/leave?${qs}`)
+  }
 }
 
 /** 页面切换时更新本地路径（统计仅在会话首次访问时上报） */
