@@ -1,8 +1,6 @@
-import { useCallback, useMemo, useState } from 'react'
-import { RefreshCw, TrendingUp } from 'lucide-react'
-import { useStore } from '../store'
+import { useMemo } from 'react'
+import { TrendingUp } from 'lucide-react'
 import { useSummary } from '../hooks/useSummary'
-import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
 import EChart from '../components/EChart'
 import { lightAxis, lightTooltip } from '../components/chartTheme'
 import { Card, CardBody, CardHeader, MetricCard } from '../components/ui/Card'
@@ -13,20 +11,6 @@ import { fmtCompact, fmtMoney, fmtPct, pnlColor } from '../utils/format'
 
 export default function Dashboard({ goTo }: { goTo: (page: string) => void }) {
   const summary = useSummary()
-  const refreshing = useStore((s) => s.refreshing)
-  const refreshPrices = useStore((s) => s.refreshPrices)
-  const settings = useStore((s) => s.settings)
-  const [msg, setMsg] = useState('')
-
-  const doRefresh = useCallback(async () => {
-    if (refreshing) return
-    setMsg('')
-    const result = await refreshPrices()
-    setMsg(result)
-  }, [refreshPrices, refreshing])
-
-  useKeyboardShortcuts(useMemo(() => [{ key: 'r', action: () => void doRefresh() }], [doRefresh]))
-
   const { history } = summary
   const monthDelta = useMemo(() => {
     if (history.length < 2) return null
@@ -171,25 +155,7 @@ export default function Dashboard({ goTo }: { goTo: (page: string) => void }) {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-xl font-semibold text-slate-800">总览</h1>
-        <div className="flex items-center gap-3">
-          {settings.pricesUpdatedAt && (
-            <span className="text-xs text-slate-500">
-              行情更新于 {new Date(settings.pricesUpdatedAt).toLocaleString('zh-CN')}
-            </span>
-          )}
-          <button
-            className={`${btnGhost} inline-flex items-center gap-1.5 disabled:opacity-50`}
-            onClick={doRefresh}
-            disabled={refreshing}
-          >
-            <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-            {refreshing ? '更新中…' : '刷新行情'}
-          </button>
-        </div>
-      </div>
-      {msg && <p className="text-xs text-blue-600">{msg}</p>}
+      <h1 className="text-xl font-semibold text-slate-800">总览</h1>
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <MetricCard label="净资产" value={fmtMoney(summary.netWorthCNY)} featured />
