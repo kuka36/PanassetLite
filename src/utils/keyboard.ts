@@ -22,6 +22,15 @@ function normalizeKey(key: string): string {
   return key
 }
 
+function isDigitKey(key: string): boolean {
+  return key.length === 1 && key >= '0' && key <= '9'
+}
+
+/** macOS Option+数字会打出特殊字符(如 ⌥2 → ™),需用物理键位 code 匹配 */
+function matchesDigitCode(e: KeyboardEvent, digit: string): boolean {
+  return e.code === `Digit${digit}` || e.code === `Numpad${digit}`
+}
+
 export function matchKey(e: KeyboardEvent, spec: KeySpec): boolean {
   const wantMod = spec.mod ?? false
   const wantAlt = spec.alt ?? false
@@ -33,7 +42,11 @@ export function matchKey(e: KeyboardEvent, spec: KeySpec): boolean {
 
   const eventKey = normalizeKey(e.key)
   const specKey = normalizeKey(spec.key)
-  return eventKey === specKey
+  if (eventKey === specKey) return true
+
+  if (isDigitKey(specKey) && matchesDigitCode(e, specKey)) return true
+
+  return false
 }
 
 const isMac =
