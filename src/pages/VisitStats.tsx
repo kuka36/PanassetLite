@@ -132,9 +132,22 @@ export default function VisitStats({ onClose }: { onClose: () => void }) {
   }, [])
 
   useEffect(() => {
-    void load()
+    let cancelled = false
+    void (async () => {
+      try {
+        setData(await fetchVisitStats())
+        setError(null)
+      } catch (e) {
+        if (!cancelled) setError(e instanceof Error ? e.message : '加载失败')
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    })()
     const timer = window.setInterval(() => void load(), 60_000)
-    return () => window.clearInterval(timer)
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+    }
   }, [load])
 
   const trendOption = useMemo(() => {
@@ -161,7 +174,7 @@ export default function VisitStats({ onClose }: { onClose: () => void }) {
         },
       ],
     }
-  }, [data?.trend])
+  }, [data])
 
   return (
     <div className="min-h-screen bg-slate-50">
