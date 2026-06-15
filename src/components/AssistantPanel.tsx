@@ -13,7 +13,7 @@ import { btnAi, btnGhost, inputCls } from './Modal'
 import { ADVISOR_PRESETS, DEFAULT_ADVISOR_PROMPT, resolveAdvisorPrompt, streamLlmAdvice } from '../services/ai'
 import { runAssistantTurn, runLocalAssistantTurn } from '../services/assistantAgent'
 import type { AssistantToolContext } from '../services/assistantTools'
-import { isLocalLlmBaseUrl } from '../services/llmClient'
+import { isLlmUsable } from '../services/llmClient'
 import type { AppPageId, AuditLogEntry, PendingAction } from '../types/assistant'
 import { clearAuditLog, getAuditLog } from '../services/assistantAudit'
 import { color } from '../theme/colors'
@@ -21,10 +21,6 @@ import { color } from '../theme/colors'
 interface Props {
   currentPage: AppPageId
   onNavigate: (page: AppPageId) => void
-}
-
-function canUseLlm(apiKey: string, baseUrl: string): boolean {
-  return !!apiKey || isLocalLlmBaseUrl(baseUrl)
 }
 
 export default function AssistantPanel({ currentPage, onNavigate }: Props) {
@@ -73,7 +69,7 @@ export default function AssistantPanel({ currentPage, onNavigate }: Props) {
     return () => window.removeEventListener('keydown', handler)
   }, [open, setOpen])
 
-  const llmReady = canUseLlm(settings.llm.apiKey, settings.llm.baseUrl)
+  const llmReady = isLlmUsable(settings.llm.apiKey, settings.llm.baseUrl)
 
   useEffect(() => {
     if (open && messages.length === 0) {

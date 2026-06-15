@@ -16,6 +16,7 @@ import Dashboard from './pages/Dashboard'
 import Assets from './pages/Assets'
 import Transactions from './pages/Transactions'
 import SettingsPage from './pages/Settings'
+import VisitStats from './pages/VisitStats'
 import AssistantFab from './components/AssistantFab'
 import AssistantPanel from './components/AssistantPanel'
 import AssistantConfirmModals from './components/AssistantConfirmModals'
@@ -39,7 +40,19 @@ const MAIN_EXPANDED = 'md:ml-56'
 const MAIN_COLLAPSED = 'md:ml-[4.5rem]'
 const ABOUT_URL = 'https://mp.weixin.qq.com/s/du0wh1As2s-casSadFAgZQ'
 
+function isStatsUrl(): boolean {
+  return new URLSearchParams(window.location.search).get('stats') === 'true'
+}
+
+function closeStatsUrl() {
+  const url = new URL(window.location.href)
+  url.searchParams.delete('stats')
+  const next = `${url.pathname}${url.search}${url.hash}`
+  window.history.replaceState({}, '', next)
+}
+
 export default function App() {
+  const [showStats, setShowStats] = useState(isStatsUrl)
   const [page, setPage] = useState<PageId>('dashboard')
   const [collapsed, setCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -69,6 +82,15 @@ export default function App() {
     [goTo, toggleAssistant],
   )
   useKeyboardShortcuts(globalShortcuts)
+
+  const closeStats = useCallback(() => {
+    closeStatsUrl()
+    setShowStats(false)
+  }, [])
+
+  if (showStats) {
+    return <VisitStats onClose={closeStats} />
+  }
 
   const sidebarWidth = collapsed ? SIDEBAR_COLLAPSED : SIDEBAR_EXPANDED
   const mainMargin = collapsed ? MAIN_COLLAPSED : MAIN_EXPANDED

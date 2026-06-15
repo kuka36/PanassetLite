@@ -7,6 +7,7 @@ import { Card, CardBody, CardHeader } from '../components/ui/Card'
 import { btnGhost, btnPrimary, inputCls, labelCls } from '../components/Modal'
 import { color } from '../theme/colors'
 import { formatFxRate, staleUpdateCls } from '../utils/format'
+import { isLocalLlmBaseUrl, isLocalLlmUnavailableOnRemoteHost } from '../services/llmClient'
 
 const FX_STALE_DAYS = 7
 
@@ -156,7 +157,7 @@ export default function Settings() {
 
       <Section
         title="AI 助手 · LLM 接口(可选)"
-        desc="OpenAI 兼容接口(OpenAI / DeepSeek / 通义 / 本地 LM Studio·Ollama 均可)。本地模型请填 http://127.0.0.1:端口/v1,通过 npm run dev 访问时会自动走代理避免 CORS。仅在主动触发时发送数据。"
+        desc="OpenAI 兼容接口(OpenAI / DeepSeek / 通义 / 本地 LM Studio·Ollama 均可)。本地模型仅能在本机通过 npm run dev 使用;GitHub Pages 等云端部署请改用云端 API。仅在主动触发时发送数据。"
       >
         <div className="space-y-3">
           <div>
@@ -167,6 +168,16 @@ export default function Settings() {
               onChange={(e) => setLlm({ ...llm, baseUrl: e.target.value })}
               placeholder="https://api.openai.com/v1"
             />
+            {isLocalLlmUnavailableOnRemoteHost(llm.baseUrl) && (
+              <p className="mt-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200/90">
+                当前页面部署在云端,无法访问你电脑上的本地模型。请改用 DeepSeek、OpenAI 等云端 API,或在本地通过 npm run dev 运行应用。
+              </p>
+            )}
+            {isLocalLlmBaseUrl(llm.baseUrl) && !isLocalLlmUnavailableOnRemoteHost(llm.baseUrl) && (
+              <p className="mt-1 text-xs text-slate-500">
+                本地模型请填 http://127.0.0.1:端口/v1,通过 npm run dev 访问时会自动走代理避免 CORS。
+              </p>
+            )}
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>

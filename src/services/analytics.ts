@@ -8,6 +8,32 @@ const CF_FALLBACK = 'https://panassetlite-analytics.panassetlite.workers.dev'
 const SID_KEY = '__pa_sid'
 const NEW_KEY = '__pa_new'
 
+export interface VisitHit {
+  sid: string
+  path: string
+  ref: string
+  country: string
+  device: string
+  browser: string
+  os: string
+  ts: number
+}
+
+export interface VisitStats {
+  activeCount: number
+  activeSessions: VisitHit[]
+  totalVisits: number
+  todayVisits: number
+  last24hCount: number
+  trend: { date: string; count: number }[]
+  byPage: Record<string, number>
+  byDevice: Record<string, number>
+  byBrowser: Record<string, number>
+  byOS: Record<string, number>
+  byCountry: Record<string, number>
+  recentHits: VisitHit[]
+}
+
 function analyticsEndpoints(): string[] {
   const primary = import.meta.env.VITE_ANALYTICS_URL as string | undefined
   const fallback = import.meta.env.VITE_ANALYTICS_FALLBACK as string | undefined
@@ -75,6 +101,19 @@ function leave() {
 /** 页面切换时更新本地路径（统计仅在会话首次访问时上报） */
 export function reportPageView(page: string) {
   currentPage = page
+}
+
+/** 统计面板拉取数据用的主端点 */
+export function analyticsStatsBaseUrl(): string {
+  return analyticsEndpoints()[0]
+}
+
+export async function fetchVisitStats(): Promise<VisitStats> {
+  const res = await fetch(`${analyticsStatsBaseUrl()}/stats`)
+  if (!res.ok) throw new Error(`统计接口异常 (${res.status})`)
+  const data = (await res.json()) as VisitStats & { ok?: boolean; error?: string }
+  if (data.ok === false) throw new Error(data.error || '统计加载失败')
+  return data
 }
 
 /** 应用启动：本会话首次访问上报一次 */

@@ -1,7 +1,12 @@
 import type { PortfolioSummary, Settings } from '../types'
 import type { AppPageId, ChatMessage, LlmContextPrivacy, PendingAction } from '../types/assistant'
 import { buildPortfolioBrief } from './ai'
-import { isLocalLlmBaseUrl, postChatCompletions } from './llmClient'
+import {
+  isLocalLlmBaseUrl,
+  isLocalLlmUnavailableOnRemoteHost,
+  LOCAL_LLM_REMOTE_HOST_MSG,
+  postChatCompletions,
+} from './llmClient'
 import {
   ASSISTANT_TOOL_DEFINITIONS,
   type AssistantToolContext,
@@ -29,6 +34,9 @@ export interface RunAssistantTurnResult {
 
 function assertLlmReady(settings: Settings) {
   const { baseUrl, apiKey } = settings.llm
+  if (isLocalLlmUnavailableOnRemoteHost(baseUrl)) {
+    throw new Error(LOCAL_LLM_REMOTE_HOST_MSG)
+  }
   if (!apiKey && !isLocalLlmBaseUrl(baseUrl)) {
     throw new Error('未配置 LLM API key,请到设置页填写(本地模型可留空 key)')
   }

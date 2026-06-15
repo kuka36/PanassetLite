@@ -1,6 +1,11 @@
 import type { Asset, Settings, Transaction, TxType } from '../types'
 import { ASSET_TYPE_LABEL } from '../types'
-import { isLocalLlmBaseUrl, postChatCompletions } from './llmClient'
+import {
+  isLocalLlmBaseUrl,
+  isLocalLlmUnavailableOnRemoteHost,
+  LOCAL_LLM_REMOTE_HOST_MSG,
+  postChatCompletions,
+} from './llmClient'
 import { today } from './storage'
 
 /** LLM 输出的交易草稿(尚未绑定 assetId) */
@@ -49,6 +54,9 @@ const JSON_SCHEMA_DESC = `{
 
 function assertApiReady(settings: Settings) {
   const { baseUrl, apiKey } = settings.llm
+  if (isLocalLlmUnavailableOnRemoteHost(baseUrl)) {
+    throw new Error(LOCAL_LLM_REMOTE_HOST_MSG)
+  }
   if (!apiKey && !isLocalLlmBaseUrl(baseUrl)) {
     throw new Error('未配置 LLM API key,请到设置页填写')
   }

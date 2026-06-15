@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { Sparkles } from 'lucide-react'
 import type { Asset, Settings } from '../types'
-import { isLocalLlmBaseUrl } from '../services/llmClient'
+import { isLlmUsable } from '../services/llmClient'
 import { parseNaturalLanguageTx, type NlTxParseResult } from '../services/nlTx'
 import { color } from '../theme/colors'
 import { btnAi, btnGhost, inputCls } from './Modal'
@@ -32,7 +32,7 @@ export default function NlTxInput({
   const [error, setError] = useState('')
   const abortRef = useRef<AbortController | null>(null)
 
-  const canUseLlm = !!settings.llm.apiKey || isLocalLlmBaseUrl(settings.llm.baseUrl)
+  const canUseLlm = isLlmUsable(settings.llm.apiKey, settings.llm.baseUrl)
 
   const submit = async () => {
     const text = input.trim()

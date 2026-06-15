@@ -16,6 +16,20 @@ export function shouldUseLlmProxy(baseUrl: string): boolean {
   return LOCAL_HOSTS.has(window.location.hostname)
 }
 
+/** 静态托管(如 GitHub Pages)上配置了本地模型:无 Vite 代理且浏览器无法访问用户本机。 */
+export function isLocalLlmUnavailableOnRemoteHost(baseUrl: string): boolean {
+  return isLocalLlmBaseUrl(baseUrl) && !shouldUseLlmProxy(baseUrl)
+}
+
+export const LOCAL_LLM_REMOTE_HOST_MSG =
+  '本地模型无法在 GitHub Pages 等云端页面中使用:浏览器无法访问你电脑上的 LM Studio / Ollama。请改用 DeepSeek、OpenAI 等云端 API,或在本地通过 npm run dev 运行应用。'
+
+/** 当前页面环境下 LLM 是否可用(已配置且非「远程页面 + 本地模型」)。 */
+export function isLlmUsable(apiKey: string, baseUrl: string): boolean {
+  if (isLocalLlmUnavailableOnRemoteHost(baseUrl)) return false
+  return !!apiKey || isLocalLlmBaseUrl(baseUrl)
+}
+
 export function resolveLlmEndpoint(baseUrl: string): { url: string; proxyBase?: string } {
   const normalized = baseUrl.replace(/\/$/, '')
   if (shouldUseLlmProxy(normalized)) {
@@ -58,6 +72,10 @@ async function llmFetch(
   body: unknown,
   signal?: AbortSignal,
 ): Promise<Response> {
+  if (isLocalLlmUnavailableOnRemoteHost(baseUrl)) {
+    throw new Error(LOCAL_LLM_REMOTE_HOST_MSG)
+  }
+
   const { url, init } = buildLlmRequestInit(baseUrl, apiKey, body, signal)
   try {
     return await fetch(url, init)
