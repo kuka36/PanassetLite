@@ -488,10 +488,11 @@ function AssetDetail({
   const deleteTransaction = useStore((s) => s.deleteTransaction)
   const snap = summary.snapshots.find((s) => s.asset.id === assetId)
   const asset = snap?.asset
-  const ledger = useMemo(
-    () => (asset ? engine.txLedger(asset) : []),
-    [engine, asset?.id],
-  )
+  const ledger = useMemo(() => {
+    const s = summary.snapshots.find((s) => s.asset.id === assetId)
+    if (!s) return []
+    return engine.txLedger(s.asset)
+  }, [engine, assetId, summary])
   if (!snap || !asset) return null
 
   const qtyBased = isQuantityBased(asset.type)
