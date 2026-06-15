@@ -19,11 +19,12 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    # Owner can ship manually (workflow_dispatch or tag push). Automated tags from
-    # release-on-merge.yml are pushed by github-actions[bot] and must be allowed too.
+    # Owner: manual workflow_dispatch or PAT tag push. Bot: release-on-merge dispatches
+    # deploy after GITHUB_TOKEN tag push (token pushes do not fire push workflows).
     if: |
       github.actor == github.repository_owner ||
-      (github.event_name == 'push' && github.actor == 'github-actions[bot]' && startsWith(github.ref_name, 'v'))
+      (github.actor == 'github-actions[bot]' && startsWith(github.ref_name, 'v') &&
+        (github.event_name == 'workflow_dispatch' || github.event_name == 'push'))
     steps:
       - name: Checkout
         uses: actions/checkout@v4
