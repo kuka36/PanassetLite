@@ -46,6 +46,53 @@ function parseUA(ua = '') {
   return { device, browser, os };
 }
 
+function clientIp(request) {
+  const forwarded = request.headers.get('x-forwarded-for');
+  if (forwarded) {
+    const ip = forwarded.split(',')[0]?.trim();
+    if (ip) return ip;
+  }
+  for (const name of ['x-real-ip', 'ali-real-client-ip', 'cf-connecting-ip']) {
+    const ip = request.headers.get(name)?.trim();
+    if (ip) return ip;
+  }
+  return null;
+}
+
+function countryFromHeaders(request) {
+  if (request.cf?.country) return request.cf.country;
+  for (const name of ['cf-ipcountry', 'ali-ip-country', 'x-vercel-ip-country']) {
+    const val = request.headers.get(name);
+    if (val && /^[A-Za-z]{2}$/.test(val)) return val.toUpperCase();
+  }
+  return null;
+}
+
+/** Cloudflare cf.country、CDN 注入头，或 IP 地理库回退 */
+async function resolveCountry(request) {
+  const fromHeaders = countryFromHeaders(request);
+  if (fromHeaders) return fromHeaders;
+
+  const ip = clientIp(request);
+  if (!ip || ip === '127.0.0.1' || ip.startsWith('10.') || ip.startsWith('192.168.')) {
+    return '?';
+  }
+
+  try {
+    const res = await fetch(`https://ipwho.is/${ip}`, {
+      signal: AbortSignal.timeout(2500),
+    });
+    if (!res.ok) return '?';
+    const data = await res.json();
+    if (data.success && data.country_code && /^[A-Z]{2}$/.test(data.country_code)) {
+      return data.country_code;
+    }
+  } catch (err) {
+    console.error('geo lookup failed:', err);
+  }
+  return '?';
+}
+
 function todayKey() {
   return new Date().toISOString().slice(0, 10); // YYYY-MM-DD (UTC)
 }
@@ -155,7 +202,7 @@ export default {
         const sid     = url.searchParams.get('sid') || crypto.randomUUID();
         const path    = url.searchParams.get('p')   || '/';
         const ref     = url.searchParams.get('r')   || '';
-        const country = request.cf?.country          || '?';
+        const country = await resolveCountry(request);
         const ua      = request.headers.get('user-agent') || '';
         const ts      = Date.now();
         const { device, browser, os } = parseUA(ua);
@@ -326,6 +373,14 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
 function fmt(ts){
   return new Date(ts).toLocaleString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'});
 }
+const countryNames=new Intl.DisplayNames(['zh-CN'],{type:'region'});
+function fmtCountry(code){
+  const raw=(code||'').trim();
+  if(!raw||raw==='?')return '未知';
+  const upper=raw.toUpperCase();
+  if(!/^[A-Z]{2}$/.test(upper))return raw;
+  try{return countryNames.of(upper)||raw;}catch{return raw;}
+}
 function deviceTag(d){return '<span class="tag '+d+'">'+d+'</span>';}
 const PAGE_LABEL={dashboard:'总览',assets:'资产',transactions:'流水',settings:'设置'};
 function fmtPage(p){
@@ -364,7 +419,7 @@ async function load(){
     }else{
       sb.innerHTML=d.activeSessions.map(s=>\`<tr>
         <td>\${deviceTag(s.device)}</td><td>\${s.browser}</td><td>\${s.os}</td>
-        <td>\${s.country}</td><td style="color:#38bdf8">\${fmtPage(s.path)}</td>
+        <td>\${fmtCountry(s.country)}</td><td style="color:#38bdf8">\${fmtPage(s.path)}</td>
         <td class="ts">\${fmt(s.ts)}</td>
       </tr>\`).join('');
     }
@@ -373,7 +428,7 @@ async function load(){
     document.getElementById('hits').innerHTML=d.recentHits.map(h=>\`<tr>
       <td class="ts">\${fmt(h.ts)}</td><td>\${deviceTag(h.device)}</td>
       <td>\${h.browser}</td><td>\${h.os}</td>
-      <td>\${h.country}</td><td style="color:#38bdf8">\${fmtPage(h.path)}</td>
+      <td>\${fmtCountry(h.country)}</td><td style="color:#38bdf8">\${fmtPage(h.path)}</td>
     </tr>\`).join('');
   }catch(e){console.error(e);}
 }

@@ -37,6 +37,21 @@ export function formatFxRate(n: number, digits = 4): string {
   return parseFloat(n.toFixed(digits)).toString()
 }
 
+const countryNames = new Intl.DisplayNames(['zh-CN'], { type: 'region' })
+
+/** ISO 3166-1 alpha-2 国家码 → 中文国名；未知为「未知」 */
+export function fmtCountry(code: string): string {
+  const raw = code?.trim()
+  if (!raw || raw === '?') return '未知'
+  const upper = raw.toUpperCase()
+  if (!/^[A-Z]{2}$/.test(upper)) return raw
+  try {
+    return countryNames.of(upper) ?? raw
+  } catch {
+    return raw
+  }
+}
+
 export { isUpdateStale }
 
 /** 「更新于」列文字颜色 */

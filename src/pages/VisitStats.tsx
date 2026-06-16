@@ -6,6 +6,7 @@ import { lightAxis, lightTooltip } from '../components/chartTheme'
 import { Card, CardBody, CardHeader, MetricCard } from '../components/ui/Card'
 import { analyticsStatsBaseUrl, fetchVisitStats, type VisitHit, type VisitStats } from '../services/analytics'
 import { palette } from '../theme/colors'
+import { fmtCountry } from '../utils/format'
 
 const PAGE_LABEL: Record<string, string> = {
   dashboard: '总览',
@@ -96,7 +97,7 @@ function HitsTable({
                     </td>
                     <td className="px-4 py-2.5 text-slate-700 sm:px-5">{h.browser}</td>
                     <td className="px-4 py-2.5 text-slate-700 sm:px-5">{h.os}</td>
-                    <td className="px-4 py-2.5 text-slate-700 sm:px-5">{h.country}</td>
+                    <td className="px-4 py-2.5 text-slate-700 sm:px-5">{fmtCountry(h.country)}</td>
                     <td className="px-4 py-2.5 sm:px-5">
                       <span className="font-medium text-blue-600">{page.label}</span>
                       {page.id && PAGE_LABEL[page.id] ? (
