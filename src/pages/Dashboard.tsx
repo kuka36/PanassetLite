@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { TrendingUp } from 'lucide-react'
 import { useSummary } from '../hooks/useSummary'
+import { useStore } from '../store'
 import EChart from '../components/EChart'
 import { lightAxis, lightTooltip } from '../components/chartTheme'
 import { Card, CardBody, CardHeader, MetricCard } from '../components/ui/Card'
@@ -10,6 +11,7 @@ import { ASSET_TYPE_COLOR, ASSET_TYPE_LABEL } from '../types'
 import { fmtCompact, fmtMoney, fmtPct, pnlColor } from '../utils/format'
 
 export default function Dashboard({ goTo }: { goTo: (page: string) => void }) {
+  const loadDemo = useStore((s) => s.loadDemo)
   const summary = useSummary()
   const { history } = summary
   const monthDelta = useMemo(() => {
@@ -145,7 +147,7 @@ export default function Dashboard({ goTo }: { goTo: (page: string) => void }) {
           >
             添加第一项资产
           </button>
-          <button className={btnGhost + ' px-5 py-2.5'} onClick={() => goTo('settings')}>
+          <button className={btnGhost + ' px-5 py-2.5'} onClick={() => loadDemo()}>
             或加载演示数据
           </button>
         </div>

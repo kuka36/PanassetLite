@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type { Asset, PriceHistory, Settings, Transaction } from './types'
+import { buildDemoData } from './demoData'
 import { StorageService, today, uid } from './services/storage'
 import { fetchCryptoPrices, fetchFxRates, fetchStockPrices } from './services/prices'
 
@@ -21,6 +22,7 @@ interface AppState {
   saveSettings: (patch: Partial<Settings>) => void
   refreshPrices: () => Promise<string>
   importData: (json: string) => { assets: number; transactions: number }
+  loadDemo: () => boolean
   clearAll: () => void
   reload: () => void
 }
@@ -131,6 +133,16 @@ export const useStore = create<AppState>((set, get) => ({
     const result = StorageService.importAll(json)
     get().reload()
     return result
+  },
+
+  loadDemo() {
+    if (get().assets.length > 0 && !confirm('当前已有数据,加载演示数据会覆盖它们。继续?')) return false
+    const demo = buildDemoData()
+    StorageService.saveAssets(demo.assets)
+    StorageService.saveTransactions(demo.transactions)
+    StorageService.savePrices(demo.prices)
+    get().reload()
+    return true
   },
 
   clearAll() {
