@@ -1,0 +1,41 @@
+# Serverless Devs 部署模板
+# 文档见 worker-fc/README.md
+edition: 3.0.0
+name: panassetlite-analytics
+access: default
+
+vars:
+  region: cn-hangzhou
+  functionName: panassetlite-analytics
+  allowedOrigin: https://kuka36.github.io
+  # 部署前填写 OSS Bucket 名称（需与 region 同地域）
+  ossBucket: YOUR_OSS_BUCKET
+  # RAM 角色 ARN，需授予目标 Bucket 的 oss:PutObject / oss:GetObject
+  roleArn: acs:ram::YOUR_ACCOUNT_ID:role/YOUR_FC_OSS_ROLE
+
+resources:
+  analytics:
+    component: fc3
+    props:
+      region: ${vars.region}
+      functionName: ${vars.functionName}
+      description: PanassetLite visit analytics (OSS-backed)
+      runtime: nodejs18
+      handler: index.handler
+      timeout: 30
+      memorySize: 256
+      code: ./
+      role: ${vars.roleArn}
+      environmentVariables:
+        ALLOWED_ORIGIN: ${vars.allowedOrigin}
+        OSS_BUCKET: ${vars.ossBucket}
+        OSS_REGION: ${vars.region}
+      triggers:
+        - triggerName: http
+          triggerType: http
+          triggerConfig:
+            authType: anonymous
+            methods:
+              - GET
+              - POST
+              - OPTIONS

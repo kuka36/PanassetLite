@@ -1,0 +1,13 @@
+{
+  "name": "panassetlite-analytics-fc",
+  "private": true,
+  "version": "1.0.0",
+  "description": "PanassetLite visit analytics on Alibaba Cloud FC + OSS",
+  "main": "index.js",
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "ali-oss": "^6.23.0"
+  }
+}
