@@ -150,7 +150,7 @@ export default function Settings() {
 
       <Section
         title="AI 助手 · LLM 接口(可选)"
-        desc="OpenAI 兼容接口(OpenAI / DeepSeek / 通义 / 本地 LM Studio·Ollama 均可)。本地模型仅能在本机通过 npm run dev 使用;GitHub Pages 等云端部署请改用云端 API。仅在主动触发时发送数据。"
+        desc="OpenAI 兼容接口(默认 DeepSeek,亦可切换 OpenAI / 通义 / 本地 LM Studio·Ollama)。本地模型仅能在本机通过 npm run dev 使用;GitHub Pages 等云端部署请改用云端 API。仅在主动触发时发送数据。"
       >
         <div className="space-y-3">
           <div>
@@ -159,7 +159,7 @@ export default function Settings() {
               className={inputCls}
               value={llm.baseUrl}
               onChange={(e) => setLlm({ ...llm, baseUrl: e.target.value })}
-              placeholder="https://api.openai.com/v1"
+              placeholder="https://api.deepseek.com"
             />
             {isLocalLlmUnavailableOnRemoteHost(llm.baseUrl) && (
               <p className="mt-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200/90">
@@ -188,7 +188,7 @@ export default function Settings() {
                 className={inputCls}
                 value={llm.model}
                 onChange={(e) => setLlm({ ...llm, model: e.target.value })}
-                placeholder="gpt-4o-mini / deepseek-chat"
+                placeholder="deepseek-chat / gpt-4o-mini"
               />
             </div>
           </div>
