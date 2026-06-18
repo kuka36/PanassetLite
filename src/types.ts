@@ -86,6 +86,8 @@ export interface Transaction {
   value?: number
   note?: string
   createdAt: number
+  /** 系统维护：最后添加或修改时间戳 */
+  updatedAt: number
 }
 
 // ── 行情与汇率 ──────────────────────────────────────────────────────────────

@@ -5,7 +5,7 @@ export type AppPageId = 'dashboard' | 'assets' | 'transactions' | 'settings'
 export type PendingAction =
   | { kind: 'addAsset'; initial?: Partial<Omit<Asset, 'id' | 'createdAt'>> }
   | { kind: 'editAsset'; assetId: string }
-  | { kind: 'addTx'; initial: Omit<Transaction, 'id' | 'createdAt'>; fixedAssetId?: string; rawInput?: string; warnings?: string[] }
+  | { kind: 'addTx'; initial: Omit<Transaction, 'id' | 'createdAt' | 'updatedAt'>; fixedAssetId?: string; rawInput?: string; warnings?: string[] }
   | { kind: 'editTx'; txId: string }
   | { kind: 'deleteAsset'; assetId: string }
   | { kind: 'deleteTx'; txId: string }

@@ -6,7 +6,7 @@ import TxForm from '../components/TxForm'
 import { Card, CardBody } from '../components/ui/Card'
 import type { Transaction } from '../types'
 import { TX_TYPE_LABEL } from '../types'
-import { fmtNum } from '../utils/format'
+import { fmtDateTime, fmtNum } from '../utils/format'
 
 type ModalState = { kind: 'add' } | { kind: 'edit'; tx: Transaction } | null
 
@@ -78,6 +78,7 @@ export default function Transactions() {
             <thead>
               <tr className="border-b border-slate-100 text-left text-xs text-slate-500">
                 <th className="px-4 py-3 font-medium">日期</th>
+                <th className="px-3 py-3 font-medium">更新时间</th>
                 <th className="px-3 py-3 font-medium">资产</th>
                 <th className="px-3 py-3 font-medium">类型</th>
                 <th className="px-3 py-3 font-medium text-right">明细</th>
@@ -95,6 +96,9 @@ export default function Transactions() {
                     className="border-t border-slate-100 transition-colors duration-200 hover:bg-slate-50/50"
                   >
                     <td className="px-4 py-2.5 tabular-nums text-slate-500">{t.date}</td>
+                    <td className="px-3 py-2.5 text-xs tabular-nums text-slate-500">
+                      {fmtDateTime(t.updatedAt)}
+                    </td>
                     <td className="px-3 py-2.5 text-slate-700">{asset?.name ?? '(已删除)'}</td>
                     <td className="px-3 py-2.5">
                       <span className="rounded-full border border-slate-100 bg-slate-50 px-2 py-0.5 text-xs text-slate-600">
@@ -115,7 +119,7 @@ export default function Transactions() {
               })}
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-12 text-center text-slate-500">
+                  <td colSpan={7} className="px-4 py-12 text-center text-slate-500">
                     暂无记录。所有财务状态都由这里的事件流计算得出 —— 买入、卖出、存取、估值更新。
                   </td>
                 </tr>
@@ -137,6 +141,7 @@ export default function Transactions() {
                   <div>
                     <p className="font-medium text-slate-800">{asset?.name ?? '(已删除)'}</p>
                     <p className="text-xs text-slate-500">{t.date}</p>
+                    <p className="text-xs text-slate-400">更新于 {fmtDateTime(t.updatedAt)}</p>
                   </div>
                   <span className="shrink-0 rounded-full border border-slate-100 bg-slate-50 px-2 py-0.5 text-xs text-slate-600">
                     {TX_TYPE_LABEL[t.type]}

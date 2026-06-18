@@ -32,6 +32,18 @@ export function fmtNum(n: number, maxDigits = 4): string {
   return n.toLocaleString('zh-CN', { maximumFractionDigits: maxDigits })
 }
 
+/** 日期时间:MM/DD HH:mm:ss */
+export function fmtDateTime(ts: number): string {
+  return new Date(ts).toLocaleString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  })
+}
+
 /** 汇率输入展示:截断至最多 4 位小数,去掉尾随零 */
 export function formatFxRate(n: number, digits = 4): string {
   return parseFloat(n.toFixed(digits)).toString()
