@@ -33,7 +33,7 @@ export function buildDemoData(): {
 
   const assets = [bank, yuebao, wealth2, moutai, catl, aapl, btc, usdt, mortgage]
 
-  const txs: Array<Omit<Transaction, 'id' | 'createdAt'>> = [
+  const txs: Array<Omit<Transaction, 'id' | 'createdAt' | 'updatedAt'>> = [
     // 银行卡
     { assetId: bank.id, type: 'DEPOSIT', date: m(8), amount: 60000, note: '初始结余' },
     { assetId: bank.id, type: 'DEPOSIT', date: m(5, 10), amount: 12000, note: '工资结余' },
@@ -84,7 +84,10 @@ export function buildDemoData(): {
     })),
   ]
 
-  const transactions: Transaction[] = txs.map((t) => ({ ...t, id: uid(), createdAt: Date.now() }))
+  const transactions: Transaction[] = txs.map((t) => {
+    const now = Date.now()
+    return { ...t, id: uid(), createdAt: now, updatedAt: now }
+  })
 
   // 预置少量行情观测点,保证未联网时图表也有数据
   const prices: PriceHistory = {

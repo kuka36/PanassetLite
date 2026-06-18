@@ -438,7 +438,7 @@ export async function executeAssistantTool(
       const txType = safeArgs.type as Transaction['type']
       if (!txType) return { content: JSON.stringify({ error: '请提供 type 或 naturalLanguage' }) }
 
-      const initial: Omit<Transaction, 'id' | 'createdAt'> = {
+      const initial: Omit<Transaction, 'id' | 'createdAt' | 'updatedAt'> = {
         assetId,
         type: txType,
         date: typeof safeArgs.date === 'string' ? safeArgs.date : today(),

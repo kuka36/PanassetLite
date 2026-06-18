@@ -29,7 +29,13 @@ export const StorageService = {
   loadAssets: (): Asset[] => read(KEYS.assets, []),
   saveAssets: (assets: Asset[]) => write(KEYS.assets, assets),
 
-  loadTransactions: (): Transaction[] => read(KEYS.transactions, []),
+  loadTransactions: (): Transaction[] => {
+    const txs = read<Array<Transaction & { updatedAt?: number }>>(KEYS.transactions, [])
+    return txs.map((tx) => ({
+      ...tx,
+      updatedAt: tx.updatedAt ?? tx.createdAt,
+    }))
+  },
   saveTransactions: (txs: Transaction[]) => write(KEYS.transactions, txs),
 
   loadPrices: (): PriceHistory => read(KEYS.prices, {}),

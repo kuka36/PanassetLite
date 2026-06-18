@@ -10,7 +10,7 @@ interface Props {
   fixedAssetId?: string
   defaultType?: TxType
   initial?: Transaction
-  onSubmit: (t: Omit<Transaction, 'id' | 'createdAt'>) => void
+  onSubmit: (t: Omit<Transaction, 'id' | 'createdAt' | 'updatedAt'>) => void
   onCancel: () => void
 }
 

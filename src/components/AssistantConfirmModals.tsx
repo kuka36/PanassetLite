@@ -120,7 +120,7 @@ export default function AssistantConfirmModals({ onSuccess }: Props) {
         <TxForm
           assets={assets}
           fixedAssetId={pendingAction.fixedAssetId}
-          initial={{ ...pendingAction.initial, id: '', createdAt: 0 }}
+          initial={{ ...pendingAction.initial, id: '', createdAt: 0, updatedAt: 0 }}
           onSubmit={(t) => {
             addTransaction(t)
             const asset = assets.find((a) => a.id === t.assetId)

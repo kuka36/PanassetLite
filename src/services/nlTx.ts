@@ -358,5 +358,6 @@ export function nlResultToTxInitial(
     value: draft.value,
     note: draft.note,
     createdAt: 0,
+    updatedAt: 0,
   }
 }
