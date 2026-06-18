@@ -2,7 +2,6 @@ import { useRef, useState } from 'react'
 import { useStore } from '../store'
 import { StorageService } from '../services/storage'
 import { fetchFxRates } from '../services/prices'
-import { buildDemoData } from '../demoData'
 import { Card, CardBody, CardHeader } from '../components/ui/Card'
 import { btnGhost, btnPrimary, inputCls, labelCls } from '../components/Modal'
 import { color } from '../theme/colors'
@@ -14,8 +13,8 @@ const FX_STALE_DAYS = 7
 export default function Settings() {
   const settings = useStore((s) => s.settings)
   const saveSettings = useStore((s) => s.saveSettings)
+  const loadDemoData = useStore((s) => s.loadDemo)
   const reload = useStore((s) => s.reload)
-  const assets = useStore((s) => s.assets)
   const [msg, setMsg] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
 
@@ -77,13 +76,7 @@ export default function Settings() {
   }
 
   const loadDemo = () => {
-    if (assets.length > 0 && !confirm('当前已有数据,加载演示数据会覆盖它们。继续?')) return
-    const demo = buildDemoData()
-    StorageService.saveAssets(demo.assets)
-    StorageService.saveTransactions(demo.transactions)
-    StorageService.savePrices(demo.prices)
-    reload()
-    flash('演示数据已加载,去「总览」看看效果')
+    if (loadDemoData()) flash('演示数据已加载,去「总览」看看效果')
   }
 
   const clearAll = () => {
