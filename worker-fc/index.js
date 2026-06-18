@@ -1,7 +1,7 @@
 /**
  * PanassetLite Analytics — 阿里云函数计算 FC 3.0 + OSS
  *
- * 路由：/hit /leave /stats / /dashboard
+ * 路由：/hit /leave /stats /debug/geoip / /dashboard
  */
 
 const { randomUUID } = require('crypto')
@@ -11,6 +11,7 @@ const {
   removeSession,
   buildStatsResponse,
   resolveCountry,
+  resolveCountryDebug,
 } = require('./stats-core')
 const { createStore } = require('./storage-oss')
 const { DASHBOARD_HTML } = require('./dashboard')
@@ -54,16 +55,30 @@ function json(data, status = 200, extraHeaders = {}) {
 }
 
 exports.handler = async (event, context) => {
-  const { method, path, query, headers, userAgent } = resolveRequest(event)
+  const { method, path, query, headers, userAgent, sourceIp } = resolveRequest(event)
   const origin = getHeader(headers, 'origin')
   const cors = corsHeaders(origin)
 
   if (firstQueryValue(query, 'debug') === 'path') {
-    return json({ method, path, query }, 200, cors)
+    return json({ method, path, query, sourceIp }, 200, cors)
   }
 
   if (method === 'OPTIONS') {
     return respond(204, '', cors)
+  }
+
+  if (path === '/debug/geoip') {
+    try {
+      const debug = await resolveCountryDebug(headers, getHeader, sourceIp)
+      return json(debug, 200, cors)
+    } catch (err) {
+      console.error('/debug/geoip failed:', err)
+      return json(
+        { ok: false, error: err instanceof Error ? err.message : String(err) },
+        500,
+        cors,
+      )
+    }
   }
 
   if (path === '/hit') {
@@ -73,7 +88,7 @@ exports.handler = async (event, context) => {
       const sid = firstQueryValue(query, 'sid') || randomUUID()
       const pagePath = firstQueryValue(query, 'p') || '/'
       const ref = firstQueryValue(query, 'r') || ''
-      const country = await resolveCountry(headers, getHeader)
+      const country = await resolveCountry(headers, getHeader, sourceIp)
       const ts = Date.now()
       const { device, browser, os } = parseUA(userAgent)
       const isNew = firstQueryValue(query, 'new') === '1'
@@ -82,6 +97,10 @@ exports.handler = async (event, context) => {
         await recordNewVisit(store, sid, { sid, path: pagePath, ref, country, device, browser, os, ts })
       }
 
+      if (debug) {
+        const geoDebug = await resolveCountryDebug(headers, getHeader, sourceIp)
+        return json({ sid, ok: true, country, ...geoDebug }, 200, cors)
+      }
       return json({ sid, ok: true }, 200, cors)
     } catch (err) {
       console.error('/hit failed:', err)

@@ -48,7 +48,9 @@ s config add
 
 ### 方式 A：Serverless Devs（推荐）
 
-编辑 `s.yaml` 中的 `ossBucket`、`roleArn`、`allowedOrigin`，然后：
+编辑 `s.yaml` 中的 `ossBucket`、`roleArn`、`allowedOrigin`。
+
+#### 首次部署（函数尚不存在）
 
 ```bash
 cd worker-fc
@@ -59,6 +61,23 @@ s deploy
 部署完成后控制台会输出 HTTP 触发器 URL，形如：
 
 `https://panassetlite-analytics.cn-hangzhou.fcapp.run`
+
+#### 日常更新代码（函数已存在，最常用）
+
+函数和 HTTP 触发器已在控制台创建好后，**只更新代码**请用：
+
+```bash
+cd worker-fc
+s deploy --function code -y
+```
+
+> **务必记住 `--function code`**：裸跑 `s deploy` 会尝试再次创建 HTTP 触发器，报错 `can not create more than one http trigger`；也会重复校验 `ram:PassRole`。
+
+| 场景 | 命令 |
+|------|------|
+| 函数已存在，改代码后发布 | `s deploy --function code -y` |
+| 只改环境变量/内存/超时 | `s deploy --function config -y` |
+| 全新创建（函数还不存在） | `s deploy` |
 
 ### 方式 B：控制台手动创建
 
@@ -186,13 +205,16 @@ VITE_ANALYTICS_URL=https://你的触发器地址
 
 | 现象 | 处理 |
 |------|------|
+| `can not create more than one http trigger` | 函数已有 HTTP 触发器；改用 `s deploy --function code -y` 只更新代码 |
+| `ram:PassRole` 403 | 部署账号缺 PassRole 权限；或函数已存在时直接用 `--function code` 跳过 |
+| `Assume role ... fail` | RAM 执行角色信任策略须为 `"Service": ["fc.aliyuncs.com"]`，不是 `RAM: root` |
 | `缺少环境变量 OSS_BUCKET` | 检查环境变量是否保存、是否重新部署 |
 | `FC 执行角色凭证不可用` | 函数未绑定 RAM 角色，或角色信任主体不是函数计算 |
 | `AccessDenied` 读写 OSS | RAM 策略中 Bucket 名或路径 `stats/*` 写错 |
 | 浏览器跨域失败 | `ALLOWED_ORIGIN` 必须与 Pages 地址完全一致（含 `https://`，无末尾 `/`） |
 | `502 Internal Server Error` | 多为代码或依赖问题；查函数调用日志 |
 | `/hit` 返回 HTML 面板 | 路径被识别为 `/`：确认函数类型为**事件函数**+ Node.js 18；重新上传含 `http-req.js` 的 zip；用 `?debug=path` 诊断 |
-| 更新代码不生效 | 重新 zip 上传并点 **部署** |
+| 更新代码不生效 | 确认用了 `s deploy --function code -y`，或重新 zip 上传并点 **部署** |
 
 浏览器打开 `https://xxx.fcapp.run/` 若直接**下载** HTML 而非渲染页面，是阿里云默认域名的已知限制（强制加 `Content-Disposition: attachment`），**不是地址写错**。
 
@@ -246,7 +268,36 @@ open "https://你的函数.fcapp.run/"
 | `/hit` | GET | 上报访问；`new=1` 时写入 |
 | `/leave` | POST | 会话结束（sendBeacon） |
 | `/stats` | GET | JSON 统计数据 |
+| `/debug/geoip` | GET | 诊断 IP 与国家解析（见下方） |
 | `/` | GET | 内置 HTML 面板 |
+
+### 国家解析诊断
+
+部署后若国家仍显示「未知」，先访问：
+
+```bash
+curl "https://你的触发器地址/debug/geoip"
+```
+
+返回示例：
+
+```json
+{
+  "country": "CN",
+  "source": "geo",
+  "sourceIp": "1.2.3.4",
+  "clientIp": "1.2.3.4",
+  "ipHeaders": { "x-forwarded-for": "1.2.3.4" },
+  "geo": { "country": "CN", "provider": "ip-api" }
+}
+```
+
+- `sourceIp`：FC 3.0 的 `requestContext.http.sourceIp`（直连 HTTP 触发器时最可靠）
+- `clientIp`：实际用于 geo 查询的 IP
+- `geo.provider`：命中的 geo 服务（`ip-api` / `ipwho` / `ip-sb`）
+- `reason: no_public_ip`：未拿到公网 IP；`geo_lookup_failed`：IP 有但 geo 全失败
+
+也可在 `/hit` 加 `debug=1` 查看单次上报解析结果（不写 OSS 时仍返回诊断字段）。
 
 ## 费用参考
 
@@ -257,7 +308,7 @@ open "https://你的函数.fcapp.run/"
 ## 与 Cloudflare 版差异
 
 - 存储从 KV 改为 OSS 单文件 `stats/bundle.json`
-- 无 `request.cf.country`；通过 CDN 地域头或 `ipwho.is` IP 回退解析国家（与 Cloudflare 版逻辑一致）
+- 无 `request.cf.country`；优先读 FC `sourceIp` + CDN 头，再依次尝试 ip-api / ipwho / ip-sb
 - 需配置 RAM 角色与环境变量
 
 Cloudflare 版仍保留在 `worker/`，可作为 `VITE_ANALYTICS_FALLBACK` 双写备用。

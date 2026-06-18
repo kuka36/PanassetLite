@@ -107,7 +107,12 @@ function resolveRequest(event) {
     getHeader(headers, 'user-agent') ||
     ''
 
-  return { method, path, query, headers, userAgent }
+  const sourceIp =
+    req.requestContext?.http?.sourceIp ||
+    req.requestContext?.identity?.sourceIp ||
+    ''
+
+  return { method, path, query, headers, userAgent, sourceIp }
 }
 
 function firstQueryValue(query, key) {

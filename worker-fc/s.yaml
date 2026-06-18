@@ -9,10 +9,9 @@ vars:
   functionName: panassetlite-analytics
   allowedOrigin: https://kuka36.github.io
   # 部署前填写 OSS Bucket 名称（需与 region 同地域）
-  ossBucket: YOUR_OSS_BUCKET
+  ossBucket: panassetlite-stats
   # RAM 角色 ARN，需授予目标 Bucket 的 oss:PutObject / oss:GetObject
-  roleArn: acs:ram::YOUR_ACCOUNT_ID:role/YOUR_FC_OSS_ROLE
-
+  roleArn: acs:ram::1911611449873819:role/fc-panassetlite-analytics
 resources:
   analytics:
     component: fc3

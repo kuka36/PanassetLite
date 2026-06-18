@@ -63,16 +63,37 @@ function pruneOldDays(days) {
   return days
 }
 
+function isPrivateIp(ip) {
+  if (!ip) return true
+  const trimmed = ip.trim()
+  if (trimmed === '127.0.0.1' || trimmed === '::1') return true
+  if (trimmed.startsWith('10.')) return true
+  if (trimmed.startsWith('192.168.')) return true
+  if (trimmed.startsWith('172.')) {
+    const second = Number.parseInt(trimmed.split('.')[1], 10)
+    if (second >= 16 && second <= 31) return true
+  }
+  return false
+}
+
 /** @param {Record<string, string>} headers */
-function clientIp(headers, getHeader) {
+function clientIp(headers, getHeader, sourceIp = '') {
+  const fromFc = sourceIp?.trim()
+  if (fromFc && !isPrivateIp(fromFc)) return fromFc
+
   const forwarded = getHeader(headers, 'x-forwarded-for')
   if (forwarded) {
     const ip = forwarded.split(',')[0]?.trim()
-    if (ip) return ip
+    if (ip && !isPrivateIp(ip)) return ip
   }
-  for (const name of ['x-real-ip', 'ali-real-client-ip', 'cf-connecting-ip']) {
+  for (const name of [
+    'x-real-ip',
+    'x-client-ip',
+    'ali-real-client-ip',
+    'cf-connecting-ip',
+  ]) {
     const ip = getHeader(headers, name)?.trim()
-    if (ip) return ip
+    if (ip && !isPrivateIp(ip)) return ip
   }
   return null
 }
@@ -92,29 +113,106 @@ function countryFromHeaders(headers, getHeader) {
   return null
 }
 
-/** CDN 地域头或 ipwho.is 回退（与 worker/analytics.js 一致） */
-async function resolveCountry(headers, getHeader) {
+/** CDN 地域头；否则按 IP 依次尝试多个 geo 服务（FC 大陆节点优先 http ip-api） */
+async function lookupCountryByIp(ip) {
+  const providers = [
+    {
+      name: 'ip-api',
+      url: `http://ip-api.com/json/${encodeURIComponent(ip)}?fields=status,countryCode`,
+      pick: (data) => (data.status === 'success' ? data.countryCode : null),
+    },
+    {
+      name: 'ipwho',
+      url: `https://ipwho.is/${encodeURIComponent(ip)}`,
+      pick: (data) => (data.success ? data.country_code : null),
+    },
+    {
+      name: 'ip-sb',
+      url: `https://api.ip.sb/geoip/${encodeURIComponent(ip)}`,
+      pick: (data) => data.country_code || null,
+    },
+  ]
+
+  for (const provider of providers) {
+    try {
+      const res = await fetch(provider.url, { signal: AbortSignal.timeout(2500) })
+      if (!res.ok) continue
+      const data = await res.json()
+      const code = provider.pick(data)
+      if (code && /^[A-Za-z]{2}$/.test(code)) {
+        return { country: code.toUpperCase(), provider: provider.name }
+      }
+    } catch (err) {
+      console.error(`geo ${provider.name} failed:`, err)
+    }
+  }
+  return null
+}
+
+/** @param {Record<string, string>} headers */
+async function resolveCountry(headers, getHeader, sourceIp = '') {
   const fromHeaders = countryFromHeaders(headers, getHeader)
   if (fromHeaders) return fromHeaders
 
-  const ip = clientIp(headers, getHeader)
-  if (!ip || ip === '127.0.0.1' || ip.startsWith('10.') || ip.startsWith('192.168.')) {
-    return '?'
+  const ip = clientIp(headers, getHeader, sourceIp)
+  if (!ip) return '?'
+
+  const geo = await lookupCountryByIp(ip)
+  return geo?.country || '?'
+}
+
+/** 诊断：FC sourceIp、解析 IP、CDN 头、geo 提供商 */
+async function resolveCountryDebug(headers, getHeader, sourceIp = '') {
+  const countryHeader = countryFromHeaders(headers, getHeader)
+  const ip = clientIp(headers, getHeader, sourceIp)
+  const ipHeaders = {}
+  for (const name of [
+    'x-forwarded-for',
+    'x-real-ip',
+    'x-client-ip',
+    'ali-real-client-ip',
+    'cf-ipcountry',
+    'ali-ip-country',
+    'x-client-ip-country',
+    'ali-cdn-real-country',
+  ]) {
+    const val = getHeader(headers, name)
+    if (val) ipHeaders[name] = val
   }
 
-  try {
-    const res = await fetch(`https://ipwho.is/${ip}`, {
-      signal: AbortSignal.timeout(2500),
-    })
-    if (!res.ok) return '?'
-    const data = await res.json()
-    if (data.success && data.country_code && /^[A-Z]{2}$/.test(data.country_code)) {
-      return data.country_code
+  if (countryHeader) {
+    return {
+      country: countryHeader,
+      source: 'header',
+      sourceIp: sourceIp || null,
+      clientIp: ip,
+      ipHeaders,
+      geo: null,
     }
-  } catch (err) {
-    console.error('geo lookup failed:', err)
   }
-  return '?'
+
+  if (!ip) {
+    return {
+      country: '?',
+      source: 'none',
+      sourceIp: sourceIp || null,
+      clientIp: null,
+      ipHeaders,
+      geo: null,
+      reason: 'no_public_ip',
+    }
+  }
+
+  const geo = await lookupCountryByIp(ip)
+  return {
+    country: geo?.country || '?',
+    source: geo ? 'geo' : 'none',
+    sourceIp: sourceIp || null,
+    clientIp: ip,
+    ipHeaders,
+    geo,
+    reason: geo ? undefined : 'geo_lookup_failed',
+  }
 }
 
 /** @param {{ loadBundle: () => Promise<object>, saveBundle: (b: object) => Promise<void> }} store */
@@ -185,4 +283,5 @@ module.exports = {
   removeSession,
   buildStatsResponse,
   resolveCountry,
+  resolveCountryDebug,
 }
