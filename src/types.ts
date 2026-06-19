@@ -154,6 +154,10 @@ export interface TxLedgerRow {
   /** 该笔事件后的余额/持仓(原币种: 份额或金额) */
   balanceAfter: number
   balanceLabel: 'quantity' | 'value' | 'debt'
+  /** 相对上一笔的区间盈亏(原币种);首笔或无意义区间为 null */
+  intervalGainNative?: number | null
+  /** 相对上一笔的区间年化(小数);不可算时为 null */
+  intervalAnnualized?: number | null
 }
 
 /** 区间收益(本周/本月/今年以来/近一年) */
@@ -177,4 +181,87 @@ export interface PortfolioSummary {
   history: { date: string; netWorth: number; assets: number; debt: number }[]
   /** 区间收益 */
   periodReturns: PeriodReturn[]
+}
+
+// ── 策略跟踪 ────────────────────────────────────────────────────────────────
+// 策略是独立于资产流水的「收益分析透镜」，不参与净资产汇总。
+// 一个资产账户可以有零到多个策略，用于单独跟踪账户内部分资金的收益。
+
+export type StrategyKind = 'dca' | 'grid' | 'manual'
+
+export const STRATEGY_KIND_LABEL: Record<StrategyKind, string> = {
+  dca: '定投',
+  grid: '网格',
+  manual: '手动',
+}
+
+export interface Strategy {
+  id: string
+  /** 归属哪个账户（关联展示用，不做资金穿透） */
+  assetId: string
+  name: string
+  kind: StrategyKind
+  /** 创建时默认继承 asset.currency */
+  currency: string
+  note?: string
+  archived?: boolean
+  createdAt: number
+}
+
+/**
+ * 策略流水类型，收窄为金额型子集。
+ * 不复用 TxType，避免 BUY/SELL/BORROW/REPAY 进入策略引擎产生防御分支。
+ */
+export type StrategyTxType = 'DEPOSIT' | 'WITHDRAW' | 'INCOME' | 'VALUATION'
+
+export const STRATEGY_TX_TYPE_LABEL: Record<StrategyTxType, string> = {
+  DEPOSIT: '存入',
+  WITHDRAW: '取出',
+  INCOME: '收益入账',
+  VALUATION: '估值更新',
+}
+
+export interface StrategyTransaction {
+  id: string
+  strategyId: string
+  type: StrategyTxType
+  /** YYYY-MM-DD */
+  date: string
+  /** DEPOSIT / WITHDRAW / INCOME 用 */
+  amount?: number
+  /** VALUATION：策略当日总市值（策略币种） */
+  value?: number
+  note?: string
+  createdAt: number
+}
+
+/** 策略快照（不加入 PortfolioSummary.totalAssetsCNY） */
+export interface StrategySnapshot {
+  strategy: Strategy
+  /** 当前市值（策略币种） */
+  valueNative: number
+  /** 当前市值（CNY） */
+  valueCNY: number
+  /** 净投入本金（CNY）：流入 - 流出 */
+  netInvestedCNY: number
+  /** 累计盈亏（CNY）= 市值 + 累计流出 - 累计流入 */
+  totalPnlCNY: number
+  /** 年化收益率（XIRR），无法计算时为 null */
+  xirr: number | null
+  /** 最近两次 VALUATION 之间的区间年化 */
+  recentAnnualized?: number | null
+  lastUpdated?: string
+}
+
+/** 策略账本行（独立类型，不强转 TxLedgerRow，避免 tx: Transaction 硬类型） */
+export interface StrategyLedgerRow {
+  tx: StrategyTransaction
+  /** 发生额（策略币种）；VALUATION 为当日总市值 */
+  amountNative: number | null
+  /** 该笔事件后的余额（策略币种） */
+  balanceAfter: number
+  /** 相对上一笔的区间盈亏（策略币种）；首笔为 null */
+  intervalGainNative?: number | null
+  /** 相对上一笔的区间年化（小数）；不可算时为 null */
+  intervalAnnualized?: number | null
 }

@@ -1,4 +1,4 @@
-import type { Asset, PriceHistory, Settings, Transaction } from '../types'
+import type { Asset, PriceHistory, Settings, Strategy, StrategyTransaction, Transaction } from '../types'
 import { DEFAULT_SETTINGS } from '../types'
 
 /**
@@ -10,6 +10,8 @@ const KEYS = {
   transactions: 'panasset.transactions',
   prices: 'panasset.prices',
   settings: 'panasset.settings',
+  strategies: 'panasset.strategies',
+  strategyTransactions: 'panasset.strategyTransactions',
 } as const
 
 function read<T>(key: string, fallback: T): T {
@@ -52,16 +54,24 @@ export const StorageService = {
   },
   saveSettings: (settings: Settings) => write(KEYS.settings, settings),
 
+  loadStrategies: (): Strategy[] => read(KEYS.strategies, []),
+  saveStrategies: (strategies: Strategy[]) => write(KEYS.strategies, strategies),
+
+  loadStrategyTransactions: (): StrategyTransaction[] => read(KEYS.strategyTransactions, []),
+  saveStrategyTransactions: (txs: StrategyTransaction[]) => write(KEYS.strategyTransactions, txs),
+
   exportAll(): string {
     return JSON.stringify(
       {
         app: 'PanassetLite',
-        version: 1,
+        version: 2,
         exportedAt: new Date().toISOString(),
         assets: this.loadAssets(),
         transactions: this.loadTransactions(),
         prices: this.loadPrices(),
         settings: this.loadSettings(),
+        strategies: this.loadStrategies(),
+        strategyTransactions: this.loadStrategyTransactions(),
       },
       null,
       2,
@@ -77,6 +87,9 @@ export const StorageService = {
     write(KEYS.transactions, data.transactions)
     if (data.prices) write(KEYS.prices, data.prices)
     if (data.settings) write(KEYS.settings, data.settings)
+    // v2 字段：v1 文件无此字段时补空数组，不渗入引擎
+    write(KEYS.strategies, Array.isArray(data.strategies) ? data.strategies : [])
+    write(KEYS.strategyTransactions, Array.isArray(data.strategyTransactions) ? data.strategyTransactions : [])
     return { assets: data.assets.length, transactions: data.transactions.length }
   },
 

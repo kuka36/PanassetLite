@@ -22,7 +22,7 @@ const TX_TYPES = new Set<TxType>([
   'REPAY',
 ])
 
-const APP_PAGES = new Set(['dashboard', 'assets', 'transactions', 'settings'])
+const APP_PAGES = new Set(['dashboard', 'assets', 'strategies', 'transactions', 'settings'])
 
 export type SchemaValidationResult =
   | { ok: true; args: Record<string, unknown> }

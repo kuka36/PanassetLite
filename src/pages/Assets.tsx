@@ -1,15 +1,19 @@
 import { useMemo, useState } from 'react'
 import { useStore } from '../store'
 import { usePortfolioEngine, useSummary } from '../hooks/useSummary'
+import { useStrategyEngine } from '../hooks/useStrategySummary'
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
 import Modal, { btnGhost, btnPrimary } from '../components/Modal'
 import AssetForm from '../components/AssetForm'
 import NlTxInput from '../components/NlTxInput'
 import TxForm from '../components/TxForm'
+import StrategyList from '../components/StrategyList'
+import StrategyDetail from '../components/StrategyDetail'
+import StrategyForm from '../components/StrategyForm'
 import { Card, CardHeader } from '../components/ui/Card'
 import type { NlTxParseResult } from '../services/nlTx'
 import { nlResultToTxInitial } from '../services/nlTx'
-import type { Asset, AssetSnapshot, AssetType, Transaction, TxLedgerRow, TxType } from '../types'
+import type { Asset, AssetSnapshot, AssetType, StrategySnapshot, Transaction, TxLedgerRow, TxType } from '../types'
 import { ASSET_TYPE_COLOR, ASSET_TYPE_LABEL, TX_TYPE_LABEL, isQuantityBased } from '../types'
 import { color } from '../theme/colors'
 import { fmtMoney, fmtNum, fmtPct, isUpdateStale, pnlColor, staleUpdateCls } from '../utils/format'
@@ -484,10 +488,27 @@ function AssetDetail({
 }) {
   const summary = useSummary()
   const engine = usePortfolioEngine()
+  const strategyEngine = useStrategyEngine()
+  const assets = useStore((s) => s.assets)
+  const addStrategy = useStore((s) => s.addStrategy)
+  const updateStrategy = useStore((s) => s.updateStrategy)
+  const deleteStrategy = useStore((s) => s.deleteStrategy)
   const settings = useStore((s) => s.settings)
   const deleteTransaction = useStore((s) => s.deleteTransaction)
   const snap = summary.snapshots.find((s) => s.asset.id === assetId)
   const asset = snap?.asset
+
+  type StrategyModalState =
+    | { kind: 'addStrategy' }
+    | { kind: 'editStrategy'; snap: StrategySnapshot }
+    | { kind: 'detailStrategy'; snap: StrategySnapshot }
+    | null
+  const [strategyModal, setStrategyModal] = useState<StrategyModalState>(null)
+
+  const strategySnapshots = useMemo(
+    () => strategyEngine.snapshotsByAsset(assetId),
+    [strategyEngine, assetId],
+  )
   const ledger = useMemo(() => {
     const s = summary.snapshots.find((s) => s.asset.id === assetId)
     if (!s) return []
@@ -497,11 +518,25 @@ function AssetDetail({
 
   const qtyBased = isQuantityBased(asset.type)
   const showFx = asset.currency !== 'CNY'
+  const showInterval = !qtyBased && asset.type !== 'debt'
   const fx = asset.currency === settings.baseCurrency ? 1 : (settings.fxRates[asset.currency] ?? 1)
-  const colSpan = (qtyBased ? 8 : 6) + (showFx ? 1 : 0)
+  const colSpan = (qtyBased ? 8 : showInterval ? 8 : 6) + (showFx ? 1 : 0)
 
   return (
-    <Modal title={asset.name} onClose={onClose} size="xl">
+    <Modal
+      title={
+        <span className="flex min-w-0 items-baseline gap-2">
+          <span className="shrink-0">{asset.name}</span>
+          {asset.note && (
+            <span className="truncate text-sm font-normal text-slate-500" title={asset.note}>
+              {asset.note}
+            </span>
+          )}
+        </span>
+      }
+      onClose={onClose}
+      size="xl"
+    >
       <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Mini label="当前市值" value={fmtMoney(snap.valueCNY)} />
         <Mini
@@ -536,12 +571,23 @@ function AssetDetail({
               <th className="px-3 py-2 font-medium text-right">发生额</th>
               {showFx && <th className="px-3 py-2 font-medium text-right">折合 CNY</th>}
               <th className="px-3 py-2 font-medium text-right">交易后余额</th>
+              {showInterval && (
+                <>
+                  <th className="px-3 py-2 font-medium text-right">区间变化</th>
+                  <th
+                    className="px-3 py-2 font-medium text-right"
+                    title="相对上一笔流水，扣除存取后的区间收益年化（与列表「近期年化」同口径）"
+                  >
+                    近期年化
+                  </th>
+                </>
+              )}
               <th className="px-3 py-2 font-medium">备注</th>
               <th className="px-3 py-2 font-medium text-right"></th>
             </tr>
           </thead>
           <tbody>
-            {ledger.map(({ tx, amountNative, balanceAfter, balanceLabel }) => (
+            {ledger.map(({ tx, amountNative, balanceAfter, balanceLabel, intervalGainNative, intervalAnnualized }) => (
               <tr key={tx.id} className="border-t border-slate-100 hover:bg-slate-50/50">
                 <td className="px-3 py-2 tabular-nums text-slate-500">{tx.date}</td>
                 <td className="px-3 py-2 text-slate-700">{TX_TYPE_LABEL[tx.type]}</td>
@@ -566,6 +612,29 @@ function AssetDetail({
                 <td className="px-3 py-2 text-right tabular-nums text-slate-700">
                   {formatTxBalance(balanceAfter, balanceLabel, asset.currency)}
                 </td>
+                {showInterval && (
+                  <>
+                    <td
+                      className={`px-3 py-2 text-right tabular-nums ${
+                        intervalGainNative != null && intervalGainNative !== 0
+                          ? pnlColor(intervalGainNative)
+                          : 'text-slate-500'
+                      }`}
+                    >
+                      {intervalGainNative != null && intervalGainNative !== 0
+                        ? formatTxAmount(intervalGainNative, asset.currency)
+                        : '—'}
+                    </td>
+                    <td
+                      className={`px-3 py-2 text-right tabular-nums ${
+                        intervalAnnualized != null ? pnlColor(intervalAnnualized) : 'text-slate-500'
+                      }`}
+                      title="相对上一笔流水，扣除存取后的区间收益年化"
+                    >
+                      {intervalAnnualized != null ? fmtPct(intervalAnnualized) : '—'}
+                    </td>
+                  </>
+                )}
                 <td className="max-w-32 truncate px-3 py-2 text-xs text-slate-500">{tx.note}</td>
                 <td className="px-3 py-2 text-right">
                   <button
@@ -613,6 +682,69 @@ function AssetDetail({
           </button>
         </div>
       </div>
+
+      {/* 跟踪策略区块 */}
+      <div className="mt-4 border-t border-slate-100 pt-4">
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="text-sm font-medium text-slate-700">跟踪策略</h3>
+          <button
+            className="text-xs text-blue-600 transition-colors hover:text-blue-700"
+            onClick={() => setStrategyModal({ kind: 'addStrategy' })}
+          >
+            + 新建策略
+          </button>
+        </div>
+        {strategySnapshots.length > 0 && (
+          <p className="mb-2 text-xs text-slate-500">
+            已跟踪 {fmtMoney(strategySnapshots.reduce((s, sn) => s + sn.valueCNY, 0))} ·
+            {' '}账户市值 {fmtMoney(snap.valueCNY)}
+            {' '}· 不计入净资产
+          </p>
+        )}
+        <StrategyList
+          snapshots={strategySnapshots}
+          onSelect={(s) => setStrategyModal({ kind: 'detailStrategy', snap: s })}
+        />
+      </div>
+
+      {strategyModal?.kind === 'addStrategy' && (
+        <Modal title="新建策略" onClose={() => setStrategyModal(null)}>
+          <StrategyForm
+            assets={assets}
+            fixedAssetId={assetId}
+            onSubmit={(s) => {
+              addStrategy(s)
+              setStrategyModal(null)
+            }}
+            onCancel={() => setStrategyModal(null)}
+          />
+        </Modal>
+      )}
+      {strategyModal?.kind === 'editStrategy' && (
+        <Modal title="编辑策略" onClose={() => setStrategyModal(null)}>
+          <StrategyForm
+            assets={assets}
+            fixedAssetId={assetId}
+            initial={strategyModal.snap.strategy}
+            onSubmit={(s) => {
+              updateStrategy(strategyModal.snap.strategy.id, s)
+              setStrategyModal(null)
+            }}
+            onCancel={() => setStrategyModal(null)}
+          />
+        </Modal>
+      )}
+      {strategyModal?.kind === 'detailStrategy' && (
+        <StrategyDetail
+          snap={strategyEngine.snapshot(strategyModal.snap.strategy)}
+          onClose={() => setStrategyModal(null)}
+          onEdit={(s) => setStrategyModal({ kind: 'editStrategy', snap: s })}
+          onDelete={(s) => {
+            deleteStrategy(s.strategy.id)
+            setStrategyModal(null)
+          }}
+        />
+      )}
     </Modal>
   )
 }

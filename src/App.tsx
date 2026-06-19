@@ -8,6 +8,7 @@ import {
   LayoutDashboard,
   Menu,
   Settings,
+  Target,
   Wallet,
   X,
 } from 'lucide-react'
@@ -15,6 +16,7 @@ import { palette } from './theme/colors'
 import Dashboard from './pages/Dashboard'
 import Assets from './pages/Assets'
 import Transactions from './pages/Transactions'
+import Strategies from './pages/Strategies'
 import SettingsPage from './pages/Settings'
 import VisitStats from './pages/VisitStats'
 import AssistantFab from './components/AssistantFab'
@@ -28,6 +30,7 @@ import type { AppPageId } from './types/assistant'
 const NAV = [
   { id: 'dashboard', label: '总览', icon: LayoutDashboard },
   { id: 'assets', label: '资产', icon: Wallet },
+  { id: 'strategies', label: '策略', icon: Target },
   { id: 'transactions', label: '流水', icon: ArrowLeftRight },
   { id: 'settings', label: '设置', icon: Settings },
 ] as const
@@ -74,8 +77,9 @@ export default function App() {
     () => [
       { key: '1', alt: true, action: () => goTo('dashboard') },
       { key: '2', alt: true, action: () => goTo('assets') },
-      { key: '3', alt: true, action: () => goTo('transactions') },
-      { key: '4', alt: true, action: () => goTo('settings') },
+      { key: '3', alt: true, action: () => goTo('strategies') },
+      { key: '4', alt: true, action: () => goTo('transactions') },
+      { key: '5', alt: true, action: () => goTo('settings') },
       { key: 'k', mod: true, action: toggleAssistant },
       { key: '?', shift: true, action: () => setHelpOpen(true) },
     ],
@@ -220,6 +224,7 @@ export default function App() {
         <div key={page} className="animate-fade-in mx-auto max-w-6xl space-y-6">
           {page === 'dashboard' && <Dashboard goTo={(p) => goTo(p as PageId)} />}
           {page === 'assets' && <Assets />}
+          {page === 'strategies' && <Strategies />}
           {page === 'transactions' && <Transactions />}
           {page === 'settings' && <SettingsPage />}
         </div>

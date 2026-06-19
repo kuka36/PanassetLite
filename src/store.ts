@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { Asset, PriceHistory, Settings, Transaction } from './types'
+import type { Asset, PriceHistory, Settings, Strategy, StrategyTransaction, Transaction } from './types'
 import { buildDemoData } from './demoData'
 import { StorageService, today, uid } from './services/storage'
 import { fetchCryptoPrices, fetchFxRates, fetchStockPrices } from './services/prices'
@@ -10,6 +10,8 @@ interface AppState {
   prices: PriceHistory
   settings: Settings
   refreshing: boolean
+  strategies: Strategy[]
+  strategyTransactions: StrategyTransaction[]
 
   addAsset: (a: Omit<Asset, 'id' | 'createdAt'>) => Asset
   updateAsset: (id: string, patch: Partial<Asset>) => void
@@ -18,6 +20,14 @@ interface AppState {
   addTransaction: (t: Omit<Transaction, 'id' | 'createdAt' | 'updatedAt'>) => void
   updateTransaction: (id: string, t: Omit<Transaction, 'id' | 'createdAt' | 'updatedAt'>) => void
   deleteTransaction: (id: string) => void
+
+  addStrategy: (s: Omit<Strategy, 'id' | 'createdAt'>) => Strategy
+  updateStrategy: (id: string, patch: Partial<Omit<Strategy, 'id' | 'createdAt'>>) => void
+  deleteStrategy: (id: string) => void
+
+  addStrategyTransaction: (t: Omit<StrategyTransaction, 'id' | 'createdAt'>) => void
+  updateStrategyTransaction: (id: string, t: Omit<StrategyTransaction, 'id' | 'createdAt'>) => void
+  deleteStrategyTransaction: (id: string) => void
 
   saveSettings: (patch: Partial<Settings>) => void
   refreshPrices: () => Promise<string>
@@ -33,6 +43,8 @@ export const useStore = create<AppState>((set, get) => ({
   prices: StorageService.loadPrices(),
   settings: StorageService.loadSettings(),
   refreshing: false,
+  strategies: StorageService.loadStrategies(),
+  strategyTransactions: StorageService.loadStrategyTransactions(),
 
   addAsset(a) {
     const asset: Asset = { ...a, id: uid(), createdAt: Date.now() }
@@ -51,9 +63,19 @@ export const useStore = create<AppState>((set, get) => ({
   deleteAsset(id) {
     const assets = get().assets.filter((a) => a.id !== id)
     const transactions = get().transactions.filter((t) => t.assetId !== id)
+    // 级联删除该资产下的所有策略及其流水
+    const deletedStrategyIds = new Set(
+      get().strategies.filter((s) => s.assetId === id).map((s) => s.id),
+    )
+    const strategies = get().strategies.filter((s) => s.assetId !== id)
+    const strategyTransactions = get().strategyTransactions.filter(
+      (t) => !deletedStrategyIds.has(t.strategyId),
+    )
     StorageService.saveAssets(assets)
     StorageService.saveTransactions(transactions)
-    set({ assets, transactions })
+    StorageService.saveStrategies(strategies)
+    StorageService.saveStrategyTransactions(strategyTransactions)
+    set({ assets, transactions, strategies, strategyTransactions })
   },
 
   addTransaction(t) {
@@ -78,6 +100,49 @@ export const useStore = create<AppState>((set, get) => ({
     const transactions = get().transactions.filter((t) => t.id !== id)
     StorageService.saveTransactions(transactions)
     set({ transactions })
+  },
+
+  addStrategy(s) {
+    const strategy: Strategy = { ...s, id: uid(), createdAt: Date.now() }
+    const strategies = [...get().strategies, strategy]
+    StorageService.saveStrategies(strategies)
+    set({ strategies })
+    return strategy
+  },
+
+  updateStrategy(id, patch) {
+    const strategies = get().strategies.map((s) => (s.id === id ? { ...s, ...patch } : s))
+    StorageService.saveStrategies(strategies)
+    set({ strategies })
+  },
+
+  deleteStrategy(id) {
+    const strategies = get().strategies.filter((s) => s.id !== id)
+    const strategyTransactions = get().strategyTransactions.filter((t) => t.strategyId !== id)
+    StorageService.saveStrategies(strategies)
+    StorageService.saveStrategyTransactions(strategyTransactions)
+    set({ strategies, strategyTransactions })
+  },
+
+  addStrategyTransaction(t) {
+    const tx: StrategyTransaction = { ...t, id: uid(), createdAt: Date.now() }
+    const strategyTransactions = [...get().strategyTransactions, tx]
+    StorageService.saveStrategyTransactions(strategyTransactions)
+    set({ strategyTransactions })
+  },
+
+  updateStrategyTransaction(id, t) {
+    const strategyTransactions = get().strategyTransactions.map((tx) =>
+      tx.id === id ? { ...tx, ...t, id: tx.id, createdAt: tx.createdAt } : tx,
+    )
+    StorageService.saveStrategyTransactions(strategyTransactions)
+    set({ strategyTransactions })
+  },
+
+  deleteStrategyTransaction(id) {
+    const strategyTransactions = get().strategyTransactions.filter((t) => t.id !== id)
+    StorageService.saveStrategyTransactions(strategyTransactions)
+    set({ strategyTransactions })
   },
 
   saveSettings(patch) {
@@ -159,6 +224,8 @@ export const useStore = create<AppState>((set, get) => ({
       transactions: StorageService.loadTransactions(),
       prices: StorageService.loadPrices(),
       settings: StorageService.loadSettings(),
+      strategies: StorageService.loadStrategies(),
+      strategyTransactions: StorageService.loadStrategyTransactions(),
     })
   },
 }))

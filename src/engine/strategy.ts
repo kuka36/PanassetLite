@@ -1,0 +1,96 @@
+import type {
+  Settings,
+  Strategy,
+  StrategyLedgerRow,
+  StrategySnapshot,
+  StrategyTransaction,
+} from '../types'
+import { buildValueLedgerRows, snapshotFromValueTxs } from './replayValue'
+import { today } from '../services/storage'
+
+/**
+ * StrategyEngine — 策略收益分析引擎。
+ * 策略是独立于资产的金额型账本，市值完全依赖 VALUATION 记录，不接行情。
+ * 计算结果不参与 PortfolioSummary。
+ */
+export class StrategyEngine {
+  private txByStrategy = new Map<string, StrategyTransaction[]>()
+  private strategies: Strategy[]
+  private settings: Settings
+
+  constructor(
+    strategies: Strategy[],
+    strategyTransactions: StrategyTransaction[],
+    settings: Settings,
+  ) {
+    this.strategies = strategies
+    this.settings = settings
+    const sorted = [...strategyTransactions].sort(
+      (a, b) => a.date.localeCompare(b.date) || a.createdAt - b.createdAt,
+    )
+    for (const tx of sorted) {
+      const list = this.txByStrategy.get(tx.strategyId) ?? []
+      list.push(tx)
+      this.txByStrategy.set(tx.strategyId, list)
+    }
+  }
+
+  /** 1 单位策略币种 = ? CNY */
+  private fx(currency: string): number {
+    if (currency === this.settings.baseCurrency) return 1
+    return this.settings.fxRates[currency] ?? 1
+  }
+
+  /** 某策略的快照 */
+  snapshot(strategy: Strategy): StrategySnapshot {
+    const txs = this.txByStrategy.get(strategy.id) ?? []
+    const fx = this.fx(strategy.currency)
+    const t = today()
+
+    const {
+      valueCNY,
+      valueNative,
+      netInvestedCNY,
+      totalPnlCNY,
+      xirr: rate,
+      recentAnnualized,
+      lastUpdated,
+    } = snapshotFromValueTxs(txs, fx, t)
+
+    return {
+      strategy,
+      valueCNY,
+      valueNative,
+      netInvestedCNY,
+      totalPnlCNY,
+      xirr: rate,
+      recentAnnualized,
+      lastUpdated,
+    }
+  }
+
+  /**
+   * 策略账本：按 date + createdAt 正序重放，返回 newest-first 供列表展示。
+   */
+  txLedger(strategy: Strategy): StrategyLedgerRow[] {
+    const txs = this.txByStrategy.get(strategy.id) ?? []
+    return buildValueLedgerRows(txs, (tx) => {
+      if (tx.type === 'VALUATION') return tx.value ?? null
+      return tx.amount ?? null
+    }).reverse()
+  }
+
+  /** 某资产下的所有策略快照（用于资产详情展示） */
+  snapshotsByAsset(assetId: string): StrategySnapshot[] {
+    return this.strategies
+      .filter((s) => s.assetId === assetId && !s.archived)
+      .map((s) => this.snapshot(s))
+  }
+
+  /** 所有未归档策略的快照 */
+  allSnapshots(): StrategySnapshot[] {
+    return this.strategies
+      .filter((s) => !s.archived)
+      .map((s) => this.snapshot(s))
+  }
+}

@@ -51,6 +51,36 @@ check('银行卡市值=最后估值 65200', Math.abs(bank.valueCNY - 65200) < 0.
 const yuebao = summary.snapshots.find((s) => s.asset.name === '余额宝')!
 check('余额宝近期年化在 1%-2%', yuebao.recentAnnualized != null && yuebao.recentAnnualized > 0.01 && yuebao.recentAnnualized < 0.02, yuebao.recentAnnualized)
 
+const yuebaoLedger = engine.txLedger(yuebao.asset)
+const latestValRow = yuebaoLedger.find((r) => r.tx.type === 'VALUATION')!
+check(
+  '余额宝最新估值行近期年化与 snapshot 一致',
+  latestValRow.intervalAnnualized != null &&
+    yuebao.recentAnnualized != null &&
+    Math.abs(latestValRow.intervalAnnualized - yuebao.recentAnnualized) < 0.001,
+  { row: latestValRow.intervalAnnualized, snap: yuebao.recentAnnualized },
+)
+const oldestRow = yuebaoLedger[yuebaoLedger.length - 1]
+check(
+  '余额宝首笔 DEPOSIT 无区间年化',
+  oldestRow.tx.type === 'DEPOSIT' &&
+    oldestRow.intervalGainNative == null &&
+    oldestRow.intervalAnnualized == null,
+  oldestRow,
+)
+const chronological = [...yuebaoLedger].reverse()
+const valAfterDeposit = chronological.find((r, i) => {
+  const prev = chronological[i - 1]
+  return r.tx.type === 'VALUATION' && prev?.tx.type === 'DEPOSIT'
+})
+check(
+  '余额宝首次估值相对存入有正区间变化',
+  valAfterDeposit != null &&
+    valAfterDeposit.intervalGainNative != null &&
+    valAfterDeposit.intervalGainNative > 0,
+  valAfterDeposit?.intervalGainNative,
+)
+
 // 6. 稳健理财年化约 3.4%
 const w2 = summary.snapshots.find((s) => s.asset.name.includes('安鑫'))!
 check('稳健理财近期年化在 3%-4%', w2.recentAnnualized != null && w2.recentAnnualized > 0.03 && w2.recentAnnualized < 0.04, w2.recentAnnualized)

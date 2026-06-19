@@ -73,7 +73,7 @@ export const ASSISTANT_TOOL_DEFINITIONS = [
         properties: {
           page: {
             type: 'string',
-            enum: ['dashboard', 'assets', 'transactions', 'settings'],
+            enum: ['dashboard', 'assets', 'strategies', 'transactions', 'settings'],
           },
         },
         required: ['page'],
@@ -341,7 +341,7 @@ export async function executeAssistantTool(
 
     case 'navigate': {
       const page = safeArgs.page as AppPageId
-      if (!['dashboard', 'assets', 'transactions', 'settings'].includes(page)) {
+      if (!['dashboard', 'assets', 'strategies', 'transactions', 'settings'].includes(page)) {
         return { content: JSON.stringify({ error: '无效页面' }) }
       }
       ctx.navigate(page)

@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 
 interface Props {
-  title: string
+  title: ReactNode
   onClose: () => void
   children: ReactNode
   /** md=表单弹窗, lg=宽表(原 wide), xl=资产详情等大面板 */
@@ -42,8 +42,8 @@ export default function Modal({ title, onClose, children, size, wide }: Props) {
           className={`fade-up my-6 w-full ${SIZE_CLS[resolved]} rounded-2xl border border-slate-100 bg-white p-6 shadow-2xl`}
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="mb-4 flex items-center justify-between border-b border-slate-100 pb-4">
-            <h2 className="text-lg font-semibold text-slate-800">{title}</h2>
+          <div className="mb-4 flex items-center justify-between gap-3 border-b border-slate-100 pb-4">
+            <h2 className="min-w-0 flex-1 text-lg font-semibold text-slate-800">{title}</h2>
             <button
               onClick={onClose}
               className="rounded-xl p-1.5 text-slate-400 transition-all duration-200 hover:bg-slate-100 hover:text-slate-600 active:scale-95"

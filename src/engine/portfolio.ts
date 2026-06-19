@@ -11,6 +11,7 @@ import type {
 } from '../types'
 import { isQuantityBased } from '../types'
 import { xirr, type CashFlow } from './xirr'
+import { applyValueTxStep, buildValueFlows, buildValueLedgerRows, recentAnnualizedFromValueTxs } from './replayValue'
 import { today } from '../services/storage'
 
 const DAY_MS = 86400_000
@@ -116,22 +117,7 @@ export class PortfolioEngine {
 
     let value = 0
     for (const tx of txs) {
-      switch (tx.type) {
-        case 'DEPOSIT':
-        case 'BORROW':
-        case 'INCOME':
-          value += tx.amount ?? 0
-          break
-        case 'WITHDRAW':
-        case 'REPAY':
-          value -= tx.amount ?? 0
-          break
-        case 'VALUATION':
-          value = tx.value ?? value
-          break
-        default:
-          break
-      }
+      value = applyValueTxStep(value, tx)
     }
     return Math.max(0, value) * fx
   }
@@ -145,20 +131,25 @@ export class PortfolioEngine {
     const valueNative = fx === 0 ? 0 : valueCNY / fx
 
     // 现金流(CNY,资产视角:投入为负,收回为正)
-    const flows: CashFlow[] = []
-    let totalIn = 0
-    let totalOut = 0
-    for (const tx of txs) {
-      let amt = 0
-      if (tx.type === 'BUY') amt = -(tx.quantity ?? 0) * (tx.price ?? 0) * fx
-      if (tx.type === 'SELL') amt = (tx.quantity ?? 0) * (tx.price ?? 0) * fx
-      if (tx.type === 'DEPOSIT') amt = -(tx.amount ?? 0) * fx
-      if (tx.type === 'WITHDRAW') amt = (tx.amount ?? 0) * fx
-      if (amt !== 0) {
-        flows.push({ date: tx.date, amount: amt })
-        if (amt < 0) totalIn += -amt
-        else totalOut += amt
+    let flows: CashFlow[]
+    let totalIn: number
+    let totalOut: number
+    if (isQuantityBased(asset.type)) {
+      flows = []
+      totalIn = 0
+      totalOut = 0
+      for (const tx of txs) {
+        let amt = 0
+        if (tx.type === 'BUY') amt = -(tx.quantity ?? 0) * (tx.price ?? 0) * fx
+        if (tx.type === 'SELL') amt = (tx.quantity ?? 0) * (tx.price ?? 0) * fx
+        if (amt !== 0) {
+          flows.push({ date: tx.date, amount: amt })
+          if (amt < 0) totalIn += -amt
+          else totalOut += amt
+        }
       }
+    } else {
+      ;({ flows, totalIn, totalOut } = buildValueFlows(txs, fx))
     }
 
     const isDebt = asset.type === 'debt'
@@ -210,25 +201,7 @@ export class PortfolioEngine {
    */
   private recentAnnualized(asset: Asset): number | null {
     if (isQuantityBased(asset.type) || asset.type === 'debt') return null
-    const vals = (this.txByAsset.get(asset.id) ?? []).filter(
-      (t) => t.type === 'VALUATION' && t.value != null,
-    )
-    if (vals.length < 2) return null
-    const v1 = vals[vals.length - 2]
-    const v2 = vals[vals.length - 1]
-    const days = (Date.parse(v2.date) - Date.parse(v1.date)) / DAY_MS
-    if (days < 1) return null
-
-    let netFlow = 0
-    for (const tx of this.txByAsset.get(asset.id) ?? []) {
-      if (tx.date <= v1.date || tx.date > v2.date) continue
-      if (tx.type === 'DEPOSIT') netFlow += tx.amount ?? 0
-      if (tx.type === 'WITHDRAW') netFlow -= tx.amount ?? 0
-    }
-    const base = (v1.value ?? 0) + Math.max(0, netFlow)
-    if (base <= 0) return null
-    const gain = (v2.value ?? 0) - (v1.value ?? 0) - netFlow
-    return (gain / base) * (365 / days)
+    return recentAnnualizedFromValueTxs(this.txByAsset.get(asset.id) ?? [])
   }
 
   /** 单笔发生额(原币种) */
@@ -261,6 +234,16 @@ export class PortfolioEngine {
         ? 'debt'
         : 'value'
 
+    if (!isQuantityBased(asset.type) && asset.type !== 'debt') {
+      const rows = buildValueLedgerRows(txs, (tx) => this.txAmountNative(tx))
+      return rows
+        .map((row) => ({
+          ...row,
+          balanceLabel,
+        }))
+        .reverse()
+    }
+
     let balance = 0
     const rows: TxLedgerRow[] = []
 
@@ -269,23 +252,7 @@ export class PortfolioEngine {
         if (tx.type === 'BUY') balance += tx.quantity ?? 0
         if (tx.type === 'SELL') balance -= tx.quantity ?? 0
       } else {
-        switch (tx.type) {
-          case 'DEPOSIT':
-          case 'BORROW':
-          case 'INCOME':
-            balance += tx.amount ?? 0
-            break
-          case 'WITHDRAW':
-          case 'REPAY':
-            balance -= tx.amount ?? 0
-            break
-          case 'VALUATION':
-            balance = tx.value ?? balance
-            break
-          default:
-            break
-        }
-        if (asset.type !== 'debt') balance = Math.max(0, balance)
+        balance = applyValueTxStep(balance, tx)
       }
 
       rows.push({
