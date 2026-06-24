@@ -299,6 +299,21 @@ export default function Assets() {
             }}
             onCancel={() => closeTx(modal, setModal)}
           />
+          <p className="mt-3 text-center">
+            <button
+              type="button"
+              className={`text-xs ${color.link} hover:underline`}
+              onClick={() =>
+                setModal({
+                  kind: 'nlTx',
+                  asset: modal.asset,
+                  returnAssetId: modal.returnAssetId,
+                })
+              }
+            >
+              改用 AI 解析
+            </button>
+          </p>
         </Modal>
       )}
 
@@ -322,7 +337,7 @@ export default function Assets() {
           assetId={modal.assetId}
           onClose={() => setModal(null)}
           onEdit={(asset) => setModal({ kind: 'edit', asset })}
-          onAddTx={(asset) => setModal({ kind: 'nlTx', asset, returnAssetId: modal.assetId })}
+          onAddTx={(asset) => setModal({ kind: 'tx', asset, returnAssetId: modal.assetId })}
           onEditTx={(tx) => setModal({ kind: 'editTx', tx, returnAssetId: modal.assetId })}
           onDelete={(asset) => {
             if (confirm(`确定删除「${asset.name}」及其全部交易记录?此操作不可恢复。`)) {
