@@ -149,12 +149,17 @@ export default function Strategies({ initial }: Props) {
     for (const s of allSnapshots) {
       counts.set(s.strategy.assetId, (counts.get(s.strategy.assetId) ?? 0) + 1)
     }
+    if (showClosed) {
+      for (const s of archivedSnapshots) {
+        counts.set(s.strategy.assetId, (counts.get(s.strategy.assetId) ?? 0) + 1)
+      }
+    }
     return [...counts.entries()].map(([id, count]) => ({
       id,
       name: assetMap.get(id)?.name ?? '(已删除)',
       count,
     }))
-  }, [allSnapshots, assetMap])
+  }, [allSnapshots, archivedSnapshots, showClosed, assetMap])
 
   const filtered = useMemo(
     () => filterSnapshots(allSnapshots, filterAsset, filterKind),
