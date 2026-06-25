@@ -39,6 +39,7 @@ export interface StrategiesInit {
 
 interface Props {
   initial?: StrategiesInit
+  onViewAllFlows?: () => void
 }
 
 function filterSnapshots(
@@ -117,7 +118,7 @@ function StrategyTableRow({
   )
 }
 
-export default function Strategies({ initial }: Props) {
+export default function Strategies({ initial, onViewAllFlows }: Props) {
   const assets = useStore((s) => s.assets)
   const addStrategy = useStore((s) => s.addStrategy)
   const updateStrategy = useStore((s) => s.updateStrategy)
@@ -291,14 +292,21 @@ export default function Strategies({ initial }: Props) {
       <div className="space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-xl font-semibold text-slate-800">策略</h1>
-          <button
-            type="button"
-            className={btnPrimary}
-            onClick={() => setModal({ kind: 'add' })}
-            disabled={activeAssets.length === 0}
-          >
-            + 添加策略
-          </button>
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            {onViewAllFlows && (
+              <button type="button" className={btnGhost} onClick={onViewAllFlows}>
+                全部流水
+              </button>
+            )}
+            <button
+              type="button"
+              className={btnPrimary}
+              onClick={() => setModal({ kind: 'add' })}
+              disabled={activeAssets.length === 0}
+            >
+              + 添加策略
+            </button>
+          </div>
         </div>
 
         <div className="flex h-[50vh] flex-col items-center justify-center gap-4 text-center">
@@ -330,14 +338,21 @@ export default function Strategies({ initial }: Props) {
       <div className="space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-xl font-semibold text-slate-800">策略</h1>
-          <button
-            type="button"
-            className={btnPrimary}
-            onClick={() => setModal({ kind: 'add' })}
-            disabled={activeAssets.length === 0}
-          >
-            + 添加策略
-          </button>
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            {onViewAllFlows && (
+              <button type="button" className={btnGhost} onClick={onViewAllFlows}>
+                全部流水
+              </button>
+            )}
+            <button
+              type="button"
+              className={btnPrimary}
+              onClick={() => setModal({ kind: 'add' })}
+              disabled={activeAssets.length === 0}
+            >
+              + 添加策略
+            </button>
+          </div>
         </div>
 
         <div className="flex h-[40vh] flex-col items-center justify-center gap-4 text-center">
@@ -368,14 +383,21 @@ export default function Strategies({ initial }: Props) {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-xl font-semibold text-slate-800">策略</h1>
-        <button
-          type="button"
-          className={btnPrimary}
-          onClick={() => setModal({ kind: 'add' })}
-          disabled={activeAssets.length === 0}
-        >
-          + 添加策略
-        </button>
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+          {onViewAllFlows && (
+            <button type="button" className={btnGhost} onClick={onViewAllFlows}>
+              全部流水
+            </button>
+          )}
+          <button
+            type="button"
+            className={btnPrimary}
+            onClick={() => setModal({ kind: 'add' })}
+            disabled={activeAssets.length === 0}
+          >
+            + 添加策略
+          </button>
+        </div>
       </div>
 
       <StrategyFilters

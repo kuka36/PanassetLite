@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { initAnalytics, reportPageView } from './services/analytics'
 import {
-  ArrowLeftRight,
   BookOpen,
   ChevronLeft,
   ChevronRight,
@@ -15,7 +14,7 @@ import {
 import { palette } from './theme/colors'
 import Dashboard from './pages/Dashboard'
 import Assets from './pages/Assets'
-import Transactions from './pages/Transactions'
+import Transactions, { type FlowsInit } from './pages/Transactions'
 import Strategies, { type StrategiesInit } from './pages/Strategies'
 import SettingsPage from './pages/Settings'
 import VisitStats from './pages/VisitStats'
@@ -32,12 +31,12 @@ import type { AppPageId } from './types/assistant'
 const NAV = [
   { id: 'dashboard', label: '总览', icon: LayoutDashboard },
   { id: 'assets', label: '资产', icon: Wallet },
-  { id: 'flows', label: '资产流水', icon: ArrowLeftRight },
   { id: 'strategies', label: '策略', icon: Target },
   { id: 'settings', label: '设置', icon: Settings },
 ] as const
 
-type PageId = (typeof NAV)[number]['id']
+type NavId = (typeof NAV)[number]['id']
+type PageId = NavId | 'flows'
 
 const SIDEBAR_EXPANDED = 'w-56'
 const SIDEBAR_COLLAPSED = 'w-[4.5rem]'
@@ -45,20 +44,20 @@ const MAIN_EXPANDED = 'md:ml-56'
 const MAIN_COLLAPSED = 'md:ml-[4.5rem]'
 const ABOUT_URL = 'https://mp.weixin.qq.com/s/du0wh1As2s-casSadFAgZQ'
 
-function navStaleBadge(id: PageId, assetStaleCount: number, strategyStaleCount: number): number {
+function navStaleBadge(id: NavId, assetStaleCount: number, strategyStaleCount: number): number {
   if (id === 'assets') return assetStaleCount
   if (id === 'strategies') return strategyStaleCount
   return 0
 }
 
-function navStaleTitle(label: string, id: PageId, count: number): string {
+function navStaleTitle(label: string, id: NavId, count: number): string {
   if (count <= 0) return label
   if (id === 'assets') return `${label}（${count} 个资产待更新）`
   if (id === 'strategies') return `${label}（${count} 个策略待更新估值）`
   return label
 }
 
-function navStaleAria(id: PageId, count: number): string {
+function navStaleAria(id: NavId, count: number): string {
   if (id === 'assets') return `${count} 个资产待更新`
   if (id === 'strategies') return `${count} 个策略待更新估值`
   return `${count} 个待更新`
@@ -79,6 +78,7 @@ export default function App() {
   const [showStats, setShowStats] = useState(isStatsUrl)
   const [page, setPage] = useState<PageId>('dashboard')
   const [strategiesInit, setStrategiesInit] = useState<StrategiesInit | undefined>()
+  const [flowsInit, setFlowsInit] = useState<FlowsInit | undefined>()
   const [collapsed, setCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
@@ -91,11 +91,26 @@ export default function App() {
     initAnalytics('dashboard')
   }, [])
 
-  const goTo = useCallback((id: PageId) => {
+  const goTo = useCallback((id: NavId) => {
     setPage(id)
     reportPageView(id)
     setMobileOpen(false)
   }, [])
+
+  const goToFlows = useCallback((init?: FlowsInit) => {
+    setFlowsInit(init)
+    setPage('flows')
+    reportPageView('flows')
+    setMobileOpen(false)
+  }, [])
+
+  const onAssistantNavigate = useCallback(
+    (id: AppPageId) => {
+      if (id === 'flows') goToFlows()
+      else goTo(id)
+    },
+    [goTo, goToFlows],
+  )
 
   const goToClosedStrategies = useCallback((assetId: string) => {
     setStrategiesInit({ filterAsset: assetId, showClosed: true })
@@ -108,9 +123,8 @@ export default function App() {
     () => [
       { key: '1', alt: true, action: () => goTo('dashboard') },
       { key: '2', alt: true, action: () => goTo('assets') },
-      { key: '3', alt: true, action: () => goTo('flows') },
-      { key: '4', alt: true, action: () => goTo('strategies') },
-      { key: '5', alt: true, action: () => goTo('settings') },
+      { key: '3', alt: true, action: () => goTo('strategies') },
+      { key: '4', alt: true, action: () => goTo('settings') },
       { key: 'k', mod: true, action: toggleAssistant },
       { key: '?', shift: true, action: () => setHelpOpen(true) },
     ],
@@ -273,21 +287,32 @@ export default function App() {
       {/* 主内容 */}
       <main className={`px-4 pb-10 pt-20 transition-all duration-200 md:pt-8 md:px-6 lg:px-10 ${mainMargin}`}>
         <div key={page} className="animate-fade-in mx-auto max-w-6xl space-y-6">
-          {page === 'dashboard' && <Dashboard goTo={(p) => goTo(p as PageId)} />}
-          {page === 'assets' && <Assets onViewClosedStrategies={goToClosedStrategies} />}
+          {page === 'dashboard' && <Dashboard goTo={(p) => goTo(p as NavId)} />}
+          {page === 'assets' && (
+            <Assets
+              onViewClosedStrategies={goToClosedStrategies}
+              onViewAllFlows={(assetId) => goToFlows({ tab: 'asset', filterAssetId: assetId })}
+            />
+          )}
           {page === 'strategies' && (
             <Strategies
               key={`${strategiesInit?.filterAsset ?? ''}-${strategiesInit?.showClosed ?? false}`}
               initial={strategiesInit}
+              onViewAllFlows={() => goToFlows({ tab: 'strategy' })}
             />
           )}
-          {page === 'flows' && <Transactions />}
+          {page === 'flows' && (
+            <Transactions
+              key={`${flowsInit?.tab ?? ''}-${flowsInit?.filterAssetId ?? ''}-${flowsInit?.filterStrategyId ?? ''}`}
+              initial={flowsInit}
+            />
+          )}
           {page === 'settings' && <SettingsPage />}
         </div>
       </main>
 
       <AssistantFab />
-      <AssistantPanel currentPage={page as AppPageId} onNavigate={goTo} />
+      <AssistantPanel currentPage={page as AppPageId} onNavigate={onAssistantNavigate} />
       <AssistantConfirmModals
         onSuccess={(msg) => addAssistantMessage({ role: 'assistant', content: msg })}
       />

@@ -201,7 +201,7 @@ export async function runLocalQuickReply(
 
   if (/打开流水|资产流水/.test(text)) {
     await executeAssistantTool('navigate', { page: 'flows' }, ctx)
-    return { assistantContent: '已切换到资产流水页。', pendingActions: [] }
+    return { assistantContent: '已切换到流水页。', pendingActions: [] }
   }
 
   return null

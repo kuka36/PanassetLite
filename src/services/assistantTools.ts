@@ -53,7 +53,7 @@ export const ASSISTANT_TOOL_DEFINITIONS = [
     type: 'function' as const,
     function: {
       name: 'list_flows',
-      description: '列出最近流水',
+      description: '列出最近资产流水',
       parameters: {
         type: 'object',
         properties: {

@@ -75,8 +75,10 @@ function closeEditTx(
 
 export default function Assets({
   onViewClosedStrategies,
+  onViewAllFlows,
 }: {
   onViewClosedStrategies?: (assetId: string) => void
+  onViewAllFlows?: (assetId?: string) => void
 } = {}) {
   const summary = useSummary()
   const assets = useStore((s) => s.assets)
@@ -120,6 +122,16 @@ export default function Assets({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-xl font-semibold text-slate-800">资产</h1>
         <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+          {onViewAllFlows && (
+            <button
+              type="button"
+              className={btnGhost}
+              disabled={assets.length === 0}
+              onClick={() => onViewAllFlows()}
+            >
+              全部流水
+            </button>
+          )}
           <button
             className={btnGhost}
             disabled={assets.length === 0}
@@ -342,6 +354,7 @@ export default function Assets({
             }
           }}
           onViewClosedStrategies={onViewClosedStrategies}
+          onViewAllFlows={onViewAllFlows}
         />
       )}
     </div>
@@ -493,6 +506,7 @@ function AssetDetail({
   onEditTx,
   onDelete,
   onViewClosedStrategies,
+  onViewAllFlows,
 }: {
   assetId: string
   onClose: () => void
@@ -501,6 +515,7 @@ function AssetDetail({
   onEditTx: (t: Transaction) => void
   onDelete: (a: Asset) => void
   onViewClosedStrategies?: (assetId: string) => void
+  onViewAllFlows?: (assetId?: string) => void
 }) {
   const summary = useSummary()
   const engine = usePortfolioEngine()
@@ -577,6 +592,17 @@ function AssetDetail({
       </div>
 
       <div className="mb-4 max-h-[min(50vh,28rem)] overflow-x-auto overflow-y-auto rounded-xl border border-slate-100">
+        {onViewAllFlows && (
+          <div className="flex justify-end border-b border-slate-100 px-3 py-2">
+            <button
+              type="button"
+              className="text-xs text-blue-600 transition-colors hover:text-blue-700"
+              onClick={() => onViewAllFlows(assetId)}
+            >
+              在全部流水中查看 →
+            </button>
+          </div>
+        )}
         <table className="w-full text-sm">
           <thead className="sticky top-0 bg-white">
             <tr className="border-b border-slate-100 text-left text-xs text-slate-500">
