@@ -1,8 +1,13 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Target } from 'lucide-react'
 import { useStore } from '../store'
-import { useStrategyEngine, useStrategySnapshots } from '../hooks/useStrategySummary'
-import Modal, { btnPrimary } from '../components/Modal'
+import {
+  useArchivedStrategySnapshots,
+  useStrategyEngine,
+  useStrategySnapshots,
+} from '../hooks/useStrategySummary'
+import { StorageService } from '../services/storage'
+import Modal, { btnGhost, btnPrimary } from '../components/Modal'
 import { SortTh } from '../components/SortTh'
 import StrategyForm from '../components/StrategyForm'
 import StrategyList from '../components/StrategyList'
@@ -26,18 +31,107 @@ type ModalState =
   | { kind: 'detail'; snap: StrategySnapshot }
   | null
 
-export default function Strategies() {
+export interface StrategiesInit {
+  filterAsset?: string
+  showClosed?: boolean
+}
+
+interface Props {
+  initial?: StrategiesInit
+}
+
+function filterSnapshots(
+  snapshots: StrategySnapshot[],
+  filterAsset: string,
+  filterKind: string,
+) {
+  return snapshots.filter((s) => {
+    if (filterAsset && s.strategy.assetId !== filterAsset) return false
+    if (filterKind && s.strategy.kind !== filterKind) return false
+    return true
+  })
+}
+
+function StrategyTableRow({
+  snap,
+  assetMap,
+  archived,
+  onSelect,
+}: {
+  snap: StrategySnapshot
+  assetMap: Map<string, { name: string; platform?: string }>
+  archived?: boolean
+  onSelect: (snap: StrategySnapshot) => void
+}) {
+  const { strategy } = snap
+  const asset = assetMap.get(strategy.assetId)
+  return (
+    <tr
+      key={strategy.id}
+      className={`cursor-pointer border-t border-slate-100 transition-colors duration-200 hover:bg-slate-50/50 ${
+        archived ? 'bg-slate-50/80 opacity-75' : ''
+      }`}
+      onClick={() => onSelect(snap)}
+    >
+      <td className={`px-4 py-2.5 font-medium ${archived ? 'text-slate-600' : 'text-slate-800'}`}>
+        <span className="inline-flex flex-wrap items-center gap-2">
+          {strategy.name}
+          {archived && (
+            <span className="rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-xs font-normal text-slate-500">
+              已关闭
+            </span>
+          )}
+        </span>
+      </td>
+      <td className="px-3 py-2.5">
+        <span className="rounded-full border border-sky-100 bg-sky-50 px-2 py-0.5 text-xs text-sky-700">
+          {STRATEGY_KIND_LABEL[strategy.kind]}
+        </span>
+      </td>
+      <td className="px-3 py-2.5 text-slate-600">
+        {asset?.name ?? '(已删除)'}
+        {asset?.platform && (
+          <span className="text-slate-400"> · {asset.platform}</span>
+        )}
+      </td>
+      <td className={`px-3 py-2.5 text-right tabular-nums font-medium ${archived ? 'text-slate-600' : 'text-slate-800'}`}>
+        {fmtMoney(snap.valueCNY)}
+      </td>
+      <td className={`px-3 py-2.5 text-right tabular-nums ${pnlColor(snap.totalPnlCNY)}`}>
+        {snap.totalPnlCNY >= 0 ? '+' : ''}{fmtMoney(snap.totalPnlCNY)}
+      </td>
+      <td className={`px-3 py-2.5 text-right tabular-nums ${snap.xirr != null ? pnlColor(snap.xirr) : 'text-slate-400'}`}>
+        {snap.xirr != null ? fmtPct(snap.xirr) : '—'}
+      </td>
+      <td className="px-3 py-2.5 text-right tabular-nums text-slate-500">
+        {snap.lastUpdated ?? '—'}
+      </td>
+    </tr>
+  )
+}
+
+export default function Strategies({ initial }: Props) {
   const assets = useStore((s) => s.assets)
   const addStrategy = useStore((s) => s.addStrategy)
   const updateStrategy = useStore((s) => s.updateStrategy)
   const deleteStrategy = useStore((s) => s.deleteStrategy)
 
   const allSnapshots = useStrategySnapshots()
+  const archivedSnapshots = useArchivedStrategySnapshots()
   const engine = useStrategyEngine()
 
-  const [filterAsset, setFilterAsset] = useState('')
+  const [filterAsset, setFilterAsset] = useState(initial?.filterAsset ?? '')
   const [filterKind, setFilterKind] = useState('')
+  const [showClosed, setShowClosed] = useState(
+    () => initial?.showClosed ?? StorageService.loadStrategiesShowClosed(),
+  )
   const [modal, setModal] = useState<ModalState>(null)
+
+  useEffect(() => {
+    if (initial?.showClosed) {
+      StorageService.saveStrategiesShowClosed(true)
+    }
+  }, [initial?.showClosed])
   const { sort, handleSort } = useTableSort(DEFAULT_STRATEGY_SORT, STRATEGY_TEXT_KEYS)
 
   const assetMap = useMemo(() => new Map(assets.map((a) => [a.id, a])), [assets])
@@ -55,13 +149,15 @@ export default function Strategies() {
     }))
   }, [allSnapshots, assetMap])
 
-  const filtered = useMemo(() => {
-    return allSnapshots.filter((s) => {
-      if (filterAsset && s.strategy.assetId !== filterAsset) return false
-      if (filterKind && s.strategy.kind !== filterKind) return false
-      return true
-    })
-  }, [allSnapshots, filterAsset, filterKind])
+  const filtered = useMemo(
+    () => filterSnapshots(allSnapshots, filterAsset, filterKind),
+    [allSnapshots, filterAsset, filterKind],
+  )
+
+  const filteredClosed = useMemo(
+    () => filterSnapshots(archivedSnapshots, filterAsset, filterKind),
+    [archivedSnapshots, filterAsset, filterKind],
+  )
 
   const strategyAccessors = useMemo(
     (): Record<StrategySortKey, (s: StrategySnapshot) => string | number | null | undefined> => ({
@@ -81,18 +177,101 @@ export default function Strategies() {
     [filtered, sort, strategyAccessors],
   )
 
+  const sortedClosed = useMemo(
+    () => sortBy(filteredClosed, sort, strategyAccessors),
+    [filteredClosed, sort, strategyAccessors],
+  )
+
   const totalValue = filtered.reduce((sum, s) => sum + s.valueCNY, 0)
   const totalPnl = filtered.reduce((sum, s) => sum + s.totalPnlCNY, 0)
 
   const refreshSnap = (old: StrategySnapshot): StrategySnapshot =>
-    engine.snapshot(old.strategy)
+    engine.snapshotById(old.strategy.id) ?? old
 
-  if (allSnapshots.length === 0) {
+  const toggleShowClosed = () => {
+    setShowClosed((v) => {
+      const next = !v
+      StorageService.saveStrategiesShowClosed(next)
+      return next
+    })
+  }
+
+  const openShowClosed = () => {
+    setShowClosed(true)
+    StorageService.saveStrategiesShowClosed(true)
+  }
+
+  const hasAnyStrategy = allSnapshots.length > 0 || archivedSnapshots.length > 0
+  const onlyArchived = allSnapshots.length === 0 && archivedSnapshots.length > 0
+
+  const modals = (
+    <>
+      {modal?.kind === 'add' && (
+        <Modal title="新建策略" onClose={() => setModal(null)}>
+          <StrategyForm
+            assets={assets}
+            onSubmit={(s) => {
+              addStrategy(s)
+              setModal(null)
+            }}
+            onCancel={() => setModal(null)}
+          />
+        </Modal>
+      )}
+
+      {modal?.kind === 'edit' && (
+        <Modal title="编辑策略" onClose={() => setModal(null)}>
+          <StrategyForm
+            assets={assets}
+            fixedAssetId={modal.snap.strategy.assetId}
+            initial={modal.snap.strategy}
+            onSubmit={(s) => {
+              updateStrategy(modal.snap.strategy.id, s)
+              setModal(null)
+            }}
+            onCancel={() => setModal(null)}
+            onPermanentDelete={
+              !modal.snap.strategy.archived
+                ? () => {
+                    if (
+                      confirm(
+                        `永久删除策略「${modal.snap.strategy.name}」及其全部流水？\n\n` +
+                          '此操作不可恢复。若只是想停止跟踪，请使用「关闭策略」。',
+                      )
+                    ) {
+                      deleteStrategy(modal.snap.strategy.id)
+                      setModal(null)
+                    }
+                  }
+                : undefined
+            }
+          />
+        </Modal>
+      )}
+
+      {modal?.kind === 'detail' && (
+        <StrategyDetail
+          snap={refreshSnap(modal.snap)}
+          onClose={() => setModal(null)}
+          onEdit={(snap) => setModal({ kind: 'edit', snap })}
+          onArchive={(snap) => updateStrategy(snap.strategy.id, { archived: true })}
+          onReopen={(snap) => updateStrategy(snap.strategy.id, { archived: false })}
+          onDelete={(snap) => {
+            deleteStrategy(snap.strategy.id)
+            setModal(null)
+          }}
+        />
+      )}
+    </>
+  )
+
+  if (!hasAnyStrategy) {
     return (
       <div className="space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-xl font-semibold text-slate-800">跟踪策略</h1>
           <button
+            type="button"
             className={btnPrimary}
             onClick={() => setModal({ kind: 'add' })}
             disabled={activeAssets.length === 0}
@@ -111,6 +290,7 @@ export default function Strategies() {
             策略流水与资产流水完全隔离，不影响净资产统计。
           </p>
           <button
+            type="button"
             className={btnPrimary}
             onClick={() => setModal({ kind: 'add' })}
             disabled={activeAssets.length === 0}
@@ -119,27 +299,56 @@ export default function Strategies() {
           </button>
         </div>
 
-        {modal?.kind === 'add' && (
-          <Modal title="新建策略" onClose={() => setModal(null)}>
-            <StrategyForm
-              assets={assets}
-              onSubmit={(s) => {
-                addStrategy(s)
-                setModal(null)
-              }}
-              onCancel={() => setModal(null)}
-            />
-          </Modal>
-        )}
+        {modals}
       </div>
     )
   }
+
+  if (onlyArchived && !showClosed) {
+    return (
+      <div className="space-y-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h1 className="text-xl font-semibold text-slate-800">跟踪策略</h1>
+          <button
+            type="button"
+            className={btnPrimary}
+            onClick={() => setModal({ kind: 'add' })}
+            disabled={activeAssets.length === 0}
+          >
+            + 新建策略
+          </button>
+        </div>
+
+        <div className="flex h-[40vh] flex-col items-center justify-center gap-4 text-center">
+          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-100 text-slate-500">
+            <Target className="h-8 w-8" />
+          </div>
+          <h2 className="text-xl font-semibold text-slate-800">暂无进行中的策略</h2>
+          <p className="max-w-md text-sm text-slate-500">
+            你有 {archivedSnapshots.length} 个已关闭的策略可查看。
+          </p>
+          <button
+            type="button"
+            className={btnGhost}
+            onClick={openShowClosed}
+          >
+            显示已关闭
+          </button>
+        </div>
+
+        {modals}
+      </div>
+    )
+  }
+
+  const tableEmpty = sorted.length === 0 && (!showClosed || sortedClosed.length === 0)
 
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-xl font-semibold text-slate-800">跟踪策略</h1>
         <button
+          type="button"
           className={btnPrimary}
           onClick={() => setModal({ kind: 'add' })}
           disabled={activeAssets.length === 0}
@@ -176,9 +385,11 @@ export default function Strategies() {
           setFilterAsset('')
           setFilterKind('')
         }}
+        showClosed={showClosed}
+        archivedCount={archivedSnapshots.length}
+        onToggleClosed={toggleShowClosed}
       />
 
-      {/* 桌面端表格 */}
       <Card className="hidden overflow-hidden md:block">
         <CardHeader>
           <h3 className="text-sm font-medium text-slate-700">策略列表</h3>
@@ -187,99 +398,42 @@ export default function Strategies() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-slate-100 bg-slate-50/80 text-left text-xs text-slate-500">
-                <SortTh
-                  label="策略名称"
-                  sortKey="name"
-                  sort={sort}
-                  onSort={handleSort}
-                  className="px-4 py-3 font-medium"
-                />
-                <SortTh
-                  label="类型"
-                  sortKey="kind"
-                  sort={sort}
-                  onSort={handleSort}
-                  className="px-3 py-3 font-medium"
-                />
-                <SortTh
-                  label="归属账户"
-                  sortKey="asset"
-                  sort={sort}
-                  onSort={handleSort}
-                  className="px-3 py-3 font-medium"
-                />
-                <SortTh
-                  label="市值"
-                  sortKey="valueCNY"
-                  sort={sort}
-                  onSort={handleSort}
-                  className="px-3 py-3 font-medium"
-                  align="right"
-                />
-                <SortTh
-                  label="累计盈亏"
-                  sortKey="totalPnlCNY"
-                  sort={sort}
-                  onSort={handleSort}
-                  className="px-3 py-3 font-medium"
-                  align="right"
-                />
-                <SortTh
-                  label="年化(XIRR)"
-                  sortKey="xirr"
-                  sort={sort}
-                  onSort={handleSort}
-                  className="px-3 py-3 font-medium"
-                  align="right"
-                />
-                <SortTh
-                  label="更新于"
-                  sortKey="lastUpdated"
-                  sort={sort}
-                  onSort={handleSort}
-                  className="px-3 py-3 font-medium"
-                  align="right"
-                />
+                <SortTh label="策略名称" sortKey="name" sort={sort} onSort={handleSort} className="px-4 py-3 font-medium" />
+                <SortTh label="类型" sortKey="kind" sort={sort} onSort={handleSort} className="px-3 py-3 font-medium" />
+                <SortTh label="归属账户" sortKey="asset" sort={sort} onSort={handleSort} className="px-3 py-3 font-medium" />
+                <SortTh label="市值" sortKey="valueCNY" sort={sort} onSort={handleSort} className="px-3 py-3 font-medium" align="right" />
+                <SortTh label="累计盈亏" sortKey="totalPnlCNY" sort={sort} onSort={handleSort} className="px-3 py-3 font-medium" align="right" />
+                <SortTh label="年化(XIRR)" sortKey="xirr" sort={sort} onSort={handleSort} className="px-3 py-3 font-medium" align="right" />
+                <SortTh label="更新于" sortKey="lastUpdated" sort={sort} onSort={handleSort} className="px-3 py-3 font-medium" align="right" />
               </tr>
             </thead>
             <tbody>
-              {sorted.map((snap) => {
-                const { strategy } = snap
-                const asset = assetMap.get(strategy.assetId)
-                return (
-                  <tr
-                    key={strategy.id}
-                    className="cursor-pointer border-t border-slate-100 transition-colors duration-200 hover:bg-slate-50/50"
-                    onClick={() => setModal({ kind: 'detail', snap })}
-                  >
-                    <td className="px-4 py-2.5 font-medium text-slate-800">{strategy.name}</td>
-                    <td className="px-3 py-2.5">
-                      <span className="rounded-full border border-sky-100 bg-sky-50 px-2 py-0.5 text-xs text-sky-700">
-                        {STRATEGY_KIND_LABEL[strategy.kind]}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2.5 text-slate-600">
-                      {asset?.name ?? '(已删除)'}
-                      {asset?.platform && (
-                        <span className="text-slate-400"> · {asset.platform}</span>
-                      )}
-                    </td>
-                    <td className="px-3 py-2.5 text-right tabular-nums font-medium text-slate-800">
-                      {fmtMoney(snap.valueCNY)}
-                    </td>
-                    <td className={`px-3 py-2.5 text-right tabular-nums ${pnlColor(snap.totalPnlCNY)}`}>
-                      {snap.totalPnlCNY >= 0 ? '+' : ''}{fmtMoney(snap.totalPnlCNY)}
-                    </td>
-                    <td className={`px-3 py-2.5 text-right tabular-nums ${snap.xirr != null ? pnlColor(snap.xirr) : 'text-slate-400'}`}>
-                      {snap.xirr != null ? fmtPct(snap.xirr) : '—'}
-                    </td>
-                    <td className="px-3 py-2.5 text-right tabular-nums text-slate-500">
-                      {snap.lastUpdated ?? '—'}
-                    </td>
-                  </tr>
-                )
-              })}
-              {filtered.length === 0 && (
+              {sorted.map((snap) => (
+                <StrategyTableRow
+                  key={snap.strategy.id}
+                  snap={snap}
+                  assetMap={assetMap}
+                  onSelect={(s) => setModal({ kind: 'detail', snap: s })}
+                />
+              ))}
+              {showClosed && sortedClosed.length > 0 && (
+                <tr className="border-t border-slate-200 bg-slate-50/50">
+                  <td colSpan={7} className="px-4 py-2 text-xs text-slate-400">
+                    已关闭的策略
+                  </td>
+                </tr>
+              )}
+              {showClosed &&
+                sortedClosed.map((snap) => (
+                  <StrategyTableRow
+                    key={snap.strategy.id}
+                    snap={snap}
+                    assetMap={assetMap}
+                    archived
+                    onSelect={(s) => setModal({ kind: 'detail', snap: s })}
+                  />
+                ))}
+              {tableEmpty && (
                 <tr>
                   <td colSpan={7} className="px-4 py-12 text-center text-slate-500">
                     没有符合筛选条件的策略
@@ -291,55 +445,17 @@ export default function Strategies() {
         </div>
       </Card>
 
-      {/* 移动端卡片列表 */}
       <div className="md:hidden">
         <StrategyList
           snapshots={sorted}
+          closedSnapshots={showClosed ? sortedClosed : []}
           assetMap={assetMap}
           onSelect={(snap) => setModal({ kind: 'detail', snap })}
           onAdd={() => setModal({ kind: 'add' })}
         />
       </div>
 
-      {modal?.kind === 'add' && (
-        <Modal title="新建策略" onClose={() => setModal(null)}>
-          <StrategyForm
-            assets={assets}
-            onSubmit={(s) => {
-              addStrategy(s)
-              setModal(null)
-            }}
-            onCancel={() => setModal(null)}
-          />
-        </Modal>
-      )}
-
-      {modal?.kind === 'edit' && (
-        <Modal title="编辑策略" onClose={() => setModal(null)}>
-          <StrategyForm
-            assets={assets}
-            fixedAssetId={modal.snap.strategy.assetId}
-            initial={modal.snap.strategy}
-            onSubmit={(s) => {
-              updateStrategy(modal.snap.strategy.id, s)
-              setModal(null)
-            }}
-            onCancel={() => setModal(null)}
-          />
-        </Modal>
-      )}
-
-      {modal?.kind === 'detail' && (
-        <StrategyDetail
-          snap={refreshSnap(modal.snap)}
-          onClose={() => setModal(null)}
-          onEdit={(snap) => setModal({ kind: 'edit', snap })}
-          onDelete={(snap) => {
-            deleteStrategy(snap.strategy.id)
-            setModal(null)
-          }}
-        />
-      )}
+      {modals}
     </div>
   )
 }

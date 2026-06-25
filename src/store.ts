@@ -125,6 +125,10 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   addStrategyTransaction(t) {
+    const strategy = get().strategies.find((s) => s.id === t.strategyId)
+    if (strategy?.archived) {
+      throw new Error('策略已关闭，无法新增流水')
+    }
     const tx: StrategyTransaction = { ...t, id: uid(), createdAt: Date.now() }
     const strategyTransactions = [...get().strategyTransactions, tx]
     StorageService.saveStrategyTransactions(strategyTransactions)

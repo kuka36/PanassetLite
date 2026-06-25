@@ -10,9 +10,18 @@ interface Props {
   initial?: Strategy
   onSubmit: (s: Omit<Strategy, 'id' | 'createdAt'>) => void
   onCancel: () => void
+  /** 编辑进行中策略时，底部永久删除入口 */
+  onPermanentDelete?: () => void
 }
 
-export default function StrategyForm({ assets, fixedAssetId, initial, onSubmit, onCancel }: Props) {
+export default function StrategyForm({
+  assets,
+  fixedAssetId,
+  initial,
+  onSubmit,
+  onCancel,
+  onPermanentDelete,
+}: Props) {
   const active = assets.filter((a) => !a.archived)
   const [assetId, setAssetId] = useState(
     fixedAssetId ?? initial?.assetId ?? active[0]?.id ?? '',
@@ -22,7 +31,7 @@ export default function StrategyForm({ assets, fixedAssetId, initial, onSubmit, 
   const [note, setNote] = useState(initial?.note ?? '')
 
   const selectedAsset = active.find((a) => a.id === assetId)
-  const currency = selectedAsset?.currency ?? 'CNY'
+  const currency = selectedAsset?.currency ?? initial?.currency ?? 'CNY'
 
   const valid = !!assetId && name.trim().length > 0
 
@@ -95,9 +104,21 @@ export default function StrategyForm({ assets, fixedAssetId, initial, onSubmit, 
         </p>
       )}
 
+      {onPermanentDelete && (
+        <div className="border-t border-slate-100 pt-2">
+          <button
+            type="button"
+            className="text-xs text-slate-400 hover:text-red-600"
+            onClick={onPermanentDelete}
+          >
+            永久删除此策略
+          </button>
+        </div>
+      )}
+
       <div className="flex justify-end gap-3 border-t border-slate-100 pt-4">
-        <button className={btnGhost} onClick={onCancel}>取消</button>
-        <button className={btnPrimary} onClick={submit} disabled={!valid}>
+        <button type="button" className={btnGhost} onClick={onCancel}>取消</button>
+        <button type="button" className={btnPrimary} onClick={submit} disabled={!valid}>
           {initial ? '保存' : '创建策略'}
         </button>
       </div>

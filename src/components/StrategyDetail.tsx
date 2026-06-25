@@ -29,15 +29,52 @@ function Mini({ label, value, cls = '', title }: MiniProps) {
   )
 }
 
+function needsValuationHint(lastUpdated?: string): boolean {
+  if (!lastUpdated) return true
+  const updated = new Date(lastUpdated)
+  if (Number.isNaN(updated.getTime())) return true
+  const days = (Date.now() - updated.getTime()) / (1000 * 60 * 60 * 24)
+  return days > 90
+}
+
+function confirmCloseStrategy(snap: StrategySnapshot): boolean {
+  const { strategy, lastUpdated } = snap
+  let msg =
+    `确定关闭策略「${strategy.name}」？\n\n` +
+    '关闭后将从进行中列表隐藏，历史流水保留。\n' +
+    '可随时重新开启。'
+  if (needsValuationHint(lastUpdated)) {
+    msg += '\n\n建议：关闭前先记一笔估值，保留最终快照。'
+  }
+  return confirm(msg)
+}
+
+function confirmPermanentDelete(name: string): boolean {
+  return confirm(
+    `永久删除策略「${name}」及其全部流水？\n\n` +
+      '此操作不可恢复。若只是想停止跟踪，请使用「关闭策略」。',
+  )
+}
+
 interface Props {
   snap: StrategySnapshot
   onClose: () => void
   onEdit: (snap: StrategySnapshot) => void
+  onArchive: (snap: StrategySnapshot) => void
+  onReopen: (snap: StrategySnapshot) => void
   onDelete: (snap: StrategySnapshot) => void
 }
 
-export default function StrategyDetail({ snap, onClose, onEdit, onDelete }: Props) {
+export default function StrategyDetail({
+  snap,
+  onClose,
+  onEdit,
+  onArchive,
+  onReopen,
+  onDelete,
+}: Props) {
   const { strategy } = snap
+  const archived = !!strategy.archived
   const engine = useStrategyEngine()
   const addStrategyTransaction = useStore((s) => s.addStrategyTransaction)
   const updateStrategyTransaction = useStore((s) => s.updateStrategyTransaction)
@@ -46,13 +83,12 @@ export default function StrategyDetail({ snap, onClose, onEdit, onDelete }: Prop
 
   const ledger: StrategyLedgerRow[] = engine.txLedger(strategy)
   const cur = strategy.currency
-
   const kindLabel = STRATEGY_KIND_LABEL[strategy.kind]
 
   return (
     <Modal
       title={
-        <span className="flex min-w-0 items-baseline gap-2">
+        <span className="flex min-w-0 flex-wrap items-baseline gap-2">
           <span className="shrink-0">{strategy.name}</span>
           {strategy.note && (
             <span className="truncate text-sm font-normal text-slate-500" title={strategy.note}>
@@ -62,11 +98,31 @@ export default function StrategyDetail({ snap, onClose, onEdit, onDelete }: Prop
           <span className="shrink-0 rounded-md bg-sky-100 px-1.5 py-0.5 text-xs font-medium text-sky-700">
             {kindLabel}
           </span>
+          {archived && (
+            <span className="shrink-0 rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-xs text-slate-500">
+              已关闭
+            </span>
+          )}
         </span>
       }
       onClose={onClose}
       size="xl"
     >
+      {archived && (
+        <div className="mb-4 flex flex-col gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm text-slate-600">
+            此策略已关闭，不再跟踪新流水。可查看历史数据，或编辑已有记录纠错。
+          </p>
+          <button
+            type="button"
+            className={btnGhost + ' shrink-0 text-xs'}
+            onClick={() => onReopen(snap)}
+          >
+            重新开启
+          </button>
+        </div>
+      )}
+
       {/* 指标卡 */}
       <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Mini label="当前市值" value={fmtMoney(snap.valueCNY)} />
@@ -94,31 +150,49 @@ export default function StrategyDetail({ snap, onClose, onEdit, onDelete }: Prop
       </div>
 
       {/* 操作栏 */}
-      <div className="mb-3 flex items-center justify-between">
+      <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-xs text-slate-400">
           账户流水不含此策略 · 计价货币 {cur}
         </p>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap justify-end gap-2">
+          {!archived && (
+            <button
+              type="button"
+              className={btnGhost + ' text-xs'}
+              onClick={() => {
+                if (confirmCloseStrategy(snap)) onArchive(snap)
+              }}
+            >
+              关闭策略
+            </button>
+          )}
           <button
+            type="button"
             className={btnGhost + ' text-xs'}
             onClick={() => onEdit(snap)}
           >
             编辑策略
           </button>
-          <button
-            className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs text-red-500 transition-all hover:bg-red-50"
-            onClick={() => {
-              if (confirm(`删除策略「${strategy.name}」及其所有流水？`)) onDelete(snap)
-            }}
-          >
-            删除
-          </button>
-          <button
-            className={btnPrimary + ' text-xs'}
-            onClick={() => setModal({ kind: 'addTx' })}
-          >
-            + 记一笔
-          </button>
+          {archived && (
+            <button
+              type="button"
+              className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs text-red-500 transition-all hover:bg-red-50"
+              onClick={() => {
+                if (confirmPermanentDelete(strategy.name)) onDelete(snap)
+              }}
+            >
+              永久删除
+            </button>
+          )}
+          {!archived && (
+            <button
+              type="button"
+              className={btnPrimary + ' text-xs'}
+              onClick={() => setModal({ kind: 'addTx' })}
+            >
+              + 记一笔
+            </button>
+          )}
         </div>
       </div>
 
@@ -175,12 +249,14 @@ export default function StrategyDetail({ snap, onClose, onEdit, onDelete }: Prop
                 <td className="max-w-32 truncate px-3 py-2 text-xs text-slate-500">{tx.note}</td>
                 <td className="px-3 py-2 text-right">
                   <button
+                    type="button"
                     className="mr-3 text-xs text-blue-600 hover:underline"
                     onClick={() => setModal({ kind: 'editTx', tx })}
                   >
                     编辑
                   </button>
                   <button
+                    type="button"
                     className="text-xs text-slate-400 hover:text-red-600"
                     onClick={() => {
                       if (confirm('删除这条记录？')) deleteStrategyTransaction(tx.id)
@@ -194,7 +270,7 @@ export default function StrategyDetail({ snap, onClose, onEdit, onDelete }: Prop
             {ledger.length === 0 && (
               <tr>
                 <td colSpan={8} className="px-3 py-8 text-center text-sm text-slate-400">
-                  还没有流水，点击「记一笔」开始记录
+                  {archived ? '暂无流水记录' : '还没有流水，点击「记一笔」开始记录'}
                 </td>
               </tr>
             )}
@@ -202,7 +278,6 @@ export default function StrategyDetail({ snap, onClose, onEdit, onDelete }: Prop
         </table>
       </div>
 
-      {/* 子弹窗 */}
       {modal?.kind === 'addTx' && (
         <Modal title="记一笔" onClose={() => setModal(null)}>
           <StrategyTxForm

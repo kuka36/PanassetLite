@@ -19,3 +19,9 @@ export function useStrategySnapshots() {
   const engine = useStrategyEngine()
   return useMemo(() => engine.allSnapshots(), [engine])
 }
+
+/** 所有已关闭策略的快照列表 */
+export function useArchivedStrategySnapshots() {
+  const engine = useStrategyEngine()
+  return useMemo(() => engine.archivedSnapshots(), [engine])
+}

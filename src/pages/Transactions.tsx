@@ -72,7 +72,7 @@ export default function Transactions() {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-xl font-semibold text-slate-800">交易流水</h1>
+        <h1 className="text-xl font-semibold text-slate-800">资产流水</h1>
         <div className="flex items-center gap-3">
           <select
             className={`${inputCls} w-48`}

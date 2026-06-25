@@ -13,15 +13,16 @@ export const SHORTCUT_SCOPE_LABEL: Record<ShortcutScope, string> = {
   global: '全局',
   dashboard: '总览',
   assets: '资产',
-  transactions: '流水',
+  transactions: '资产流水',
   overlay: '覆盖层',
 }
 
 export const SHORTCUT_CATALOG: ShortcutEntry[] = [
   { id: 'nav-dashboard', label: '切换到总览', keys: { key: '1', alt: true }, scope: 'global' },
   { id: 'nav-assets', label: '切换到资产', keys: { key: '2', alt: true }, scope: 'global' },
-  { id: 'nav-transactions', label: '切换到流水', keys: { key: '3', alt: true }, scope: 'global' },
-  { id: 'nav-settings', label: '切换到设置', keys: { key: '4', alt: true }, scope: 'global' },
+  { id: 'nav-transactions', label: '切换到资产流水', keys: { key: '3', alt: true }, scope: 'global' },
+  { id: 'nav-strategies', label: '切换到策略', keys: { key: '4', alt: true }, scope: 'global' },
+  { id: 'nav-settings', label: '切换到设置', keys: { key: '5', alt: true }, scope: 'global' },
   { id: 'toggle-assistant', label: '打开/关闭 AI 助手', keys: { key: 'k', mod: true }, scope: 'global' },
   { id: 'show-help', label: '显示快捷键帮助', keys: { key: '?', shift: true }, scope: 'global' },
   { id: 'add-asset', label: '添加资产', keys: { key: 'a' }, scope: 'assets' },

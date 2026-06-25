@@ -71,7 +71,11 @@ function closeEditTx(
   setModal(editModal.returnAssetId ? { kind: 'detail', assetId: editModal.returnAssetId } : null)
 }
 
-export default function Assets() {
+export default function Assets({
+  onViewClosedStrategies,
+}: {
+  onViewClosedStrategies?: (assetId: string) => void
+} = {}) {
   const summary = useSummary()
   const assets = useStore((s) => s.assets)
   const addAsset = useStore((s) => s.addAsset)
@@ -318,6 +322,7 @@ export default function Assets() {
               setModal(null)
             }
           }}
+          onViewClosedStrategies={onViewClosedStrategies}
         />
       )}
     </div>
@@ -466,6 +471,7 @@ function AssetDetail({
   onAddTx,
   onEditTx,
   onDelete,
+  onViewClosedStrategies,
 }: {
   assetId: string
   onClose: () => void
@@ -473,6 +479,7 @@ function AssetDetail({
   onAddTx: (a: Asset) => void
   onEditTx: (t: Transaction) => void
   onDelete: (a: Asset) => void
+  onViewClosedStrategies?: (assetId: string) => void
 }) {
   const summary = useSummary()
   const engine = usePortfolioEngine()
@@ -495,6 +502,10 @@ function AssetDetail({
 
   const strategySnapshots = useMemo(
     () => strategyEngine.snapshotsByAsset(assetId),
+    [strategyEngine, assetId],
+  )
+  const closedStrategySnapshots = useMemo(
+    () => strategyEngine.archivedSnapshotsByAsset(assetId),
     [strategyEngine, assetId],
   )
   const ledger = useMemo(() => {
@@ -693,6 +704,21 @@ function AssetDetail({
           snapshots={strategySnapshots}
           onSelect={(s) => setStrategyModal({ kind: 'detailStrategy', snap: s })}
         />
+        {closedStrategySnapshots.length > 0 && onViewClosedStrategies && (
+          <p className="mt-3 text-center text-xs text-slate-500">
+            还有 {closedStrategySnapshots.length} 个已关闭的策略{' '}
+            <button
+              type="button"
+              className="text-blue-600 hover:underline"
+              onClick={() => {
+                onClose()
+                onViewClosedStrategies(assetId)
+              }}
+            >
+              查看
+            </button>
+          </p>
+        )}
       </div>
 
       {strategyModal?.kind === 'addStrategy' && (
@@ -719,14 +745,34 @@ function AssetDetail({
               setStrategyModal(null)
             }}
             onCancel={() => setStrategyModal(null)}
+            onPermanentDelete={
+              !strategyModal.snap.strategy.archived
+                ? () => {
+                    if (
+                      confirm(
+                        `永久删除策略「${strategyModal.snap.strategy.name}」及其全部流水？\n\n` +
+                          '此操作不可恢复。若只是想停止跟踪，请使用「关闭策略」。',
+                      )
+                    ) {
+                      deleteStrategy(strategyModal.snap.strategy.id)
+                      setStrategyModal(null)
+                    }
+                  }
+                : undefined
+            }
           />
         </Modal>
       )}
       {strategyModal?.kind === 'detailStrategy' && (
         <StrategyDetail
-          snap={strategyEngine.snapshot(strategyModal.snap.strategy)}
+          snap={
+            strategyEngine.snapshotById(strategyModal.snap.strategy.id) ??
+            strategyModal.snap
+          }
           onClose={() => setStrategyModal(null)}
           onEdit={(s) => setStrategyModal({ kind: 'editStrategy', snap: s })}
+          onArchive={(s) => updateStrategy(s.strategy.id, { archived: true })}
+          onReopen={(s) => updateStrategy(s.strategy.id, { archived: false })}
           onDelete={(s) => {
             deleteStrategy(s.strategy.id)
             setStrategyModal(null)

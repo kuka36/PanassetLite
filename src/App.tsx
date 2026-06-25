@@ -16,7 +16,7 @@ import { palette } from './theme/colors'
 import Dashboard from './pages/Dashboard'
 import Assets from './pages/Assets'
 import Transactions from './pages/Transactions'
-import Strategies from './pages/Strategies'
+import Strategies, { type StrategiesInit } from './pages/Strategies'
 import SettingsPage from './pages/Settings'
 import VisitStats from './pages/VisitStats'
 import AssistantFab from './components/AssistantFab'
@@ -30,8 +30,8 @@ import type { AppPageId } from './types/assistant'
 const NAV = [
   { id: 'dashboard', label: '总览', icon: LayoutDashboard },
   { id: 'assets', label: '资产', icon: Wallet },
+  { id: 'transactions', label: '资产流水', icon: ArrowLeftRight },
   { id: 'strategies', label: '策略', icon: Target },
-  { id: 'transactions', label: '流水', icon: ArrowLeftRight },
   { id: 'settings', label: '设置', icon: Settings },
 ] as const
 
@@ -57,6 +57,7 @@ function closeStatsUrl() {
 export default function App() {
   const [showStats, setShowStats] = useState(isStatsUrl)
   const [page, setPage] = useState<PageId>('dashboard')
+  const [strategiesInit, setStrategiesInit] = useState<StrategiesInit | undefined>()
   const [collapsed, setCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
@@ -73,12 +74,19 @@ export default function App() {
     setMobileOpen(false)
   }, [])
 
+  const goToClosedStrategies = useCallback((assetId: string) => {
+    setStrategiesInit({ filterAsset: assetId, showClosed: true })
+    setPage('strategies')
+    reportPageView('strategies')
+    setMobileOpen(false)
+  }, [])
+
   const globalShortcuts = useMemo(
     () => [
       { key: '1', alt: true, action: () => goTo('dashboard') },
       { key: '2', alt: true, action: () => goTo('assets') },
-      { key: '3', alt: true, action: () => goTo('strategies') },
-      { key: '4', alt: true, action: () => goTo('transactions') },
+      { key: '3', alt: true, action: () => goTo('transactions') },
+      { key: '4', alt: true, action: () => goTo('strategies') },
       { key: '5', alt: true, action: () => goTo('settings') },
       { key: 'k', mod: true, action: toggleAssistant },
       { key: '?', shift: true, action: () => setHelpOpen(true) },
@@ -223,8 +231,13 @@ export default function App() {
       <main className={`px-4 pb-10 pt-20 transition-all duration-200 md:pt-8 md:px-6 lg:px-10 ${mainMargin}`}>
         <div key={page} className="animate-fade-in mx-auto max-w-6xl space-y-6">
           {page === 'dashboard' && <Dashboard goTo={(p) => goTo(p as PageId)} />}
-          {page === 'assets' && <Assets />}
-          {page === 'strategies' && <Strategies />}
+          {page === 'assets' && <Assets onViewClosedStrategies={goToClosedStrategies} />}
+          {page === 'strategies' && (
+            <Strategies
+              key={`${strategiesInit?.filterAsset ?? ''}-${strategiesInit?.showClosed ?? false}`}
+              initial={strategiesInit}
+            />
+          )}
           {page === 'transactions' && <Transactions />}
           {page === 'settings' && <SettingsPage />}
         </div>

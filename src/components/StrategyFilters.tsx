@@ -23,6 +23,9 @@ interface Props {
   onKindChange: (kind: string) => void
   assetOptions: AssetOption[]
   onClear: () => void
+  showClosed?: boolean
+  archivedCount?: number
+  onToggleClosed?: () => void
 }
 
 export default function StrategyFilters({
@@ -32,6 +35,9 @@ export default function StrategyFilters({
   onKindChange,
   assetOptions,
   onClear,
+  showClosed = false,
+  archivedCount = 0,
+  onToggleClosed,
 }: Props) {
   const hasFilter = !!filterAsset || !!filterKind
 
@@ -75,14 +81,32 @@ export default function StrategyFilters({
             </div>
           </div>
 
-          {hasFilter && (
-            <button
-              type="button"
-              className="shrink-0 text-xs text-blue-600 transition-colors hover:text-blue-700"
-              onClick={onClear}
-            >
-              清除筛选
-            </button>
+          {((archivedCount > 0 && onToggleClosed) || hasFilter) && (
+            <div className="flex shrink-0 flex-col items-end gap-1">
+              {archivedCount > 0 && onToggleClosed && (
+                <button
+                  type="button"
+                  className={`text-xs tabular-nums transition-colors ${
+                    showClosed
+                      ? 'font-medium text-sky-600 hover:text-sky-700'
+                      : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                  onClick={onToggleClosed}
+                  title={showClosed ? '隐藏已关闭的策略' : '显示已关闭的策略'}
+                >
+                  已关闭 {archivedCount}
+                </button>
+              )}
+              {hasFilter && (
+                <button
+                  type="button"
+                  className="text-xs text-blue-600 transition-colors hover:text-blue-700"
+                  onClick={onClear}
+                >
+                  清除筛选
+                </button>
+              )}
+            </div>
           )}
         </div>
       </CardBody>

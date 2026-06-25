@@ -87,10 +87,30 @@ export class StrategyEngine {
       .map((s) => this.snapshot(s))
   }
 
+  /** 某资产下已关闭的策略快照 */
+  archivedSnapshotsByAsset(assetId: string): StrategySnapshot[] {
+    return this.strategies
+      .filter((s) => s.assetId === assetId && s.archived)
+      .map((s) => this.snapshot(s))
+  }
+
   /** 所有未归档策略的快照 */
   allSnapshots(): StrategySnapshot[] {
     return this.strategies
       .filter((s) => !s.archived)
       .map((s) => this.snapshot(s))
+  }
+
+  /** 所有已关闭策略的快照 */
+  archivedSnapshots(): StrategySnapshot[] {
+    return this.strategies
+      .filter((s) => s.archived)
+      .map((s) => this.snapshot(s))
+  }
+
+  /** 按 id 取快照（含已关闭） */
+  snapshotById(id: string): StrategySnapshot | null {
+    const s = this.strategies.find((x) => x.id === id)
+    return s ? this.snapshot(s) : null
   }
 }

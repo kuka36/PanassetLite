@@ -12,7 +12,12 @@ const KEYS = {
   settings: 'panasset.settings',
   strategies: 'panasset.strategies',
   strategyTransactions: 'panasset.strategyTransactions',
+  ui: 'panasset.ui',
 } as const
+
+type UiPrefs = {
+  strategiesShowClosed?: boolean
+}
 
 function read<T>(key: string, fallback: T): T {
   try {
@@ -59,6 +64,14 @@ export const StorageService = {
 
   loadStrategyTransactions: (): StrategyTransaction[] => read(KEYS.strategyTransactions, []),
   saveStrategyTransactions: (txs: StrategyTransaction[]) => write(KEYS.strategyTransactions, txs),
+
+  loadStrategiesShowClosed: (): boolean =>
+    read<UiPrefs>(KEYS.ui, {}).strategiesShowClosed ?? false,
+
+  saveStrategiesShowClosed: (value: boolean) => {
+    const prefs = read<UiPrefs>(KEYS.ui, {})
+    write(KEYS.ui, { ...prefs, strategiesShowClosed: value })
+  },
 
   exportAll(): string {
     return JSON.stringify(
