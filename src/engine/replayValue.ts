@@ -182,12 +182,16 @@ export function periodReturnsFor<T>(
   valueAt: (item: T, atMs: number) => number,
   flowsUpTo: (item: T, atMs: number) => { in: number; out: number },
   nowMs: number,
+  options?: { includeLast30Days?: boolean; netWorthAt?: (atMs: number) => number },
 ): PeriodReturn[] {
   const now = new Date(nowMs)
   const dow = (now.getDay() + 6) % 7
   const periods: { key: PeriodReturn['key']; label: string; baseline: Date }[] = [
     { key: 'week', label: '本周', baseline: new Date(now.getFullYear(), now.getMonth(), now.getDate() - dow - 1) },
     { key: 'month', label: '本月', baseline: new Date(now.getFullYear(), now.getMonth(), 0) },
+    ...(options?.includeLast30Days
+      ? [{ key: 'd30' as const, label: '近30天', baseline: new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30) }]
+      : []),
     { key: 'ytd', label: '今年以来', baseline: new Date(now.getFullYear() - 1, 11, 31) },
     { key: 'year', label: '近一年', baseline: new Date(now.getFullYear() - 1, now.getMonth(), now.getDate()) },
   ]
@@ -207,7 +211,15 @@ export function periodReturnsFor<T>(
       netInflow += f1.in - f0.in - (f1.out - f0.out)
     }
     const base = baseValue + Math.max(0, netInflow)
-    return { key, label, pnlCNY: pnl, ratio: base > 1 ? pnl / base : null }
+    const result: PeriodReturn = { key, label, pnlCNY: pnl, ratio: base > 1 ? pnl / base : null }
+    if (options?.netWorthAt) {
+      const nw0 = options.netWorthAt(baselineMs)
+      const nw1 = options.netWorthAt(nowMs)
+      const delta = nw1 - nw0
+      result.netWorthChangeCNY = delta
+      result.netWorthChangeRatio = Math.abs(nw0) > 1 ? delta / Math.abs(nw0) : null
+    }
+    return result
   })
 }
 

@@ -14,7 +14,7 @@ import StrategyList from '../components/StrategyList'
 import StrategyDetail from '../components/StrategyDetail'
 import StrategyFilters from '../components/StrategyFilters'
 import PeriodReturnsCard from '../components/PeriodReturnsCard'
-import { Card, CardHeader, MetricCard } from '../components/ui/Card'
+import { Card, CardHeader } from '../components/ui/Card'
 import { useTableSort } from '../hooks/useTableSort'
 import type { StrategySnapshot } from '../types'
 import { STRATEGY_KIND_LABEL } from '../types'
@@ -192,6 +192,8 @@ export default function Strategies({ initial }: Props) {
 
   const totalValue = filtered.reduce((sum, s) => sum + s.valueCNY, 0)
   const totalPnl = filtered.reduce((sum, s) => sum + s.totalPnlCNY, 0)
+  const totalNetInvested = filtered.reduce((sum, s) => sum + s.netInvestedCNY, 0)
+  const totalPnlRatio = totalNetInvested > 0 ? totalPnl / totalNetInvested : null
 
   const filteredStrategies = useMemo(() => filtered.map((s) => s.strategy), [filtered])
   const periodReturns = useMemo(
@@ -221,7 +223,7 @@ export default function Strategies({ initial }: Props) {
   const modals = (
     <>
       {modal?.kind === 'add' && (
-        <Modal title="新建策略" onClose={() => setModal(null)}>
+        <Modal title="添加策略" onClose={() => setModal(null)}>
           <StrategyForm
             assets={assets}
             onSubmit={(s) => {
@@ -283,14 +285,14 @@ export default function Strategies({ initial }: Props) {
     return (
       <div className="space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h1 className="text-xl font-semibold text-slate-800">跟踪策略</h1>
+          <h1 className="text-xl font-semibold text-slate-800">策略</h1>
           <button
             type="button"
             className={btnPrimary}
             onClick={() => setModal({ kind: 'add' })}
             disabled={activeAssets.length === 0}
           >
-            + 新建策略
+            + 添加策略
           </button>
         </div>
 
@@ -309,7 +311,7 @@ export default function Strategies({ initial }: Props) {
             onClick={() => setModal({ kind: 'add' })}
             disabled={activeAssets.length === 0}
           >
-            + 新建第一个策略
+            + 添加第一个策略
           </button>
         </div>
 
@@ -322,14 +324,14 @@ export default function Strategies({ initial }: Props) {
     return (
       <div className="space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h1 className="text-xl font-semibold text-slate-800">跟踪策略</h1>
+          <h1 className="text-xl font-semibold text-slate-800">策略</h1>
           <button
             type="button"
             className={btnPrimary}
             onClick={() => setModal({ kind: 'add' })}
             disabled={activeAssets.length === 0}
           >
-            + 新建策略
+            + 添加策略
           </button>
         </div>
 
@@ -360,36 +362,16 @@ export default function Strategies({ initial }: Props) {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-xl font-semibold text-slate-800">跟踪策略</h1>
+        <h1 className="text-xl font-semibold text-slate-800">策略</h1>
         <button
           type="button"
           className={btnPrimary}
           onClick={() => setModal({ kind: 'add' })}
           disabled={activeAssets.length === 0}
         >
-          + 新建策略
+          + 添加策略
         </button>
       </div>
-
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
-        <MetricCard
-          label="跟踪市值"
-          value={fmtMoney(totalValue)}
-          sub="不计入净资产"
-        />
-        <MetricCard
-          label="累计盈亏"
-          value={`${totalPnl >= 0 ? '+' : ''}${fmtMoney(totalPnl)}`}
-          accent={pnlColor(totalPnl)}
-        />
-        <MetricCard
-          label="策略数量"
-          value={String(filtered.length)}
-          sub={filterAsset || filterKind ? '已筛选' : undefined}
-        />
-      </div>
-
-      {filtered.length > 0 && <PeriodReturnsCard returns={periodReturns} />}
 
       <StrategyFilters
         filterAsset={filterAsset}
@@ -405,6 +387,26 @@ export default function Strategies({ initial }: Props) {
         archivedCount={archivedSnapshots.length}
         onToggleClosed={toggleShowClosed}
       />
+
+      {filtered.length > 0 && (
+        <PeriodReturnsCard
+          title="策略概览"
+          primary={[
+            { label: '跟踪市值', value: fmtMoney(totalValue), sub: '不计入净资产' },
+            {
+              label: '策略数量',
+              value: String(filtered.length),
+              sub: filterAsset || filterKind ? '已筛选' : undefined,
+            },
+          ]}
+          returns={periodReturns}
+          totalPnl={{
+            label: '累计盈亏',
+            amount: totalPnl,
+            ratio: totalPnlRatio,
+          }}
+        />
+      )}
 
       <Card className="hidden overflow-hidden md:block">
         <CardHeader>

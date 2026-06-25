@@ -160,14 +160,18 @@ export interface TxLedgerRow {
   intervalAnnualized?: number | null
 }
 
-/** 区间收益(本周/本月/今年以来/近一年) */
+/** 区间收益(本周/本月/近30天/今年以来/近一年) */
 export interface PeriodReturn {
-  key: 'week' | 'month' | 'ytd' | 'year'
+  key: 'week' | 'month' | 'd30' | 'ytd' | 'year'
   label: string
   /** 区间收益(CNY),已剔除区间内存取/买卖的本金变动,与 totalPnlCNY 同口径 */
   pnlCNY: number
   /** 区间收益率 = 收益 / (期初市值 + 区间净投入正部分);基数不足时为 null */
   ratio: number | null
+  /** 同期净资产变化(CNY)，含存取/还债；仅总览组合层填充 */
+  netWorthChangeCNY?: number
+  /** 净资产变化率 = 变化 / |期初净资产| */
+  netWorthChangeRatio?: number | null
 }
 
 export interface PortfolioSummary {
@@ -175,6 +179,8 @@ export interface PortfolioSummary {
   totalDebtCNY: number     // 负债合计(正数表示欠款)
   netWorthCNY: number      // 净资产
   totalPnlCNY: number
+  /** 累计收益率 = totalPnlCNY / 净投入合计；净投入不足时为 null */
+  totalPnlRatio: number | null
   byType: { type: AssetType; valueCNY: number }[]
   snapshots: AssetSnapshot[]
   /** 净值历史(按日) */

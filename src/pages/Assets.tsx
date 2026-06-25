@@ -17,6 +17,8 @@ import StrategyDetail from '../components/StrategyDetail'
 import StrategyForm from '../components/StrategyForm'
 import { SortTh } from '../components/SortTh'
 import { Card, CardHeader } from '../components/ui/Card'
+import PeriodReturnsCard from '../components/PeriodReturnsCard'
+import { color } from '../theme/colors'
 import { useTableSort } from '../hooks/useTableSort'
 import type { Asset, AssetSnapshot, AssetType, StrategySnapshot, Transaction, TxLedgerRow } from '../types'
 import { ASSET_TYPE_COLOR, ASSET_TYPE_LABEL, TX_TYPE_LABEL, isQuantityBased } from '../types'
@@ -130,6 +132,23 @@ export default function Assets({
           </button>
         </div>
       </div>
+
+      {groups.length > 0 && (
+        <PeriodReturnsCard
+          title="资产概览"
+          primary={[
+            { label: '净资产', value: fmtMoney(summary.netWorthCNY), featured: true },
+            { label: '总资产', value: fmtMoney(summary.totalAssetsCNY) },
+            { label: '总负债', value: fmtMoney(summary.totalDebtCNY), accent: color.danger },
+          ]}
+          returns={summary.periodReturns}
+          totalPnl={{
+            label: '累计盈亏',
+            amount: summary.totalPnlCNY,
+            ratio: summary.totalPnlRatio,
+          }}
+        />
+      )}
 
       {groups.length === 0 && (
         <p className="py-20 text-center text-sm text-slate-500">

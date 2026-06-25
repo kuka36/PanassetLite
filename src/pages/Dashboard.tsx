@@ -1,13 +1,13 @@
 import { useMemo } from 'react'
 import { TrendingUp } from 'lucide-react'
 import { useSummary } from '../hooks/useSummary'
+import { useStrategySnapshots } from '../hooks/useStrategySummary'
 import { useStore } from '../store'
 import EChart from '../components/EChart'
 import { lightAxis, lightTooltip } from '../components/chartTheme'
-import { Card, CardBody, CardHeader, MetricCard } from '../components/ui/Card'
-import PeriodReturnsCard from '../components/PeriodReturnsCard'
+import { Card, CardBody, CardHeader } from '../components/ui/Card'
 import { btnGhost } from '../components/Modal'
-import { color, hexAlpha, palette } from '../theme/colors'
+import { hexAlpha, palette } from '../theme/colors'
 import { ASSET_TYPE_COLOR, ASSET_TYPE_LABEL } from '../types'
 import { fmtCompact, fmtMoney, fmtPct, pnlColor } from '../utils/format'
 
@@ -15,17 +15,6 @@ export default function Dashboard({ goTo }: { goTo: (page: string) => void }) {
   const loadDemo = useStore((s) => s.loadDemo)
   const summary = useSummary()
   const { history } = summary
-  const monthDelta = useMemo(() => {
-    if (history.length < 2) return null
-    const last = history[history.length - 1]
-    const target = Date.parse(last.date) - 30 * 86400_000
-    let base = history[0]
-    for (const h of history) {
-      if (Date.parse(h.date) <= target) base = h
-      else break
-    }
-    return { delta: last.netWorth - base.netWorth, since: base.date }
-  }, [history])
 
   const trendOption = useMemo(
     () => ({
@@ -128,6 +117,15 @@ export default function Dashboard({ goTo }: { goTo: (page: string) => void }) {
   )
 
   const topAssets = summary.snapshots.filter((s) => s.asset.type !== 'debt' && s.valueCNY > 0).slice(0, 6)
+  const strategySnapshots = useStrategySnapshots()
+  const topStrategies = useMemo(
+    () => [...strategySnapshots].sort((a, b) => b.valueCNY - a.valueCNY).slice(0, 6),
+    [strategySnapshots],
+  )
+  const totalStrategyValue = useMemo(
+    () => strategySnapshots.reduce((sum, s) => sum + s.valueCNY, 0),
+    [strategySnapshots],
+  )
   const hasData = summary.snapshots.length > 0
 
   if (!hasData) {
@@ -159,29 +157,6 @@ export default function Dashboard({ goTo }: { goTo: (page: string) => void }) {
   return (
     <div className="space-y-6">
       <h1 className="text-xl font-semibold text-slate-800">总览</h1>
-
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <MetricCard label="净资产" value={fmtMoney(summary.netWorthCNY)} featured />
-        <MetricCard label="总资产" value={fmtMoney(summary.totalAssetsCNY)} />
-        <MetricCard
-          label="总负债"
-          value={fmtMoney(summary.totalDebtCNY)}
-          accent={color.danger}
-        />
-        <MetricCard
-          label="累计盈亏"
-          value={`${summary.totalPnlCNY > 0 ? '+' : ''}${fmtMoney(summary.totalPnlCNY)}`}
-          accent={pnlColor(summary.totalPnlCNY)}
-          sub={
-            monthDelta
-              ? `近30天 ${monthDelta.delta >= 0 ? '+' : ''}${fmtCompact(monthDelta.delta)}`
-              : undefined
-          }
-          subAccent={monthDelta ? pnlColor(monthDelta.delta) : undefined}
-        />
-      </div>
-
-      <PeriodReturnsCard returns={summary.periodReturns} />
 
       <div className="grid gap-4 xl:grid-cols-5">
         <Card className="xl:col-span-3">
@@ -248,6 +223,55 @@ export default function Dashboard({ goTo }: { goTo: (page: string) => void }) {
           </div>
         </CardBody>
       </Card>
+
+      {topStrategies.length > 0 && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-medium text-slate-700">主要策略</h3>
+              <button
+                className="text-xs text-blue-600 transition-colors hover:text-blue-700"
+                onClick={() => goTo('strategies')}
+              >
+                查看全部 →
+              </button>
+            </div>
+          </CardHeader>
+          <CardBody>
+            <div className="space-y-3">
+              {topStrategies.map((s) => {
+                const ratio = totalStrategyValue > 0 ? s.valueCNY / totalStrategyValue : 0
+                const ret =
+                  s.netInvestedCNY > 0 ? s.totalPnlCNY / s.netInvestedCNY : s.xirr
+                return (
+                  <div key={s.strategy.id} className="flex items-center gap-3">
+                    <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-sky-500" />
+                    <span className="w-32 truncate text-sm text-slate-700 sm:w-40">
+                      {s.strategy.name}
+                    </span>
+                    <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-100">
+                      <div
+                        className="h-full rounded-full bg-sky-500 transition-all duration-200"
+                        style={{ width: `${Math.max(2, ratio * 100)}%` }}
+                      />
+                    </div>
+                    <span className="w-20 text-right text-sm tabular-nums text-slate-700 sm:w-24">
+                      {fmtCompact(s.valueCNY)}
+                    </span>
+                    <span
+                      className={`w-16 text-right text-xs tabular-nums sm:w-20 ${
+                        ret != null ? pnlColor(ret) : 'text-slate-400'
+                      }`}
+                    >
+                      {ret != null ? fmtPct(ret) : '—'}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+          </CardBody>
+        </Card>
+      )}
     </div>
   )
 }

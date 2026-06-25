@@ -256,6 +256,17 @@ export class PortfolioEngine {
     return { in: totalIn, out: totalOut }
   }
 
+  private netWorthAt(assets: Asset[], atMs: number): number {
+    let assetsVal = 0
+    let debtVal = 0
+    for (const a of assets) {
+      const v = this.valueAt(a, atMs)
+      if (a.type === 'debt') debtVal += v
+      else assetsVal += v
+    }
+    return assetsVal - debtVal
+  }
+
   private periodReturns(assets: Asset[]): PeriodReturn[] {
     const nonDebt = assets.filter((a) => a.type !== 'debt')
     const nowMs = Date.now()
@@ -264,6 +275,10 @@ export class PortfolioEngine {
       (a, atMs) => this.valueAt(a, atMs),
       (a, atMs) => this.flowsUpTo(a, atMs),
       nowMs,
+      {
+        includeLast30Days: true,
+        netWorthAt: (atMs) => this.netWorthAt(assets, atMs),
+      },
     )
   }
 
@@ -274,6 +289,7 @@ export class PortfolioEngine {
     let totalAssets = 0
     let totalDebt = 0
     let totalPnl = 0
+    let totalNetInvested = 0
     const byTypeMap = new Map<AssetType, number>()
     for (const s of snapshots) {
       if (s.asset.type === 'debt') {
@@ -281,6 +297,7 @@ export class PortfolioEngine {
       } else {
         totalAssets += s.valueCNY
         totalPnl += s.totalPnlCNY
+        totalNetInvested += s.netInvestedCNY
       }
       byTypeMap.set(s.asset.type, (byTypeMap.get(s.asset.type) ?? 0) + s.valueCNY)
     }
@@ -290,6 +307,7 @@ export class PortfolioEngine {
       totalDebtCNY: totalDebt,
       netWorthCNY: totalAssets - totalDebt,
       totalPnlCNY: totalPnl,
+      totalPnlRatio: totalNetInvested > 0 ? totalPnl / totalNetInvested : null,
       byType: [...byTypeMap.entries()]
         .map(([type, valueCNY]) => ({ type, valueCNY }))
         .sort((a, b) => b.valueCNY - a.valueCNY),
