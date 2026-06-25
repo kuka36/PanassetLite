@@ -10,7 +10,7 @@ interface Props {
   /** 资产映射，用于显示归属账户名（策略页全量视图使用） */
   assetMap?: Map<string, Asset>
   onSelect: (snap: StrategySnapshot) => void
-  /** 新建按钮点击（可选，不传则不显示） */
+  /** 添加按钮点击（可选，不传则不显示） */
   onAdd?: () => void
 }
 
@@ -110,7 +110,7 @@ export default function StrategyList({
               className="mt-4 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700 transition-all hover:bg-slate-50"
               onClick={onAdd}
             >
-              + 新建策略
+              + 添加策略
             </button>
           )}
         </CardBody>
@@ -150,7 +150,7 @@ export default function StrategyList({
           className="w-full rounded-2xl border border-dashed border-slate-200 py-3 text-sm text-slate-500 transition-all hover:border-slate-300 hover:bg-white hover:text-slate-700"
           onClick={onAdd}
         >
-          + 新建策略
+          + 添加策略
         </button>
       )}
     </div>

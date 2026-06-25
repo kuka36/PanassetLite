@@ -158,7 +158,7 @@ export function RecordTxModals({ modal, assets, settings, onClose, onChange, onS
     return (
       <Modal title={recordTxTitle(modal)} onClose={onClose}>
         <p className="mb-3 text-xs text-slate-500">
-          原文:「{modal.rawInput}」{!asset && ' — 请核对字段后记录'}
+          原文:「{modal.rawInput}」{!asset && ' — 请核对字段后确认'}
         </p>
         {modal.result.warnings.map((w) => (
           <p key={w} className={`mb-2 ${color.alertWarn}`}>

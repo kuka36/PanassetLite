@@ -120,7 +120,7 @@ export const StorageService = {
   importAll(json: string): { assets: number; transactions: number } {
     const data = JSON.parse(json)
     if (!Array.isArray(data.assets) || !Array.isArray(data.transactions)) {
-      throw new Error('文件格式不正确:缺少 assets / transactions')
+      throw new Error('文件格式不正确:缺少 assets / transactions(流水) 字段')
     }
     write(KEYS.assets, data.assets)
     write(KEYS.transactions, data.transactions)

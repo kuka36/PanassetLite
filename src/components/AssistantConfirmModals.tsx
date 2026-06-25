@@ -36,7 +36,7 @@ function modalTitle(action: PendingAction, assets: Asset[]): string {
       return a ? `${a.name} · 确认流水` : '确认 AI 解析结果'
     }
     case 'editTx':
-      return '编辑交易'
+      return '编辑流水'
     default:
       return '确认'
   }
@@ -110,7 +110,7 @@ export default function AssistantConfirmModals({ onSuccess }: Props) {
     return (
       <Modal title={modalTitle(pendingAction, assets)} onClose={() => close(true)}>
         {pendingAction.rawInput && (
-          <p className="mb-3 text-xs text-slate-500">原文:「{pendingAction.rawInput}」— 请核对字段后记录</p>
+          <p className="mb-3 text-xs text-slate-500">原文:「{pendingAction.rawInput}」— 请核对字段后确认</p>
         )}
         {pendingAction.warnings?.map((w) => (
           <p key={w} className={`mb-2 text-sm ${color.alertWarn}`}>
@@ -174,11 +174,11 @@ export function DeleteConfirmCard({
     if (action.kind === 'deleteAsset') {
       const asset = assets.find((a) => a.id === action.assetId)
       if (!asset) return
-      if (!confirm(`确定删除「${asset.name}」及其全部交易记录?此操作不可恢复。`)) return
+      if (!confirm(`确定删除「${asset.name}」及其全部流水?此操作不可恢复。`)) return
       deleteAsset(action.assetId)
       onDone(`已删除资产「${asset.name}」`)
     } else {
-      if (!confirm('删除这条记录?')) return
+      if (!confirm('删除这条流水?')) return
       deleteTransaction(action.txId)
       onDone('已删除流水')
     }

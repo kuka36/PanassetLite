@@ -191,7 +191,7 @@ export default function TxForm({ assets, fixedAssetId, defaultType, initial, onS
           取消
         </button>
         <button className={btnPrimary} onClick={submit} disabled={!valid}>
-          {initial ? '保存' : '记录'}
+          {initial ? '保存' : '记一笔'}
         </button>
       </div>
     </div>

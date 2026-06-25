@@ -10,6 +10,8 @@ alwaysApply: false
 
 组合状态（持仓、市值、盈亏、XIRR、净值曲线）由 `PortfolioEngine` 从 `assets + transactions + prices + settings` **实时重算**，见 `src/hooks/useSummary.ts`。
 
+> 命名说明：`transactions` 即资产流水数组（中文「流水」）；页面路由 id 为 `flows`。详见 `terminology.mdc`。
+
 ```typescript
 // ❌ BAD：把 totalValue、pnl 等计算结果写入 localStorage
 StorageService.saveDerived({ netWorth: 12345 })

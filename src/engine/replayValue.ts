@@ -7,8 +7,8 @@ const MIN_SPAN_MS = 1000
 
 /**
  * 金额型事件重放的最小接口。
- * Transaction（DEPOSIT/WITHDRAW/INCOME/BORROW/REPAY/VALUATION）和
- * StrategyTransaction（DEPOSIT/WITHDRAW/INCOME/VALUATION）均满足此接口。
+ * 资产流水 Transaction（DEPOSIT/WITHDRAW/INCOME/BORROW/REPAY/VALUATION）和
+ * 策略流水 StrategyTransaction（DEPOSIT/WITHDRAW/INCOME/VALUATION）均满足此接口。
  */
 export interface ValueTx {
   type: string

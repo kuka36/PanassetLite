@@ -382,7 +382,7 @@ function fmtCountry(code){
   try{return countryNames.of(upper)||raw;}catch{return raw;}
 }
 function deviceTag(d){return '<span class="tag '+d+'">'+d+'</span>';}
-const PAGE_LABEL={dashboard:'总览',assets:'资产',transactions:'流水',settings:'设置'};
+const PAGE_LABEL={dashboard:'总览',assets:'资产',flows:'资产流水',strategies:'策略',settings:'设置'};
 function fmtPage(p){
   const m=p.match(/(?:#\\/|\\/)([^/]+)$/);
   const id=m?m[1]:'';

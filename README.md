@@ -12,7 +12,7 @@
 ## 功能
 
 - **统一记账**:8 类资产(现金存款 / 理财 / 股票 / 基金 / 加密货币 / 房产 / 负债 / 其他),多币种自动折算 CNY
-- **事件溯源**:持仓、市值、盈亏、收益率、净值历史全部由交易事件流重放计算(`PortfolioEngine`),不存派生状态
+- **事件溯源**:持仓、市值、盈亏、收益率、净值历史全部由流水事件流重放计算(`PortfolioEngine`),不存派生状态
 - **手动估值也能算收益率**:支付宝理财、银行产品每月更新一次总值,自动算出区间年化,判断"还值不值得买"
 - **自动行情**:加密货币(CoinGecko,免 key)、汇率(Frankfurter,免 key)、美股(Finnhub,免费 key)
 - **强大图表**:净资产趋势、资产分布、持仓占比(ECharts)
@@ -42,7 +42,7 @@ git push origin v2026.06.15.1
 
 ## 架构原则
 
-- **Event Sourcing**:所有财务状态由 `src/engine/portfolio.ts` 从交易历史计算
+- **Event Sourcing**:所有财务状态由 `src/engine/portfolio.ts` 从流水历史计算
 - **Local-First**:数据通过 `src/services/storage.ts` 存于 LocalStorage
 - **Privacy-Focused**:无注册;除非你主动配置并触发 API 调用,数据绝不离开浏览器
 - **Progressive Enhancement**:不配任何 key 也完整可用,配置 key 后体验更好

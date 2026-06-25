@@ -32,7 +32,7 @@ import type { AppPageId } from './types/assistant'
 const NAV = [
   { id: 'dashboard', label: '总览', icon: LayoutDashboard },
   { id: 'assets', label: '资产', icon: Wallet },
-  { id: 'transactions', label: '资产流水', icon: ArrowLeftRight },
+  { id: 'flows', label: '资产流水', icon: ArrowLeftRight },
   { id: 'strategies', label: '策略', icon: Target },
   { id: 'settings', label: '设置', icon: Settings },
 ] as const
@@ -108,7 +108,7 @@ export default function App() {
     () => [
       { key: '1', alt: true, action: () => goTo('dashboard') },
       { key: '2', alt: true, action: () => goTo('assets') },
-      { key: '3', alt: true, action: () => goTo('transactions') },
+      { key: '3', alt: true, action: () => goTo('flows') },
       { key: '4', alt: true, action: () => goTo('strategies') },
       { key: '5', alt: true, action: () => goTo('settings') },
       { key: 'k', mod: true, action: toggleAssistant },
@@ -281,7 +281,7 @@ export default function App() {
               initial={strategiesInit}
             />
           )}
-          {page === 'transactions' && <Transactions />}
+          {page === 'flows' && <Transactions />}
           {page === 'settings' && <SettingsPage />}
         </div>
       </main>

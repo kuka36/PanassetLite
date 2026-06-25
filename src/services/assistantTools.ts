@@ -52,8 +52,8 @@ export const ASSISTANT_TOOL_DEFINITIONS = [
   {
     type: 'function' as const,
     function: {
-      name: 'list_transactions',
-      description: '列出最近交易记录',
+      name: 'list_flows',
+      description: '列出最近流水',
       parameters: {
         type: 'object',
         properties: {
@@ -74,7 +74,7 @@ export const ASSISTANT_TOOL_DEFINITIONS = [
         properties: {
           page: {
             type: 'string',
-            enum: ['dashboard', 'assets', 'strategies', 'transactions', 'settings'],
+            enum: ['dashboard', 'assets', 'strategies', 'flows', 'settings'],
           },
         },
         required: ['page'],
@@ -143,7 +143,7 @@ export const ASSISTANT_TOOL_DEFINITIONS = [
   {
     type: 'function' as const,
     function: {
-      name: 'propose_add_transaction',
+      name: 'propose_add_flow',
       description:
         '提议添加一笔流水。可用 naturalLanguage 自然语言描述,或结构化字段。将打开 TxForm 确认表单',
       parameters: {
@@ -169,7 +169,7 @@ export const ASSISTANT_TOOL_DEFINITIONS = [
   {
     type: 'function' as const,
     function: {
-      name: 'propose_edit_transaction',
+      name: 'propose_edit_flow',
       description: '提议编辑已有流水,将打开 TxForm 确认表单',
       parameters: {
         type: 'object',
@@ -195,7 +195,7 @@ export const ASSISTANT_TOOL_DEFINITIONS = [
   {
     type: 'function' as const,
     function: {
-      name: 'propose_delete_transaction',
+      name: 'propose_delete_flow',
       description: '提议删除一条流水,需在对话中二次确认',
       parameters: {
         type: 'object',
@@ -210,10 +210,10 @@ export const ASSISTANT_TOOL_DEFINITIONS = [
 const WRITE_TOOLS = new Set([
   'propose_add_asset',
   'propose_edit_asset',
-  'propose_add_transaction',
-  'propose_edit_transaction',
+  'propose_add_flow',
+  'propose_edit_flow',
   'propose_delete_asset',
-  'propose_delete_transaction',
+  'propose_delete_flow',
 ])
 
 export function isWriteTool(name: string): boolean {
@@ -317,7 +317,7 @@ export async function executeAssistantTool(
       return { content: JSON.stringify({ assets: list }) }
     }
 
-    case 'list_transactions': {
+    case 'list_flows': {
       const limit = typeof safeArgs.limit === 'number' ? safeArgs.limit : 20
       const assetId = typeof safeArgs.assetId === 'string' ? safeArgs.assetId : undefined
       let txs = [...ctx.transactions].sort((a, b) => b.occurredAt - a.occurredAt)
@@ -337,12 +337,12 @@ export async function executeAssistantTool(
           note: t.note,
         }
       })
-      return { content: JSON.stringify({ transactions: list }) }
+      return { content: JSON.stringify({ flows: list }) }
     }
 
     case 'navigate': {
       const page = safeArgs.page as AppPageId
-      if (!['dashboard', 'assets', 'strategies', 'transactions', 'settings'].includes(page)) {
+      if (!['dashboard', 'assets', 'strategies', 'flows', 'settings'].includes(page)) {
         return { content: JSON.stringify({ error: '无效页面' }) }
       }
       ctx.navigate(page)
@@ -397,7 +397,7 @@ export async function executeAssistantTool(
       }
     }
 
-    case 'propose_add_transaction': {
+    case 'propose_add_flow': {
       if (typeof safeArgs.naturalLanguage === 'string' && safeArgs.naturalLanguage.trim()) {
         try {
           const result = await parseNaturalLanguageTx(
@@ -464,7 +464,7 @@ export async function executeAssistantTool(
       }
     }
 
-    case 'propose_edit_transaction': {
+    case 'propose_edit_flow': {
       const txId = String(safeArgs.txId ?? '')
       const tx = findTx(ctx, txId)
       if (!tx) return { content: JSON.stringify({ error: '未找到流水' }) }
@@ -492,7 +492,7 @@ export async function executeAssistantTool(
       }
     }
 
-    case 'propose_delete_transaction': {
+    case 'propose_delete_flow': {
       const txId = String(safeArgs.txId ?? '')
       const tx = findTx(ctx, txId)
       if (!tx) return { content: JSON.stringify({ error: '未找到流水' }) }

@@ -314,7 +314,7 @@ export default function Assets({
       )}
 
       {modal?.kind === 'editTx' && (
-        <Modal title="编辑交易" onClose={() => closeEditTx(modal, setModal)}>
+        <Modal title="编辑流水" onClose={() => closeEditTx(modal, setModal)}>
           <TxForm
             assets={assets}
             fixedAssetId={modal.tx.assetId}
@@ -336,7 +336,7 @@ export default function Assets({
           onAddTx={(asset) => setModal(openRecordTx({ asset, returnAssetId: modal.assetId }))}
           onEditTx={(tx) => setModal({ kind: 'editTx', tx, returnAssetId: modal.assetId })}
           onDelete={(asset) => {
-            if (confirm(`确定删除「${asset.name}」及其全部交易记录?此操作不可恢复。`)) {
+            if (confirm(`确定删除「${asset.name}」及其全部流水?此操作不可恢复。`)) {
               deleteAsset(asset.id)
               setModal(null)
             }
@@ -590,7 +590,7 @@ function AssetDetail({
               )}
               <th className="px-3 py-2 font-medium text-right">发生额</th>
               {showFx && <th className="px-3 py-2 font-medium text-right">折合 CNY</th>}
-              <th className="px-3 py-2 font-medium text-right">交易后余额</th>
+              <th className="px-3 py-2 font-medium text-right">余额</th>
               {showInterval && (
                 <>
                   <th className="px-3 py-2 font-medium text-right">区间变化</th>
@@ -666,7 +666,7 @@ function AssetDetail({
                   <button
                     className="text-xs text-slate-500 hover:text-red-600"
                     onClick={() => {
-                      if (confirm('删除这条记录?')) deleteTransaction(tx.id)
+                      if (confirm('删除这条流水?')) deleteTransaction(tx.id)
                     }}
                   >
                     删除
@@ -677,7 +677,7 @@ function AssetDetail({
             {ledger.length === 0 && (
               <tr>
                 <td colSpan={colSpan} className="px-3 py-6 text-center text-slate-500">
-                  暂无交易记录
+                  暂无流水记录
                 </td>
               </tr>
             )}
@@ -711,7 +711,7 @@ function AssetDetail({
             className="text-xs text-blue-600 transition-colors hover:text-blue-700"
             onClick={() => setStrategyModal({ kind: 'addStrategy' })}
           >
-            + 新建策略
+            + 添加策略
           </button>
         </div>
         {strategySnapshots.length > 0 && (
@@ -743,7 +743,7 @@ function AssetDetail({
       </div>
 
       {strategyModal?.kind === 'addStrategy' && (
-        <Modal title="新建策略" onClose={() => setStrategyModal(null)}>
+        <Modal title="添加策略" onClose={() => setStrategyModal(null)}>
           <StrategyForm
             assets={assets}
             fixedAssetId={assetId}

@@ -199,8 +199,8 @@ export async function runLocalQuickReply(
     return { assistantContent: '已切换到资产页。', pendingActions: [] }
   }
 
-  if (/打开流水|资产流水|交易页/.test(text)) {
-    await executeAssistantTool('navigate', { page: 'transactions' }, ctx)
+  if (/打开流水|资产流水/.test(text)) {
+    await executeAssistantTool('navigate', { page: 'flows' }, ctx)
     return { assistantContent: '已切换到资产流水页。', pendingActions: [] }
   }
 

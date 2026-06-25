@@ -11,7 +11,7 @@ import { fmtCountry } from '../utils/format'
 const PAGE_LABEL: Record<string, string> = {
   dashboard: '总览',
   assets: '资产',
-  transactions: '资产流水',
+  flows: '资产流水',
   strategies: '策略',
   settings: '设置',
 }

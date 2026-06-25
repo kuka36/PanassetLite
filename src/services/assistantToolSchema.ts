@@ -22,7 +22,7 @@ const TX_TYPES = new Set<TxType>([
   'REPAY',
 ])
 
-const APP_PAGES = new Set(['dashboard', 'assets', 'strategies', 'transactions', 'settings'])
+const APP_PAGES = new Set(['dashboard', 'assets', 'strategies', 'flows', 'settings'])
 
 export type SchemaValidationResult =
   | { ok: true; args: Record<string, unknown> }
@@ -100,7 +100,7 @@ export function validateToolArgs(
       return ok({ includeArchived: raw.includeArchived === true })
     }
 
-    case 'list_transactions': {
+    case 'list_flows': {
       const keyErrors = rejectUnknownKeys(raw, new Set(['limit', 'assetId']))
       const errors = [...keyErrors, ...optionalString(raw, 'assetId', 'assetId')]
       if (raw.limit !== undefined && raw.limit !== null) {
@@ -182,7 +182,7 @@ export function validateToolArgs(
       return ok({ assetId: assetId.value })
     }
 
-    case 'propose_add_transaction': {
+    case 'propose_add_flow': {
       const allowed = new Set([
         'naturalLanguage',
         'assetId',
@@ -225,7 +225,7 @@ export function validateToolArgs(
       return ok(out)
     }
 
-    case 'propose_edit_transaction': {
+    case 'propose_edit_flow': {
       const keyErrors = rejectUnknownKeys(raw, new Set(['txId']))
       const txId = requireString(raw, 'txId', 'txId')
       const errors = [...keyErrors, ...txId.errors]
@@ -243,7 +243,7 @@ export function validateToolArgs(
       return ok({ assetId: assetId.value })
     }
 
-    case 'propose_delete_transaction': {
+    case 'propose_delete_flow': {
       const keyErrors = rejectUnknownKeys(raw, new Set(['txId']))
       const txId = requireString(raw, 'txId', 'txId')
       const errors = [...keyErrors, ...txId.errors]

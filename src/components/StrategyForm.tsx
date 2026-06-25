@@ -119,7 +119,7 @@ export default function StrategyForm({
       <div className="flex justify-end gap-3 border-t border-slate-100 pt-4">
         <button type="button" className={btnGhost} onClick={onCancel}>取消</button>
         <button type="button" className={btnPrimary} onClick={submit} disabled={!valid}>
-          {initial ? '保存' : '创建策略'}
+          {initial ? '保存' : '添加策略'}
         </button>
       </div>
     </div>

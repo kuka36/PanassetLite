@@ -13,6 +13,7 @@ alwaysApply: true
 - UI 文案使用**简体中文**，代码注释可中可英。
 - 深色主题：背景 `#060a13`，使用 slate 色系（`bg-slate-900`、`border-slate-800` 等），主色 sky。
 - 页面切换是 `App.tsx` 内的 state 路由（无 react-router），新页面需同时加入 `NAV` 数组和 `<main>` 内的条件渲染。
+- **流水相关英文标识**（`flows` 路由 vs `transactions` 数据 vs XIRR `CashFlow`）见 `.cursor/rules/terminology.mdc`，改命名前先读该规则。
 
 ## 共享样式
 

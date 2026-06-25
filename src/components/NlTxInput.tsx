@@ -68,7 +68,7 @@ export default function NlTxInput({
     ? '请先在设置页配置 LLM 接口'
     : fixedAsset
       ? '用一句话描述,如:今天存入 2 万'
-      : '用一句话描述这笔交易…'
+      : '用一句话描述这笔流水…'
 
   const body = (
     <>
@@ -84,7 +84,7 @@ export default function NlTxInput({
         </div>
       )}
       {embedded && (
-        <p className="text-xs text-slate-500">用一句话描述这笔交易，AI 解析后请你确认再写入。</p>
+        <p className="text-xs text-slate-500">用一句话描述这笔流水，AI 解析后请你确认再写入。</p>
       )}
       <div className={`flex gap-2 ${hideManualAction ? 'flex-col sm:flex-row sm:items-stretch' : 'flex-col sm:flex-row'}`}>
         <input

@@ -8,7 +8,7 @@ import {
 } from '../keyboard/shortcutCatalog'
 import { formatShortcut } from '../utils/keyboard'
 
-const SCOPES: ShortcutScope[] = ['global', 'dashboard', 'assets', 'transactions', 'overlay']
+const SCOPES: ShortcutScope[] = ['global', 'dashboard', 'assets', 'flows', 'overlay']
 
 interface Props {
   open: boolean

@@ -169,7 +169,7 @@ export default function StrategyDetail({
       {archived && (
         <div className="mb-4 flex flex-col gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm text-slate-600">
-            此策略已关闭，不再跟踪新流水。可查看历史数据，或编辑已有记录纠错。
+            此策略已关闭，不再跟踪新流水。可查看历史数据，或编辑已有流水纠错。
           </p>
           <button
             type="button"
@@ -325,7 +325,7 @@ export default function StrategyDetail({
                     type="button"
                     className="text-xs text-slate-400 hover:text-red-600"
                     onClick={() => {
-                      if (confirm('删除这条记录？')) deleteStrategyTransaction(tx.id)
+                      if (confirm('删除这条流水？')) deleteStrategyTransaction(tx.id)
                     }}
                   >
                     删除
@@ -336,7 +336,7 @@ export default function StrategyDetail({
             {ledger.length === 0 && (
               <tr>
                 <td colSpan={8} className="px-3 py-8 text-center text-sm text-slate-400">
-                  {archived ? '暂无流水记录' : '还没有流水，点击「记一笔」开始记录'}
+                  {archived ? '暂无流水记录' : '还没有流水，点击「记一笔」开始'}
                 </td>
               </tr>
             )}

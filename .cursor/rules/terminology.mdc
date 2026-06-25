@@ -1,0 +1,79 @@
+---
+description: 流水/交易相关中英文标识对照，防止 Agent 误读 flows、transactions、tx 等
+alwaysApply: true
+---
+
+# 术语与英文标识对照
+
+## 产品用语（中文）
+
+- 用户可见文案统一用 **「流水」**，不用「交易」。
+- 资产侧：**资产流水**（导航、页面标题、空状态、弹窗）。
+- 策略侧：**策略流水**（与资产流水隔离，不计入净资产）。
+- 记一笔 = 新增一条流水；编辑流水 = 修改已有 `Transaction` / `StrategyTransaction`。
+
+## 核心对照表
+
+| 中文 | 英文标识 | 位置 / 说明 |
+|------|----------|-------------|
+| 资产流水（页面） | `flows` | `AppPageId`、`NAV` id、快捷键 scope、`navigate({ page: 'flows' })` |
+| 资产流水（单条记录） | `Transaction` | `src/types.ts`；store 数组元素类型 |
+| 资产流水（集合） | `transactions` | `store.transactions`、导出 JSON 字段、`panasset.transactions` |
+| 策略流水（单条） | `StrategyTransaction` | `src/types.ts` |
+| 策略流水（集合） | `strategyTransactions` | store、localStorage `panasset.strategyTransactions` |
+| 流水类型枚举 | `TxType` / `StrategyTxType` | `BUY`、`DEPOSIT`、`VALUATION` 等 |
+| 流水表单 | `TxForm` / `StrategyTxForm` | 组件名；`tx` 常作单条流水变量名 |
+| 流水账本行（重放结果） | `TxLedgerRow` / `StrategyLedgerRow` | `engine/` 输出，含 balanceAfter、区间年化等 |
+| AI 助手：列流水 | `list_flows` | 返回 JSON `{ flows: [...] }`（不是 `transactions` 键） |
+| AI 助手：提议写流水 | `propose_add_flow` / `propose_edit_flow` / `propose_delete_flow` | 对应打开 TxForm 或确认删除 |
+
+## 三个不同的 `flows`（勿混淆）
+
+1. **路由 / 页面 id `flows`** — 「资产流水」页，原 `transactions` 已废弃，不要改回。
+2. **Store / 持久化 `transactions`** — 资产流水**数据**；英文键名保留是为兼容已有 localStorage 与导出 JSON，**不要**在没迁移方案时改成 `flows`。
+3. **XIRR 计算 `CashFlow[]` / `buildValueFlows` 的 `flows`** — 引擎内部「现金流序列」，用于年化收益率，**不是**页面路由，也**不是** `Transaction[]`。
+
+```typescript
+// ✅ 页面路由
+goTo('flows')
+
+// ✅ 读写字流水数据
+useStore((s) => s.transactions)
+addTransaction(t)
+
+// ✅ XIRR 专用（与 Transaction 无关）
+const { flows } = buildValueFlows(sorted, fxRate)
+xirr([...flows, terminal])
+```
+
+## 遗留英文命名（有意保留）
+
+| 标识 | 原因 |
+|------|------|
+| `Transaction` 类型名 | 领域类型已稳定；改类型名需全库 + 导出格式迁移 |
+| `transactions` store/JSON 字段 | 与 `panasset.transactions` 及用户备份文件兼容 |
+| `Transactions.tsx` 页面组件文件名 | 仅文件名；路由 id 已是 `flows`，组件可逐步重命名 |
+| `addTransaction` / `deleteTransaction` 等 action | 与 store 字段一致，改需同步 storage 与导入导出 |
+
+新增代码时：**中文面向用户写「流水」；读写数据继续用 `Transaction` / `transactions`；路由与助手工具用 `flows`。**
+
+## 策略 vs 资产
+
+```
+资产 Account
+  └── Transaction[]          → 计入净资产，PortfolioEngine 重放
+
+策略 Strategy（透镜）
+  └── StrategyTransaction[]  → 不计净资产，StrategyEngine 重放
+```
+
+同一账户可同时有资产流水与多个策略流水；二者 id 空间与 store 数组完全分离。
+
+## Agent 常见误操作（禁止）
+
+- ❌ 把 UI 文案改回「交易」「编辑交易」
+- ❌ 把 `store.transactions` 改成 `store.flows` 而不做 storage 迁移
+- ❌ 把页面 id `flows` 改回 `transactions`
+- ❌ 把 `list_flows` 工具名改回 `list_transactions`
+- ❌ 假设 `replayValue.ts` 里的 `flows` 等于资产流水列表页
+- ❌ 在 `engine/` 里为 `Transaction` 做 `value ?? amount` 等兼容兜底（见 no-compat-layers 规则）

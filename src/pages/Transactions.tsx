@@ -172,7 +172,7 @@ export default function Transactions() {
               {rows.length === 0 && (
                 <tr>
                   <td colSpan={6} className="px-4 py-12 text-center text-slate-500">
-                    暂无记录。所有财务状态都由这里的事件流计算得出 —— 买入、卖出、存取、估值更新。
+                    暂无流水。所有财务状态都由这里的事件流计算得出 —— 买入、卖出、存取、估值更新。
                   </td>
                 </tr>
               )}
@@ -208,7 +208,7 @@ export default function Transactions() {
         })}
         {rows.length === 0 && (
           <p className="py-12 text-center text-sm text-slate-500">
-            暂无记录。所有财务状态都由这里的事件流计算得出 —— 买入、卖出、存取、估值更新。
+            暂无流水。所有财务状态都由这里的事件流计算得出 —— 买入、卖出、存取、估值更新。
           </p>
         )}
       </div>
@@ -227,7 +227,7 @@ export default function Transactions() {
       )}
 
       {modal?.kind === 'edit' && (
-        <Modal title="编辑交易" onClose={() => setModal(null)}>
+        <Modal title="编辑流水" onClose={() => setModal(null)}>
           <TxForm
             assets={assets}
             initial={modal.tx}
@@ -269,7 +269,7 @@ function TxActions({
       <button
         className="text-xs text-slate-500 transition-colors hover:text-red-600"
         onClick={() => {
-          if (confirm('删除这条记录?')) onDelete()
+          if (confirm('删除这条流水?')) onDelete()
         }}
       >
         删除

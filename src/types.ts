@@ -49,7 +49,7 @@ export interface Asset {
   createdAt: number
 }
 
-/** 交易事件类型(事件溯源的事实来源) */
+/** 流水事件类型(事件溯源的事实来源) */
 export type TxType =
   | 'BUY'        // 买入:quantity + price
   | 'SELL'       // 卖出:quantity + price
@@ -71,6 +71,7 @@ export const TX_TYPE_LABEL: Record<TxType, string> = {
   REPAY: '还款',
 }
 
+/** 单条资产流水（用户文案「流水」；store 字段名 transactions，页面路由 id flows） */
 export interface Transaction {
   id: string
   assetId: string
@@ -146,7 +147,7 @@ export interface AssetSnapshot {
   recentAnnualized?: number | null
 }
 
-/** 单资产交易账本行(由事件重放推导) */
+/** 单资产流水账本行(由事件重放推导) */
 export interface TxLedgerRow {
   tx: Transaction
   /** 发生额(原币种);VALUATION 为当日总市值 */
@@ -227,6 +228,7 @@ export const STRATEGY_TX_TYPE_LABEL: Record<StrategyTxType, string> = {
   VALUATION: '估值更新',
 }
 
+/** 单条策略流水（store 字段 strategyTransactions，与资产流水隔离） */
 export interface StrategyTransaction {
   id: string
   strategyId: string

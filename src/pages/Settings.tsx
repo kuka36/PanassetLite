@@ -69,7 +69,7 @@ export default function Settings() {
       const text = await file.text()
       const r = StorageService.importAll(text)
       reload()
-      flash(`导入成功:${r.assets} 项资产、${r.transactions} 条交易`)
+      flash(`导入成功:${r.assets} 项资产、${r.transactions} 条流水`)
     } catch (e) {
       flash(`导入失败:${(e as Error).message}`)
     }

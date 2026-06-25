@@ -1,6 +1,6 @@
 import type { Asset, Transaction } from '../types'
 
-export type AppPageId = 'dashboard' | 'assets' | 'strategies' | 'transactions' | 'settings'
+export type AppPageId = 'dashboard' | 'assets' | 'strategies' | 'flows' | 'settings'
 
 export type PendingAction =
   | { kind: 'addAsset'; initial?: Partial<Omit<Asset, 'id' | 'createdAt'>> }

@@ -9,7 +9,7 @@ import {
 import { migrateDateToOccurredAt } from '../utils/time'
 import { today } from './storage'
 
-/** LLM 输出的交易草稿(尚未绑定 assetId) */
+/** LLM 输出的流水草稿(尚未绑定 assetId) */
 export interface NlTxDraft {
   type: TxType
   /** YYYY-MM-DD */
@@ -126,7 +126,7 @@ export function validateNlTxDraft(raw: unknown): NlTxDraft {
 
   const type = raw.type
   if (typeof type !== 'string' || !TX_TYPES.includes(type as TxType)) {
-    throw new Error(`无效的交易类型: ${String(type)}`)
+    throw new Error(`无效的流水类型: ${String(type)}`)
   }
   const txType = type as TxType
 
@@ -247,7 +247,7 @@ async function requestNlTxJson(
       {
         role: 'system',
         content:
-          '你是个人资产管理助手。根据用户的自然语言描述,输出一条交易记录的 JSON 草稿。' +
+          '你是个人资产管理助手。根据用户的自然语言描述,输出一条流水的 JSON 草稿。' +
           '只输出一个 JSON 对象,不要 markdown、不要解释。' +
           '中文金额单位要换算为数字(如 2万→20000,1.5万→15000,三百→300)。' +
           '「今天」「昨日」等相对日期要换算为具体 YYYY-MM-DD。' +
@@ -295,7 +295,7 @@ async function requestNlTxJson(
 }
 
 /**
- * 自然语言 → 交易草稿。
+ * 自然语言 → 流水草稿。
  * 发送:用户原文 + (可选)资产名称列表。仅在用户主动触发时调用。
  */
 export async function parseNaturalLanguageTx(
@@ -305,7 +305,7 @@ export async function parseNaturalLanguageTx(
   signal?: AbortSignal,
 ): Promise<NlTxParseResult> {
   const text = input.trim()
-  if (!text) throw new Error('请输入要记录的内容')
+  if (!text) throw new Error('请输入流水描述')
 
   assertApiReady(settings)
 
@@ -318,7 +318,7 @@ export async function parseNaturalLanguageTx(
     '已知资产列表:',
     catalog,
     '',
-    '请解析为一条交易 JSON。',
+    '请解析为一条流水 JSON。',
   ].join('\n')
 
   const rawContent = await requestNlTxJson(settings, userPrompt, signal)
