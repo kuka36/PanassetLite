@@ -18,6 +18,18 @@ const KEYS = {
 
 type UiPrefs = {
   strategiesShowClosed?: boolean
+  assetsFilterType?: string
+  assetsFilterAsset?: string
+  strategiesFilterAsset?: string
+  strategiesFilterKind?: string
+}
+
+function loadUiPrefs(): UiPrefs {
+  return read<UiPrefs>(KEYS.ui, {})
+}
+
+function patchUiPrefs(patch: Partial<UiPrefs>) {
+  write(KEYS.ui, { ...loadUiPrefs(), ...patch })
 }
 
 function read<T>(key: string, fallback: T): T {
@@ -95,12 +107,34 @@ export const StorageService = {
   },
   saveStrategyTransactions: (txs: StrategyTransaction[]) => write(KEYS.strategyTransactions, txs),
 
-  loadStrategiesShowClosed: (): boolean =>
-    read<UiPrefs>(KEYS.ui, {}).strategiesShowClosed ?? false,
+  loadStrategiesShowClosed: (): boolean => loadUiPrefs().strategiesShowClosed ?? false,
 
   saveStrategiesShowClosed: (value: boolean) => {
-    const prefs = read<UiPrefs>(KEYS.ui, {})
-    write(KEYS.ui, { ...prefs, strategiesShowClosed: value })
+    patchUiPrefs({ strategiesShowClosed: value })
+  },
+
+  loadAssetsFilterType: (): string => loadUiPrefs().assetsFilterType ?? '',
+
+  saveAssetsFilterType: (value: string) => {
+    patchUiPrefs({ assetsFilterType: value })
+  },
+
+  loadAssetsFilterAsset: (): string => loadUiPrefs().assetsFilterAsset ?? '',
+
+  saveAssetsFilterAsset: (value: string) => {
+    patchUiPrefs({ assetsFilterAsset: value })
+  },
+
+  loadStrategiesFilterAsset: (): string => loadUiPrefs().strategiesFilterAsset ?? '',
+
+  saveStrategiesFilterAsset: (value: string) => {
+    patchUiPrefs({ strategiesFilterAsset: value })
+  },
+
+  loadStrategiesFilterKind: (): string => loadUiPrefs().strategiesFilterKind ?? '',
+
+  saveStrategiesFilterKind: (value: string) => {
+    patchUiPrefs({ strategiesFilterKind: value })
   },
 
   exportAll(): string {

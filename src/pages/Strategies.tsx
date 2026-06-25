@@ -128,18 +128,32 @@ export default function Strategies({ initial, onViewAllFlows }: Props) {
   const archivedSnapshots = useArchivedStrategySnapshots()
   const engine = useStrategyEngine()
 
-  const [filterAsset, setFilterAsset] = useState(initial?.filterAsset ?? '')
-  const [filterKind, setFilterKind] = useState('')
+  const [filterAsset, setFilterAsset] = useState(
+    () => initial?.filterAsset ?? StorageService.loadStrategiesFilterAsset(),
+  )
+  const [filterKind, setFilterKind] = useState(() => StorageService.loadStrategiesFilterKind())
   const [showClosed, setShowClosed] = useState(
     () => initial?.showClosed ?? StorageService.loadStrategiesShowClosed(),
   )
   const [modal, setModal] = useState<ModalState>(null)
 
   useEffect(() => {
+    if (initial?.filterAsset != null) setFilterAsset(initial.filterAsset)
+  }, [initial?.filterAsset])
+
+  useEffect(() => {
     if (initial?.showClosed) {
       StorageService.saveStrategiesShowClosed(true)
     }
   }, [initial?.showClosed])
+
+  useEffect(() => {
+    StorageService.saveStrategiesFilterAsset(filterAsset)
+  }, [filterAsset])
+
+  useEffect(() => {
+    StorageService.saveStrategiesFilterKind(filterKind)
+  }, [filterKind])
   const { sort, handleSort } = useTableSort(DEFAULT_STRATEGY_SORT, STRATEGY_TEXT_KEYS)
 
   const assetMap = useMemo(() => new Map(assets.map((a) => [a.id, a])), [assets])

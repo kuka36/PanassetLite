@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useStore } from '../store'
+import { StorageService } from '../services/storage'
 import { usePortfolioEngine, useSummary } from '../hooks/useSummary'
 import { useStrategyEngine } from '../hooks/useStrategySummary'
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
@@ -94,9 +95,17 @@ export default function Assets({
   const addTransaction = useStore((s) => s.addTransaction)
   const updateTransaction = useStore((s) => s.updateTransaction)
   const [modal, setModal] = useState<ModalState>(null)
-  const [filterType, setFilterType] = useState('')
-  const [filterAsset, setFilterAsset] = useState('')
+  const [filterType, setFilterType] = useState(() => StorageService.loadAssetsFilterType())
+  const [filterAsset, setFilterAsset] = useState(() => StorageService.loadAssetsFilterAsset())
   const { sort, handleSort } = useTableSort(DEFAULT_ASSET_SORT, ASSET_TEXT_KEYS)
+
+  useEffect(() => {
+    StorageService.saveAssetsFilterType(filterType)
+  }, [filterType])
+
+  useEffect(() => {
+    StorageService.saveAssetsFilterAsset(filterAsset)
+  }, [filterAsset])
 
   useKeyboardShortcuts(
     useMemo(
