@@ -35,13 +35,18 @@ function write(key: string, value: unknown) {
 
 type LegacyTx = { date?: string; occurredAt?: number; createdAt?: number; updatedAt?: number }
 
+function withoutLegacyDate<T extends { date?: string }>(tx: T): Omit<T, 'date'> {
+  const rest = { ...tx }
+  delete rest.date
+  return rest
+}
+
 function normalizeTransaction(tx: LegacyTx & Transaction): Transaction {
   const occurredAt =
     tx.occurredAt ??
     (tx.date ? migrateDateToOccurredAt(tx.date) : tx.createdAt ?? Date.now())
-  const { date: _d, ...rest } = tx as LegacyTx & Transaction & { date?: string }
   return {
-    ...rest,
+    ...withoutLegacyDate(tx),
     occurredAt,
     updatedAt: tx.updatedAt ?? tx.createdAt ?? occurredAt,
   }
@@ -51,9 +56,8 @@ function normalizeStrategyTransaction(tx: LegacyTx & StrategyTransaction): Strat
   const occurredAt =
     tx.occurredAt ??
     (tx.date ? migrateDateToOccurredAt(tx.date) : tx.createdAt ?? Date.now())
-  const { date: _d, ...rest } = tx as LegacyTx & StrategyTransaction & { date?: string }
   return {
-    ...rest,
+    ...withoutLegacyDate(tx),
     occurredAt,
   }
 }

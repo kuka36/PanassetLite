@@ -16,7 +16,8 @@ const ALL_TYPES: StrategyTxType[] = ['DEPOSIT', 'WITHDRAW', 'INCOME', 'VALUATION
 
 export default function StrategyTxForm({ strategyId, currency, initial, onSubmit, onCancel }: Props) {
   const [type, setType] = useState<StrategyTxType>(initial?.type ?? 'DEPOSIT')
-  const [occurredAtInput, setOccurredAtInput] = useState(
+  const [openedAt] = useState(() => Date.now())
+  const [occurredAtInput, setOccurredAtInput] = useState(() =>
     toDatetimeLocalValue(initial?.occurredAt ?? Date.now()),
   )
   const [amount, setAmount] = useState(initial?.amount != null ? String(initial.amount) : '')
@@ -29,7 +30,7 @@ export default function StrategyTxForm({ strategyId, currency, initial, onSubmit
   const occurredAt = parseDatetimeLocal(occurredAtInput)
   const valid =
     occurredAt != null &&
-    occurredAt <= Date.now() &&
+    occurredAt <= openedAt &&
     (needsValue ? Number(value) >= 0 && value !== '' : Number(amount) > 0)
 
   const submit = () => {
@@ -44,7 +45,7 @@ export default function StrategyTxForm({ strategyId, currency, initial, onSubmit
     })
   }
 
-  const maxDatetime = toDatetimeLocalValue(Date.now())
+  const maxDatetime = toDatetimeLocalValue(openedAt)
 
   return (
     <div className="space-y-4">
