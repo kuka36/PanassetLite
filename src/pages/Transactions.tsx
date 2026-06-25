@@ -64,9 +64,9 @@ export default function Transactions({ initial }: Props) {
   const updateStrategyTransaction = useStore((s) => s.updateStrategyTransaction)
   const deleteStrategyTransaction = useStore((s) => s.deleteStrategyTransaction)
 
-  const [tab, setTab] = useState<FlowTab>(initial?.tab ?? 'asset')
-  const [filterAsset, setFilterAsset] = useState(initial?.filterAssetId ?? '')
-  const [filterStrategy, setFilterStrategy] = useState(initial?.filterStrategyId ?? '')
+  const [tab, setTab] = useState<FlowTab>(() => initial?.tab ?? 'asset')
+  const [filterAsset, setFilterAsset] = useState(() => initial?.filterAssetId ?? '')
+  const [filterStrategy, setFilterStrategy] = useState(() => initial?.filterStrategyId ?? '')
   const [filterStrategyAsset, setFilterStrategyAsset] = useState('')
   const [assetModal, setAssetModal] = useState<AssetModalState>(null)
   const [strategyModal, setStrategyModal] = useState<StrategyModalState>(null)

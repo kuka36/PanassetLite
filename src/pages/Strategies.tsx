@@ -138,10 +138,6 @@ export default function Strategies({ initial, onViewAllFlows }: Props) {
   const [modal, setModal] = useState<ModalState>(null)
 
   useEffect(() => {
-    if (initial?.filterAsset != null) setFilterAsset(initial.filterAsset)
-  }, [initial?.filterAsset])
-
-  useEffect(() => {
     if (initial?.showClosed) {
       StorageService.saveStrategiesShowClosed(true)
     }
