@@ -68,7 +68,7 @@ function fmt(ts){
   return new Date(ts).toLocaleString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'});
 }
 function deviceTag(d){return '<span class="tag '+d+'">'+d+'</span>';}
-const PAGE_LABEL={dashboard:'总览',assets:'资产',transactions:'流水',settings:'设置'};
+const PAGE_LABEL={dashboard:'总览',assets:'资产',flows:'资产流水',strategies:'策略',settings:'设置'};
 function fmtPage(p){
   const m=p.match(/(?:#\\/|\\/)([^/]+)$/);
   const id=m?m[1]:'';
