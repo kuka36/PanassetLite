@@ -194,25 +194,31 @@ export default function Dashboard({ goTo }: { goTo: (page: string) => void }) {
             {topAssets.map((s) => {
               const ratio = summary.totalAssetsCNY > 0 ? s.valueCNY / summary.totalAssetsCNY : 0
               return (
-                <div key={s.asset.id} className="flex items-center gap-3">
+                <div key={s.asset.id} className="flex items-center gap-2 sm:gap-3">
                   <span
                     className="h-2.5 w-2.5 shrink-0 rounded-full"
                     style={{ background: ASSET_TYPE_COLOR[s.asset.type] }}
                   />
-                  <span className="w-32 truncate text-sm text-slate-700 sm:w-40">{s.asset.name}</span>
-                  <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-100">
-                    <div
-                      className="h-full rounded-full transition-all duration-200"
-                      style={{
-                        width: `${Math.max(2, ratio * 100)}%`,
-                        background: ASSET_TYPE_COLOR[s.asset.type],
-                      }}
-                    />
-                  </div>
-                  <span className="w-20 text-right text-sm tabular-nums text-slate-700 sm:w-24">
-                    {fmtCompact(s.valueCNY)}
+                  <span className="w-20 shrink-0 truncate text-sm text-slate-700 sm:w-40">
+                    {s.asset.name}
                   </span>
-                  <span className={`w-16 text-right text-xs tabular-nums sm:w-20 ${pnlColor(s.totalPnlCNY)}`}>
+                  <div className="flex min-w-0 flex-1 flex-col gap-0.5 sm:contents">
+                    <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100 sm:min-w-0 sm:flex-1">
+                      <div
+                        className="h-full rounded-full transition-all duration-200"
+                        style={{
+                          width: `${Math.max(2, ratio * 100)}%`,
+                          background: ASSET_TYPE_COLOR[s.asset.type],
+                        }}
+                      />
+                    </div>
+                    <span className="text-right text-xs tabular-nums text-slate-600 sm:w-24 sm:text-sm sm:text-slate-700">
+                      {fmtCompact(s.valueCNY)}
+                    </span>
+                  </div>
+                  <span
+                    className={`w-14 shrink-0 text-right text-xs tabular-nums sm:w-20 ${pnlColor(s.totalPnlCNY)}`}
+                  >
                     {s.asset.type === 'debt' || s.netInvestedCNY <= 0
                       ? '—'
                       : fmtPct(s.totalPnlCNY / s.netInvestedCNY)}
@@ -244,22 +250,24 @@ export default function Dashboard({ goTo }: { goTo: (page: string) => void }) {
                 const ret =
                   s.netInvestedCNY > 0 ? s.totalPnlCNY / s.netInvestedCNY : s.xirr
                 return (
-                  <div key={s.strategy.id} className="flex items-center gap-3">
+                  <div key={s.strategy.id} className="flex items-center gap-2 sm:gap-3">
                     <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-sky-500" />
-                    <span className="w-32 truncate text-sm text-slate-700 sm:w-40">
+                    <span className="w-20 shrink-0 truncate text-sm text-slate-700 sm:w-40">
                       {s.strategy.name}
                     </span>
-                    <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-100">
-                      <div
-                        className="h-full rounded-full bg-sky-500 transition-all duration-200"
-                        style={{ width: `${Math.max(2, ratio * 100)}%` }}
-                      />
+                    <div className="flex min-w-0 flex-1 flex-col gap-0.5 sm:contents">
+                      <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100 sm:min-w-0 sm:flex-1">
+                        <div
+                          className="h-full rounded-full bg-sky-500 transition-all duration-200"
+                          style={{ width: `${Math.max(2, ratio * 100)}%` }}
+                        />
+                      </div>
+                      <span className="text-right text-xs tabular-nums text-slate-600 sm:w-24 sm:text-sm sm:text-slate-700">
+                        {fmtCompact(s.valueCNY)}
+                      </span>
                     </div>
-                    <span className="w-20 text-right text-sm tabular-nums text-slate-700 sm:w-24">
-                      {fmtCompact(s.valueCNY)}
-                    </span>
                     <span
-                      className={`w-16 text-right text-xs tabular-nums sm:w-20 ${
+                      className={`w-14 shrink-0 text-right text-xs tabular-nums sm:w-20 ${
                         ret != null ? pnlColor(ret) : 'text-slate-400'
                       }`}
                     >

@@ -213,6 +213,8 @@ export const useStore = create<AppState>((set, get) => ({
     StorageService.saveAssets(demo.assets)
     StorageService.saveTransactions(demo.transactions)
     StorageService.savePrices(demo.prices)
+    StorageService.saveStrategies(demo.strategies)
+    StorageService.saveStrategyTransactions(demo.strategyTransactions)
     get().reload()
     return true
   },

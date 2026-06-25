@@ -1,11 +1,13 @@
-import type { Asset, PriceHistory, Transaction } from './types'
+import type { Asset, PriceHistory, Strategy, StrategyTransaction, Transaction } from './types'
 import { uid } from './services/storage'
 
-/** 生成演示数据:银行存款 + 两个支付宝理财 + 三只股票 + 房贷 + BTC/USDT */
+/** 生成演示数据:银行存款 + 两个支付宝理财 + 三只股票 + 房贷 + BTC/USDT + 若干策略 */
 export function buildDemoData(): {
   assets: Asset[]
   transactions: Transaction[]
   prices: PriceHistory
+  strategies: Strategy[]
+  strategyTransactions: StrategyTransaction[]
 } {
   const now = new Date()
   const at = (monthsAgo: number, dd = 5, h = 12, min = 0, sec = 0): number => {
@@ -21,6 +23,12 @@ export function buildDemoData(): {
 
   const mk = (a: Omit<Asset, 'id' | 'createdAt'>): Asset => ({
     ...a,
+    id: uid(),
+    createdAt: Date.now(),
+  })
+
+  const mkStrategy = (s: Omit<Strategy, 'id' | 'createdAt'>): Strategy => ({
+    ...s,
     id: uid(),
     createdAt: Date.now(),
   })
@@ -90,5 +98,76 @@ export function buildDemoData(): {
     AAPL: { [dateKey(0, 6)]: 1480 },
   }
 
-  return { assets, transactions, prices }
+  const btcDca = mkStrategy({
+    assetId: btc.id,
+    name: 'BTC 周定投',
+    kind: 'dca',
+    currency: 'CNY',
+    note: '每周四固定买入，与现货账户分开跟踪',
+  })
+  const aaplDca = mkStrategy({
+    assetId: aapl.id,
+    name: 'AAPL 月定投',
+    kind: 'dca',
+    currency: 'USD',
+    note: '每月工资日自动扣款',
+  })
+  const catlGrid = mkStrategy({
+    assetId: catl.id,
+    name: '宁德时代网格',
+    kind: 'grid',
+    currency: 'CNY',
+    note: '20 格区间，低买高卖',
+  })
+  const yuebaoTrack = mkStrategy({
+    assetId: yuebao.id,
+    name: '余额宝收益跟踪',
+    kind: 'manual',
+    currency: 'CNY',
+    note: '单独透镜观察余额宝收益曲线',
+  })
+
+  const strategies = [btcDca, aaplDca, catlGrid, yuebaoTrack]
+
+  const stxs: Array<Omit<StrategyTransaction, 'id' | 'createdAt'>> = [
+    // BTC 周定投：6 期 × 3000，当前市值 21500
+    { strategyId: btcDca.id, type: 'DEPOSIT', occurredAt: at(6, 4), amount: 3000, note: '第 1 期' },
+    { strategyId: btcDca.id, type: 'DEPOSIT', occurredAt: at(5, 4), amount: 3000 },
+    { strategyId: btcDca.id, type: 'DEPOSIT', occurredAt: at(4, 4), amount: 3000 },
+    { strategyId: btcDca.id, type: 'DEPOSIT', occurredAt: at(3, 4), amount: 3000 },
+    { strategyId: btcDca.id, type: 'VALUATION', occurredAt: at(2, 18), value: 12800 },
+    { strategyId: btcDca.id, type: 'DEPOSIT', occurredAt: at(2, 4), amount: 3000 },
+    { strategyId: btcDca.id, type: 'DEPOSIT', occurredAt: at(1, 4), amount: 3000 },
+    { strategyId: btcDca.id, type: 'VALUATION', occurredAt: at(0, 8), value: 21500 },
+
+    // AAPL 月定投：5 期 × 500 USD，当前 2780
+    { strategyId: aaplDca.id, type: 'DEPOSIT', occurredAt: at(5, 15), amount: 500 },
+    { strategyId: aaplDca.id, type: 'DEPOSIT', occurredAt: at(4, 15), amount: 500 },
+    { strategyId: aaplDca.id, type: 'DEPOSIT', occurredAt: at(3, 15), amount: 500 },
+    { strategyId: aaplDca.id, type: 'DEPOSIT', occurredAt: at(2, 15), amount: 500 },
+    { strategyId: aaplDca.id, type: 'DEPOSIT', occurredAt: at(1, 15), amount: 500 },
+    { strategyId: aaplDca.id, type: 'VALUATION', occurredAt: at(0, 5), value: 2780 },
+
+    // 宁德时代网格：本金 + 网格收益，近期估值回落
+    { strategyId: catlGrid.id, type: 'DEPOSIT', occurredAt: at(5, 8), amount: 30000, note: '初始本金' },
+    { strategyId: catlGrid.id, type: 'INCOME', occurredAt: at(4, 12), amount: 680, note: '网格成交收益' },
+    { strategyId: catlGrid.id, type: 'VALUATION', occurredAt: at(3, 8), value: 31200 },
+    { strategyId: catlGrid.id, type: 'INCOME', occurredAt: at(2, 6), amount: 750, note: '网格成交收益' },
+    { strategyId: catlGrid.id, type: 'VALUATION', occurredAt: at(0, 7), value: 30430 },
+
+    // 余额宝收益跟踪：稳步小幅增值
+    { strategyId: yuebaoTrack.id, type: 'DEPOSIT', occurredAt: at(4, 1), amount: 10000, note: '纳入跟踪' },
+    { strategyId: yuebaoTrack.id, type: 'VALUATION', occurredAt: at(3, 1), value: 10045 },
+    { strategyId: yuebaoTrack.id, type: 'VALUATION', occurredAt: at(2, 1), value: 10092 },
+    { strategyId: yuebaoTrack.id, type: 'VALUATION', occurredAt: at(1, 1), value: 10138 },
+    { strategyId: yuebaoTrack.id, type: 'VALUATION', occurredAt: at(0, 1), value: 10185 },
+  ]
+
+  const strategyTransactions: StrategyTransaction[] = stxs.map((t) => ({
+    ...t,
+    id: uid(),
+    createdAt: Date.now(),
+  }))
+
+  return { assets, transactions, prices, strategies, strategyTransactions }
 }
