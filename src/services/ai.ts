@@ -283,7 +283,7 @@ export function buildPortfolioBrief(
   }
 
   if (privacy === 'detailed') {
-    lines.push('持仓明细:')
+    lines.push('资产明细:')
     for (const s of summary.snapshots) {
       if (s.valueCNY <= 0) continue
       const parts = [
@@ -299,7 +299,7 @@ export function buildPortfolioBrief(
     }
   } else {
     const holdingCount = summary.snapshots.filter((s) => s.valueCNY > 0).length
-    lines.push(`持仓数量: ${holdingCount} 项(未发送具体名称与单项盈亏,可在设置中切换为「含明细」)`)
+    lines.push(`资产数量: ${holdingCount} 项(未发送具体名称与单项盈亏,可在设置中切换为「含明细」)`)
   }
   const h = summary.history
   if (h.length >= 2) {
@@ -330,7 +330,7 @@ export const ADVISOR_PRESETS: AdvisorPreset[] = [
   {
     label: '哪些理财该换/该留',
     prompt:
-      '逐一评估持仓中的理财产品与稳健类资产(含近期区间年化),哪些值得继续持有、哪些收益偏低应考虑换仓?按优先级给出操作建议。',
+      '逐一评估资产中的理财产品与稳健类资产(含近期区间年化),哪些值得继续持有、哪些收益偏低应考虑换仓?按优先级给出操作建议。',
   },
   {
     label: '如何降低风险敞口',
@@ -340,7 +340,7 @@ export const ADVISOR_PRESETS: AdvisorPreset[] = [
   {
     label: '应急金够吗',
     prompt:
-      '根据现金类资产占比与持仓结构,评估应急金是否充足(参考 3–6 个月生活开支的一般标准);若不足说明缺口大致方向,若过多说明如何兼顾流动性与收益。',
+      '根据现金类资产占比与资产结构,评估应急金是否充足(参考 3–6 个月生活开支的一般标准);若不足说明缺口大致方向,若过多说明如何兼顾流动性与收益。',
   },
 ]
 

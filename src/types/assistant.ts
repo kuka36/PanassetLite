@@ -27,7 +27,7 @@ export interface ToolExecutionResult {
   pendingSummary?: string
 }
 
-/** LLM 上下文隐私:仅汇总数字 vs 含持仓明细(资产名、盈亏等) */
+/** LLM 上下文隐私:仅汇总数字 vs 含资产明细(资产名、盈亏等) */
 export type LlmContextPrivacy = 'summary' | 'detailed'
 
 export type AuditEventKind =

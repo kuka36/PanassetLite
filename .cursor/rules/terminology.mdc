@@ -26,6 +26,8 @@ alwaysApply: true
 | 流水账本行（重放结果） | `TxLedgerRow` / `StrategyLedgerRow` | `engine/` 输出，含 balanceAfter、区间年化等 |
 | AI 助手：列流水 | `list_flows` | 返回 JSON `{ flows: [...] }`（不是 `transactions` 键） |
 | AI 助手：提议写流水 | `propose_add_flow` / `propose_edit_flow` / `propose_delete_flow` | 对应打开 TxForm 或确认删除 |
+| 资产（单条持仓项） | `Asset` | 侧边栏「资产」页、总览「主要资产」；用户可见统一称 **资产**，不用「账户」「持仓」指此实体 |
+| 策略归属 | `Strategy.assetId` | 表单/表头/筛选行用 **归属资产**、筛选行标签 **资产** |
 
 ## 三个不同的 `flows`（勿混淆）
 
@@ -60,18 +62,28 @@ xirr([...flows, terminal])
 ## 策略 vs 资产
 
 ```
-资产 Account
+Asset（用户可见：资产）
   └── Transaction[]          → 计入净资产，PortfolioEngine 重放
 
-策略 Strategy（透镜）
+Strategy（透镜）
   └── StrategyTransaction[]  → 不计净资产，StrategyEngine 重放
+  └── assetId → 归属资产
 ```
 
-同一账户可同时有资产流水与多个策略流水；二者 id 空间与 store 数组完全分离。
+同一资产可同时有资产流水与多个策略流水；二者 id 空间与 store 数组完全分离。
+
+## 筛选条标签（三页 FilterBar）
+
+| 页面 | 第一行 | 第二行 |
+|------|--------|--------|
+| 资产 | 类型 | **名称**（各 Asset.name；避免与页名「资产」重复） |
+| 策略 | 类型 | **资产**（归属 Asset） |
+| 流水 | 账本 | **资产**（策略 tab 另加「策略」行） |
 
 ## Agent 常见误操作（禁止）
 
 - ❌ 把 UI 文案改回「交易」「编辑交易」
+- ❌ 用「账户」「持仓」指 `Asset` 实体（备注等用户自由文本除外）
 - ❌ 把 `store.transactions` 改成 `store.flows` 而不做 storage 迁移
 - ❌ 把页面 id `flows` 改回 `transactions`
 - ❌ 把 `list_flows` 工具名改回 `list_transactions`

@@ -51,13 +51,13 @@ export default function StrategyForm({
     <div className="space-y-4">
       {!fixedAssetId && (
         <div>
-          <label className={labelCls}>归属账户 *</label>
+          <label className={labelCls}>归属资产 *</label>
           <select
             className={inputCls}
             value={assetId}
             onChange={(e) => setAssetId(e.target.value)}
           >
-            <option value="">请选择账户</option>
+            <option value="">请选择资产</option>
             {active.map((a) => (
               <option key={a.id} value={a.id}>
                 {a.name}
@@ -100,7 +100,7 @@ export default function StrategyForm({
 
       {selectedAsset && (
         <p className="text-xs text-slate-400">
-          计价货币将继承账户：{currency}
+          计价货币将继承资产：{currency}
         </p>
       )}
 

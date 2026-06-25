@@ -15,6 +15,7 @@ import TxForm from '../components/TxForm'
 import StrategyList from '../components/StrategyList'
 import StrategyDetail from '../components/StrategyDetail'
 import StrategyForm from '../components/StrategyForm'
+import AssetFilters from '../components/AssetFilters'
 import { SortTh } from '../components/SortTh'
 import { Card, CardHeader } from '../components/ui/Card'
 import PeriodReturnsCard from '../components/PeriodReturnsCard'
@@ -81,6 +82,7 @@ export default function Assets({
   onViewAllFlows?: (assetId?: string) => void
 } = {}) {
   const summary = useSummary()
+  const engine = usePortfolioEngine()
   const assets = useStore((s) => s.assets)
   const addAsset = useStore((s) => s.addAsset)
   const updateAsset = useStore((s) => s.updateAsset)
@@ -89,6 +91,8 @@ export default function Assets({
   const addTransaction = useStore((s) => s.addTransaction)
   const updateTransaction = useStore((s) => s.updateTransaction)
   const [modal, setModal] = useState<ModalState>(null)
+  const [filterType, setFilterType] = useState('')
+  const [filterAsset, setFilterAsset] = useState('')
   const { sort, handleSort } = useTableSort(DEFAULT_ASSET_SORT, ASSET_TEXT_KEYS)
 
   useKeyboardShortcuts(
@@ -116,6 +120,77 @@ export default function Assets({
     }
     return [...map.entries()]
   }, [summary.snapshots])
+
+  const typeOptions = useMemo(
+    () => groups.map(([type, snaps]) => ({ type, count: snaps.length })),
+    [groups],
+  )
+
+  const assetOptions = useMemo(
+    () =>
+      summary.snapshots
+        .filter((s) => !filterType || s.asset.type === filterType)
+        .map((s) => ({ id: s.asset.id, name: s.asset.name })),
+    [summary.snapshots, filterType],
+  )
+
+  const filteredSnapshots = useMemo(
+    () =>
+      summary.snapshots.filter(
+        (s) =>
+          (!filterType || s.asset.type === filterType) &&
+          (!filterAsset || s.asset.id === filterAsset),
+      ),
+    [summary.snapshots, filterType, filterAsset],
+  )
+
+  const filteredOverview = useMemo(() => {
+    let totalAssets = 0
+    let totalDebt = 0
+    let totalPnl = 0
+    let totalNetInvested = 0
+    for (const s of filteredSnapshots) {
+      if (s.asset.type === 'debt') {
+        totalDebt += s.valueCNY
+      } else {
+        totalAssets += s.valueCNY
+        totalPnl += s.totalPnlCNY
+        totalNetInvested += s.netInvestedCNY
+      }
+    }
+    return {
+      totalAssetsCNY: totalAssets,
+      totalDebtCNY: totalDebt,
+      netWorthCNY: totalAssets - totalDebt,
+      totalPnlCNY: totalPnl,
+      totalPnlRatio: totalNetInvested > 0 ? totalPnl / totalNetInvested : null,
+    }
+  }, [filteredSnapshots])
+
+  const filteredPeriodReturns = useMemo(
+    () => engine.periodReturnsForAssets(filteredSnapshots.map((s) => s.asset)),
+    [engine, filteredSnapshots],
+  )
+
+  const visibleGroups = useMemo(
+    () =>
+      groups
+        .filter(([type]) => !filterType || type === filterType)
+        .map(
+          ([type, snaps]) =>
+            [type, snaps.filter((s) => !filterAsset || s.asset.id === filterAsset)] as const,
+        )
+        .filter(([, snaps]) => snaps.length > 0),
+    [groups, filterType, filterAsset],
+  )
+
+  const handleTypeChange = (type: string) => {
+    setFilterType(type)
+    if (filterAsset) {
+      const snap = summary.snapshots.find((s) => s.asset.id === filterAsset)
+      if (type && snap?.asset.type !== type) setFilterAsset('')
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -146,18 +221,33 @@ export default function Assets({
       </div>
 
       {groups.length > 0 && (
+        <AssetFilters
+          filterType={filterType}
+          filterAsset={filterAsset}
+          typeOptions={typeOptions}
+          assetOptions={assetOptions}
+          onTypeChange={handleTypeChange}
+          onAssetChange={setFilterAsset}
+          onClear={() => {
+            setFilterType('')
+            setFilterAsset('')
+          }}
+        />
+      )}
+
+      {filteredSnapshots.length > 0 && (
         <PeriodReturnsCard
           title="资产概览"
           primary={[
-            { label: '净资产', value: fmtMoney(summary.netWorthCNY), featured: true },
-            { label: '总资产', value: fmtMoney(summary.totalAssetsCNY) },
-            { label: '总负债', value: fmtMoney(summary.totalDebtCNY), accent: color.danger },
+            { label: '净资产', value: fmtMoney(filteredOverview.netWorthCNY), featured: true },
+            { label: '总资产', value: fmtMoney(filteredOverview.totalAssetsCNY) },
+            { label: '总负债', value: fmtMoney(filteredOverview.totalDebtCNY), accent: color.danger },
           ]}
-          returns={summary.periodReturns}
+          returns={filteredPeriodReturns}
           totalPnl={{
             label: '累计盈亏',
-            amount: summary.totalPnlCNY,
-            ratio: summary.totalPnlRatio,
+            amount: filteredOverview.totalPnlCNY,
+            ratio: filteredOverview.totalPnlRatio,
           }}
         />
       )}
@@ -168,7 +258,11 @@ export default function Assets({
         </p>
       )}
 
-      {groups.map(([type, snaps]) => {
+      {groups.length > 0 && visibleGroups.length === 0 && (
+        <p className="py-20 text-center text-sm text-slate-500">没有符合筛选条件的资产</p>
+      )}
+
+      {visibleGroups.map(([type, snaps]) => {
         const sortedSnaps = sortBy(snaps, sort, ASSET_SORT_ACCESSORS)
         return (
         <Card key={type}>
@@ -743,7 +837,7 @@ function AssetDetail({
         {strategySnapshots.length > 0 && (
           <p className="mb-2 text-xs text-slate-500">
             已跟踪 {fmtMoney(strategySnapshots.reduce((s, sn) => s + sn.valueCNY, 0))} ·
-            {' '}账户市值 {fmtMoney(snap.valueCNY)}
+            {' '}策略市值 {fmtMoney(snap.valueCNY)}
             {' '}· 不计入净资产
           </p>
         )}

@@ -180,7 +180,7 @@ export default function Dashboard({ goTo }: { goTo: (page: string) => void }) {
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-medium text-slate-700">主要持仓</h3>
+            <h3 className="text-sm font-medium text-slate-700">主要资产</h3>
             <button
               className="text-xs text-blue-600 transition-colors hover:text-blue-700"
               onClick={() => goTo('assets')}

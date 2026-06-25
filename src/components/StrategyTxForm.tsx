@@ -108,7 +108,7 @@ export default function StrategyTxForm({ strategyId, currency, initial, onSubmit
             onKeyDown={(e) => e.key === 'Enter' && submit()}
           />
           <p className="mt-1 text-xs text-slate-400">
-            填写策略账户当前的总市值，用于计算盈亏与年化收益率
+            填写策略当前的总市值，用于计算盈亏与年化收益率
           </p>
         </div>
       )}

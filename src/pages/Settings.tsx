@@ -205,7 +205,7 @@ export default function Settings() {
               <span>
                 仅汇总
                 <span className="mt-0.5 block text-xs text-slate-500">
-                  仅发送净资产、类别占比、健康评分标题等汇总数字,不含具体持仓名称与单项盈亏。
+                  仅发送净资产、类别占比、健康评分标题等汇总数字,不含具体资产名称与单项盈亏。
                 </span>
               </span>
             </label>
@@ -220,7 +220,7 @@ export default function Settings() {
               <span>
                 含明细
                 <span className="mt-0.5 block text-xs text-slate-500">
-                  另含每项持仓的资产名称、市值、累计盈亏与年化收益率。
+                  另含每项资产的名称、市值、累计盈亏与年化收益率。
                 </span>
               </span>
             </label>

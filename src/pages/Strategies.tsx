@@ -313,9 +313,9 @@ export default function Strategies({ initial, onViewAllFlows }: Props) {
           <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-sky-50 text-sky-600">
             <Target className="h-8 w-8" />
           </div>
-          <h2 className="text-xl font-semibold text-slate-800">单独跟踪账户内的投资策略</h2>
+          <h2 className="text-xl font-semibold text-slate-800">单独跟踪资产内的投资策略</h2>
           <p className="max-w-md text-sm text-slate-500">
-            策略是对账户内部分资金的独立收益分析透镜，如定投、网格机器人。
+            策略是对资产内部分资金的独立收益分析透镜，如定投、网格机器人。
             策略流水与资产流水完全隔离，不影响净资产统计。
           </p>
           <button
@@ -445,7 +445,7 @@ export default function Strategies({ initial, onViewAllFlows }: Props) {
               <tr className="border-b border-slate-100 bg-slate-50/80 text-left text-xs text-slate-500">
                 <SortTh label="策略名称" sortKey="name" sort={sort} onSort={handleSort} className="px-4 py-3 font-medium" />
                 <SortTh label="类型" sortKey="kind" sort={sort} onSort={handleSort} className="px-3 py-3 font-medium" />
-                <SortTh label="归属账户" sortKey="asset" sort={sort} onSort={handleSort} className="px-3 py-3 font-medium" />
+                <SortTh label="归属资产" sortKey="asset" sort={sort} onSort={handleSort} className="px-3 py-3 font-medium" />
                 <SortTh label="市值" sortKey="valueCNY" sort={sort} onSort={handleSort} className="px-3 py-3 font-medium" align="right" />
                 <SortTh label="累计盈亏" sortKey="totalPnlCNY" sort={sort} onSort={handleSort} className="px-3 py-3 font-medium" align="right" />
                 <SortTh label="年化(XIRR)" sortKey="xirr" sort={sort} onSort={handleSort} className="px-3 py-3 font-medium" align="right" title="自开始跟踪以来的内部收益率" />

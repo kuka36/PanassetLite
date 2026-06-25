@@ -218,7 +218,7 @@ export default function StrategyDetail({
       {/* 操作栏 */}
       <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-xs text-slate-400">
-          账户流水不含此策略 · 计价货币 {cur}
+          资产流水不含此策略 · 计价货币 {cur}
         </p>
         <div className="flex flex-wrap justify-end gap-2">
           {!archived && (

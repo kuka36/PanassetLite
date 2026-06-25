@@ -109,7 +109,7 @@ export interface Settings {
   llmSendAssetNames?: boolean
   /**
    * AI 助手/顾问发送给 LLM 的组合上下文粒度。
-   * summary=仅汇总数字与类别占比;detailed=另含持仓明细(资产名、市值、盈亏、年化)。
+   * summary=仅汇总数字与类别占比;detailed=另含资产明细(资产名、市值、盈亏、年化)。
    */
   llmContextPrivacy?: 'summary' | 'detailed'
   pricesUpdatedAt?: number
@@ -192,7 +192,7 @@ export interface PortfolioSummary {
 
 // ── 策略跟踪 ────────────────────────────────────────────────────────────────
 // 策略是独立于资产流水的「收益分析透镜」，不参与净资产汇总。
-// 一个资产账户可以有零到多个策略，用于单独跟踪账户内部分资金的收益。
+// 一个资产可以有零到多个策略，用于单独跟踪资产内部分资金的收益。
 
 export type StrategyKind = 'dca' | 'grid' | 'manual'
 
@@ -204,7 +204,7 @@ export const STRATEGY_KIND_LABEL: Record<StrategyKind, string> = {
 
 export interface Strategy {
   id: string
-  /** 归属哪个账户（关联展示用，不做资金穿透） */
+  /** 归属哪个资产（关联展示用，不做资金穿透） */
   assetId: string
   name: string
   kind: StrategyKind

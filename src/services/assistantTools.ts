@@ -23,7 +23,7 @@ export const ASSISTANT_TOOL_DEFINITIONS = [
     type: 'function' as const,
     function: {
       name: 'get_portfolio_summary',
-      description: '获取当前投资组合摘要:净资产、总资产、负债、分类占比、主要持仓',
+      description: '获取当前投资组合摘要:净资产、总资产、负债、分类占比、主要资产',
       parameters: { type: 'object', properties: {}, additionalProperties: false },
     },
   },

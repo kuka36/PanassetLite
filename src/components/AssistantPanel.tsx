@@ -365,7 +365,7 @@ export default function AssistantPanel({ currentPage, onNavigate }: Props) {
           )}
           {llmReady && settings.llmContextPrivacy === 'summary' && (
             <p className="mt-2 text-[10px] text-slate-500">
-              当前为「仅汇总」隐私模式,发送给 LLM 的上下文不含持仓名称与单项盈亏。
+              当前为「仅汇总」隐私模式,发送给 LLM 的上下文不含资产名称与单项盈亏。
             </p>
           )}
         </div>

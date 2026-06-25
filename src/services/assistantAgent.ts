@@ -54,8 +54,8 @@ function buildSystemPrompt(
   const privacy = resolveContextPrivacy(settings)
   const privacyNote =
     privacy === 'summary'
-      ? '当前用户已选择「仅汇总」隐私模式,系统上下文不含具体持仓名称与单项盈亏。'
-      : '当前用户已选择「含明细」模式,系统上下文包含持仓名称、市值与盈亏。'
+      ? '当前用户已选择「仅汇总」隐私模式,系统上下文不含具体资产名称与单项盈亏。'
+      : '当前用户已选择「含明细」模式,系统上下文包含资产名称、市值与盈亏。'
   return (
     '你是 PanassetLite 的 AI 助手,帮助用户管理本地个人资产。' +
     '你可以查询组合、分析风险、导航页面、刷新行情,以及提议添加/修改/删除资产与流水。' +

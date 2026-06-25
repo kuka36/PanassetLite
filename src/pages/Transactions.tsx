@@ -5,6 +5,7 @@ import Modal, { btnGhost, btnPrimary, inputCls, labelCls } from '../components/M
 import { SortTh } from '../components/SortTh'
 import TxForm from '../components/TxForm'
 import StrategyTxForm from '../components/StrategyTxForm'
+import FlowFilters from '../components/FlowFilters'
 import { Card, CardBody } from '../components/ui/Card'
 import { useTableSort } from '../hooks/useTableSort'
 import type { Strategy, StrategyTransaction, Transaction } from '../types'
@@ -182,6 +183,58 @@ export default function Transactions({ initial }: Props) {
     strategyMap,
   ])
 
+  const assetFlowOptions = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const t of transactions) {
+      counts.set(t.assetId, (counts.get(t.assetId) ?? 0) + 1)
+    }
+    return assets.map((a) => ({
+      id: a.id,
+      name: a.name,
+      count: counts.get(a.id) ?? 0,
+    }))
+  }, [assets, transactions])
+
+  const strategyFlowAssetOptions = useMemo(
+    () => assets.map((a) => ({ id: a.id, name: a.name })),
+    [assets],
+  )
+
+  const strategyFlowOptions = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const t of strategyTransactions) {
+      counts.set(t.strategyId, (counts.get(t.strategyId) ?? 0) + 1)
+    }
+    return strategies
+      .filter((s) => !filterStrategyAsset || s.assetId === filterStrategyAsset)
+      .map((s) => ({
+        id: s.id,
+        name: s.name,
+        archived: s.archived,
+        count: counts.get(s.id) ?? 0,
+      }))
+  }, [strategies, strategyTransactions, filterStrategyAsset])
+
+  const handleStrategyAssetChange = useCallback(
+    (id: string) => {
+      setFilterStrategyAsset(id)
+      if (filterStrategy) {
+        const s = strategyMap.get(filterStrategy)
+        if (id && s?.assetId !== id) setFilterStrategy('')
+      }
+    },
+    [filterStrategy, strategyMap],
+  )
+
+  const handleClearFilters = useCallback(() => {
+    if (tab === 'asset') {
+      setFilterAsset('')
+    } else {
+      setFilterStrategyAsset('')
+      setFilterStrategy('')
+    }
+  }, [tab])
+
   const modalOpen = assetModal !== null || strategyModal !== null
 
   useKeyboardShortcuts(
@@ -212,66 +265,33 @@ export default function Transactions({ initial }: Props) {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <h1 className="shrink-0 text-xl font-semibold text-slate-800">流水</h1>
-        <div className="ml-auto flex shrink-0 flex-nowrap items-center gap-2 sm:gap-3">
-          <FlowTabBar tab={tab} onChange={setTab} className="shrink-0" />
-          {tab === 'asset' ? (
-            <select
-              className={`${inputCls} !w-40 shrink-0 sm:!w-44`}
-              value={filterAsset}
-              onChange={(e) => setFilterAsset(e.target.value)}
-            >
-              <option value="">全部资产</option>
-              {assets.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name}
-                </option>
-              ))}
-            </select>
-          ) : (
-            <>
-              <select
-                className={`${inputCls} !w-32 shrink-0 sm:!w-36`}
-                value={filterStrategyAsset}
-                onChange={(e) => setFilterStrategyAsset(e.target.value)}
-              >
-                <option value="">全部资产</option>
-                {assets.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.name}
-                  </option>
-                ))}
-              </select>
-              <select
-                className={`${inputCls} !w-36 shrink-0 sm:!w-40`}
-                value={filterStrategy}
-                onChange={(e) => setFilterStrategy(e.target.value)}
-              >
-                <option value="">全部策略</option>
-                {strategies
-                  .filter((s) => !filterStrategyAsset || s.assetId === filterStrategyAsset)
-                  .map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                      {s.archived ? '（已关闭）' : ''}
-                    </option>
-                  ))}
-              </select>
-            </>
-          )}
-          <button
-            className={`${btnPrimary} shrink-0 whitespace-nowrap`}
-            onClick={() => {
-              if (tab === 'asset') openAddAssetTx()
-              else openAddStrategyTx()
-            }}
-            disabled={tab === 'asset' ? activeAssets.length === 0 : activeStrategies.length === 0}
-          >
-            + 记一笔
-          </button>
-        </div>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-xl font-semibold text-slate-800">流水</h1>
+        <button
+          className={`${btnPrimary} shrink-0 whitespace-nowrap`}
+          onClick={() => {
+            if (tab === 'asset') openAddAssetTx()
+            else openAddStrategyTx()
+          }}
+          disabled={tab === 'asset' ? activeAssets.length === 0 : activeStrategies.length === 0}
+        >
+          + 记一笔
+        </button>
       </div>
+
+      <FlowFilters
+        tab={tab}
+        onTabChange={setTab}
+        filterAsset={filterAsset}
+        filterStrategyAsset={filterStrategyAsset}
+        filterStrategy={filterStrategy}
+        assetOptions={tab === 'asset' ? assetFlowOptions : strategyFlowAssetOptions}
+        strategyOptions={strategyFlowOptions}
+        onAssetChange={setFilterAsset}
+        onStrategyAssetChange={handleStrategyAssetChange}
+        onStrategyChange={setFilterStrategy}
+        onClear={handleClearFilters}
+      />
 
       {tab === 'asset' ? (
         <AssetFlowTable
@@ -457,48 +477,6 @@ export default function Transactions({ initial }: Props) {
           </Modal>
         )
       })()}
-    </div>
-  )
-}
-
-function FlowTabBar({
-  tab,
-  onChange,
-  className = '',
-}: {
-  tab: FlowTab
-  onChange: (t: FlowTab) => void
-  className?: string
-}) {
-  const tabCls = (active: boolean) =>
-    `rounded-lg px-3 py-2 text-sm font-medium whitespace-nowrap transition-colors ${
-      active ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-    }`
-
-  return (
-    <div
-      className={`flex rounded-xl border border-slate-200 bg-slate-50 p-1 ${className}`}
-      role="tablist"
-      aria-label="流水类型"
-    >
-      <button
-        type="button"
-        role="tab"
-        aria-selected={tab === 'asset'}
-        className={tabCls(tab === 'asset')}
-        onClick={() => onChange('asset')}
-      >
-        资产流水
-      </button>
-      <button
-        type="button"
-        role="tab"
-        aria-selected={tab === 'strategy'}
-        className={tabCls(tab === 'strategy')}
-        onClick={() => onChange('strategy')}
-      >
-        策略流水
-      </button>
     </div>
   )
 }

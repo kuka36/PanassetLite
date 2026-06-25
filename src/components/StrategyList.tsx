@@ -7,7 +7,7 @@ interface Props {
   snapshots: StrategySnapshot[]
   /** 已关闭策略（可选，渲染在分区下方） */
   closedSnapshots?: StrategySnapshot[]
-  /** 资产映射，用于显示归属账户名（策略页全量视图使用） */
+  /** 资产映射，用于显示归属资产名（策略页全量视图使用） */
   assetMap?: Map<string, Asset>
   onSelect: (snap: StrategySnapshot) => void
   /** 添加按钮点击（可选，不传则不显示） */
