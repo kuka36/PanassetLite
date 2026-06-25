@@ -18,6 +18,7 @@ export default function Dashboard({ goTo }: { goTo: (page: string) => void }) {
 
   const trendOption = useMemo(
     () => ({
+      color: [palette.blue600, palette.green600, palette.red500],
       tooltip: {
         trigger: 'axis' as const,
         ...lightTooltip,
@@ -44,6 +45,7 @@ export default function Dashboard({ goTo }: { goTo: (page: string) => void }) {
           data: history.map((h) => Math.round(h.netWorth)),
           smooth: true,
           showSymbol: false,
+          itemStyle: { color: palette.blue600 },
           lineStyle: { width: 2.5, color: palette.blue600 },
           areaStyle: {
             color: {
@@ -65,6 +67,7 @@ export default function Dashboard({ goTo }: { goTo: (page: string) => void }) {
           data: history.map((h) => Math.round(h.assets)),
           smooth: true,
           showSymbol: false,
+          itemStyle: { color: palette.green600 },
           lineStyle: { width: 1.5, color: palette.green600, type: 'dashed' as const },
         },
         {
@@ -73,6 +76,7 @@ export default function Dashboard({ goTo }: { goTo: (page: string) => void }) {
           data: history.map((h) => Math.round(h.debt)),
           smooth: true,
           showSymbol: false,
+          itemStyle: { color: palette.red500 },
           lineStyle: { width: 1.5, color: palette.red500, type: 'dashed' as const },
         },
       ],

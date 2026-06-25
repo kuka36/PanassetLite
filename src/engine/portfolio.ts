@@ -267,7 +267,7 @@ export class PortfolioEngine {
     return assetsVal - debtVal
   }
 
-  private periodReturns(assets: Asset[]): PeriodReturn[] {
+  periodReturnsForAssets(assets: Asset[]): PeriodReturn[] {
     const nonDebt = assets.filter((a) => a.type !== 'debt')
     const nowMs = Date.now()
     return periodReturnsFor(
@@ -313,7 +313,7 @@ export class PortfolioEngine {
         .sort((a, b) => b.valueCNY - a.valueCNY),
       snapshots: snapshots.sort((a, b) => b.valueCNY - a.valueCNY),
       history: this.history(active),
-      periodReturns: this.periodReturns(active),
+      periodReturns: this.periodReturnsForAssets(active),
     }
   }
 

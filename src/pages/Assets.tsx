@@ -22,7 +22,7 @@ import PeriodReturnsCard from '../components/PeriodReturnsCard'
 import { color } from '../theme/colors'
 import { useTableSort } from '../hooks/useTableSort'
 import type { Asset, AssetSnapshot, AssetType, StrategySnapshot, Transaction, TxLedgerRow } from '../types'
-import { ASSET_TYPE_COLOR, ASSET_TYPE_LABEL, TX_TYPE_LABEL, isQuantityBased } from '../types'
+import { ASSET_TYPE_LABEL, TX_TYPE_LABEL, isQuantityBased } from '../types'
 import { fmtDateTime, fmtMoney, fmtNum, fmtPct, isUpdateStale, pnlColor, staleUpdateCls } from '../utils/format'
 import { sortBy, type SortState } from '../utils/tableSort'
 
@@ -30,11 +30,13 @@ const assetTheadCls = 'bg-slate-50/80'
 const assetTheadRowCls = 'border-b border-slate-200/70 text-left text-xs text-slate-500'
 const assetThBase = 'py-2.5 font-medium whitespace-nowrap'
 const assetThName = `px-4 ${assetThBase}`
+const assetThType = `px-3 ${assetThBase}`
 const assetThNum = `px-2 ${assetThBase} text-right`
 const assetThAction = `px-4 ${assetThBase} text-right`
 
 type AssetSortKey =
   | 'name'
+  | 'type'
   | 'quantity'
   | 'valueCNY'
   | 'totalPnlCNY'
@@ -42,11 +44,12 @@ type AssetSortKey =
   | 'recentAnnualized'
   | 'lastUpdated'
 
-const ASSET_TEXT_KEYS: readonly AssetSortKey[] = ['name']
+const ASSET_TEXT_KEYS: readonly AssetSortKey[] = ['name', 'type']
 const DEFAULT_ASSET_SORT: SortState<AssetSortKey> = { key: 'valueCNY', dir: 'desc' }
 
 const ASSET_SORT_ACCESSORS: Record<AssetSortKey, (s: AssetSnapshot) => string | number | null | undefined> = {
   name: (s) => s.asset.name,
+  type: (s) => ASSET_TYPE_LABEL[s.asset.type],
   quantity: (s) => s.quantity,
   valueCNY: (s) => s.valueCNY,
   totalPnlCNY: (s) => s.totalPnlCNY,
@@ -111,20 +114,15 @@ export default function Assets({
     modal === null,
   )
 
-  const groups = useMemo(() => {
-    const map = new Map<AssetType, AssetSnapshot[]>()
-    for (const s of summary.snapshots) {
-      const list = map.get(s.asset.type) ?? []
-      list.push(s)
-      map.set(s.asset.type, list)
-    }
-    return [...map.entries()]
-  }, [summary.snapshots])
+  const hasAssets = summary.snapshots.length > 0
 
-  const typeOptions = useMemo(
-    () => groups.map(([type, snaps]) => ({ type, count: snaps.length })),
-    [groups],
-  )
+  const typeOptions = useMemo(() => {
+    const counts = new Map<AssetType, number>()
+    for (const s of summary.snapshots) {
+      counts.set(s.asset.type, (counts.get(s.asset.type) ?? 0) + 1)
+    }
+    return [...counts.entries()].map(([type, count]) => ({ type, count }))
+  }, [summary.snapshots])
 
   const assetOptions = useMemo(
     () =>
@@ -172,16 +170,9 @@ export default function Assets({
     [engine, filteredSnapshots],
   )
 
-  const visibleGroups = useMemo(
-    () =>
-      groups
-        .filter(([type]) => !filterType || type === filterType)
-        .map(
-          ([type, snaps]) =>
-            [type, snaps.filter((s) => !filterAsset || s.asset.id === filterAsset)] as const,
-        )
-        .filter(([, snaps]) => snaps.length > 0),
-    [groups, filterType, filterAsset],
+  const sortedSnapshots = useMemo(
+    () => sortBy(filteredSnapshots, sort, ASSET_SORT_ACCESSORS),
+    [filteredSnapshots, sort],
   )
 
   const handleTypeChange = (type: string) => {
@@ -220,7 +211,7 @@ export default function Assets({
         </div>
       </div>
 
-      {groups.length > 0 && (
+      {hasAssets && (
         <AssetFilters
           filterType={filterType}
           filterAsset={filterAsset}
@@ -252,34 +243,22 @@ export default function Assets({
         />
       )}
 
-      {groups.length === 0 && (
+      {!hasAssets && (
         <p className="py-20 text-center text-sm text-slate-500">
           还没有任何资产,点击右上角「添加资产」开始。
         </p>
       )}
 
-      {groups.length > 0 && visibleGroups.length === 0 && (
+      {hasAssets && filteredSnapshots.length === 0 && (
         <p className="py-20 text-center text-sm text-slate-500">没有符合筛选条件的资产</p>
       )}
 
-      {visibleGroups.map(([type, snaps]) => {
-        const sortedSnaps = sortBy(snaps, sort, ASSET_SORT_ACCESSORS)
-        return (
-        <Card key={type}>
+      {sortedSnapshots.length > 0 && (
+        <Card>
           <CardHeader>
-            <div className="flex items-center gap-2">
-              <span
-                className="h-2.5 w-2.5 rounded-full"
-                style={{ background: ASSET_TYPE_COLOR[type] }}
-              />
-              <h3 className="text-sm font-medium text-slate-700">{ASSET_TYPE_LABEL[type]}</h3>
-              <span className="ml-auto text-sm tabular-nums text-slate-600">
-                {fmtMoney(snaps.reduce((s, x) => s + x.valueCNY, 0))}
-              </span>
-            </div>
+            <h3 className="text-sm font-medium text-slate-700">资产列表</h3>
           </CardHeader>
 
-          {/* 桌面端表格 */}
           <div className="hidden overflow-x-auto md:block">
             <table className="w-full text-sm">
               <thead className={assetTheadCls}>
@@ -290,6 +269,13 @@ export default function Assets({
                     sort={sort}
                     onSort={handleSort}
                     className={assetThName}
+                  />
+                  <SortTh
+                    label="类型"
+                    sortKey="type"
+                    sort={sort}
+                    onSort={handleSort}
+                    className={assetThType}
                   />
                   <SortTh
                     label="持有"
@@ -348,11 +334,10 @@ export default function Assets({
                 </tr>
               </thead>
               <tbody>
-                {sortedSnaps.map((s) => (
+                {sortedSnapshots.map((s) => (
                   <AssetTableRow
                     key={s.asset.id}
                     snap={s}
-                    type={type}
                     onOpen={() => setModal({ kind: 'detail', assetId: s.asset.id })}
                     onRecordTx={() => setModal(openRecordTx({ asset: s.asset }))}
                     onValuation={() =>
@@ -364,13 +349,11 @@ export default function Assets({
             </table>
           </div>
 
-          {/* 移动端卡片 */}
           <div className="space-y-2 p-4 md:hidden">
-            {sortedSnaps.map((s) => (
+            {sortedSnapshots.map((s) => (
               <AssetMobileCard
                 key={s.asset.id}
                 snap={s}
-                type={type}
                 onOpen={() => setModal({ kind: 'detail', assetId: s.asset.id })}
                 onRecordTx={() => setModal(openRecordTx({ asset: s.asset }))}
                 onValuation={() =>
@@ -380,8 +363,7 @@ export default function Assets({
             ))}
           </div>
         </Card>
-        )
-      })}
+      )}
 
       {modal?.kind === 'add' && (
         <Modal title="添加资产" onClose={() => setModal(null)}>
@@ -455,19 +437,26 @@ export default function Assets({
   )
 }
 
+function AssetTypeBadge({ type }: { type: AssetType }) {
+  return (
+    <span className="rounded-full border border-sky-100 bg-sky-50 px-2 py-0.5 text-xs text-sky-700">
+      {ASSET_TYPE_LABEL[type]}
+    </span>
+  )
+}
+
 function AssetTableRow({
   snap: s,
-  type,
   onOpen,
   onRecordTx,
   onValuation,
 }: {
   snap: AssetSnapshot
-  type: AssetType
   onOpen: () => void
   onRecordTx: () => void
   onValuation: () => void
 }) {
+  const type = s.asset.type
   return (
     <tr
       className="cursor-pointer border-t border-slate-100 transition-colors duration-200 hover:bg-slate-50/50"
@@ -480,6 +469,9 @@ function AssetTableRow({
           {s.asset.currency !== 'CNY' && ` · ${s.asset.currency}`}
           {s.asset.priceSource !== 'manual' && ' · 自动行情'}
         </div>
+      </td>
+      <td className="px-3 py-2.5">
+        <AssetTypeBadge type={type} />
       </td>
       <td className="px-2 py-2.5 text-right tabular-nums text-slate-500">
         {s.quantity > 0 ? fmtNum(s.quantity) : '—'}
@@ -524,26 +516,28 @@ function AssetTableRow({
 
 function AssetMobileCard({
   snap: s,
-  type,
   onOpen,
   onRecordTx,
   onValuation,
 }: {
   snap: AssetSnapshot
-  type: AssetType
   onOpen: () => void
   onRecordTx: () => void
   onValuation: () => void
 }) {
+  const type = s.asset.type
   return (
     <div
       className="rounded-xl border border-slate-100 bg-slate-50/50 p-3 transition-colors duration-200 active:bg-slate-50"
       onClick={onOpen}
     >
       <div className="flex items-start justify-between gap-2">
-        <div>
-          <p className="font-medium text-slate-800">{s.asset.name}</p>
-          <p className="text-xs text-slate-500">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="truncate font-medium text-slate-800">{s.asset.name}</span>
+            <AssetTypeBadge type={type} />
+          </div>
+          <p className="mt-0.5 text-xs text-slate-500">
             {s.asset.platform}
             {s.asset.currency !== 'CNY' && ` · ${s.asset.currency}`}
           </p>
