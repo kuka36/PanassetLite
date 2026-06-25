@@ -17,7 +17,7 @@ import { Card, CardHeader, MetricCard } from '../components/ui/Card'
 import { useTableSort } from '../hooks/useTableSort'
 import type { StrategySnapshot } from '../types'
 import { STRATEGY_KIND_LABEL } from '../types'
-import { fmtMoney, fmtPct, pnlColor } from '../utils/format'
+import { fmtMoney, fmtPct, isUpdateStale, pnlColor, staleUpdateCls } from '../utils/format'
 import { sortBy, type SortState } from '../utils/tableSort'
 
 type StrategySortKey = 'name' | 'kind' | 'asset' | 'valueCNY' | 'totalPnlCNY' | 'xirr' | 'lastUpdated'
@@ -103,7 +103,10 @@ function StrategyTableRow({
       <td className={`px-3 py-2.5 text-right tabular-nums ${snap.xirr != null ? pnlColor(snap.xirr) : 'text-slate-400'}`}>
         {snap.xirr != null ? fmtPct(snap.xirr) : '—'}
       </td>
-      <td className="px-3 py-2.5 text-right tabular-nums text-slate-500">
+      <td
+        className={`px-3 py-2.5 text-right text-xs tabular-nums ${staleUpdateCls(snap.lastUpdated)}`}
+        title={isUpdateStale(snap.lastUpdated) ? '已超过一个月未更新,建议更新估值' : undefined}
+      >
         {snap.lastUpdated ?? '—'}
       </td>
     </tr>
@@ -404,7 +407,15 @@ export default function Strategies({ initial }: Props) {
                 <SortTh label="市值" sortKey="valueCNY" sort={sort} onSort={handleSort} className="px-3 py-3 font-medium" align="right" />
                 <SortTh label="累计盈亏" sortKey="totalPnlCNY" sort={sort} onSort={handleSort} className="px-3 py-3 font-medium" align="right" />
                 <SortTh label="年化(XIRR)" sortKey="xirr" sort={sort} onSort={handleSort} className="px-3 py-3 font-medium" align="right" />
-                <SortTh label="更新于" sortKey="lastUpdated" sort={sort} onSort={handleSort} className="px-3 py-3 font-medium" align="right" />
+                <SortTh
+                  label="更新于"
+                  sortKey="lastUpdated"
+                  sort={sort}
+                  onSort={handleSort}
+                  className="px-3 py-3 font-medium"
+                  align="right"
+                  title="最近估值更新日期；超过一个月未更新时数据行会标黄"
+                />
               </tr>
             </thead>
             <tbody>

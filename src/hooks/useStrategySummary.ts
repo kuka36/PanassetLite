@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { useStore } from '../store'
 import { StrategyEngine } from '../engine/strategy'
+import { isUpdateStale } from '../utils/format'
 
 /** 获取 StrategyEngine 实例（供快照列表与账本计算） */
 export function useStrategyEngine() {
@@ -24,4 +25,13 @@ export function useStrategySnapshots() {
 export function useArchivedStrategySnapshots() {
   const engine = useStrategyEngine()
   return useMemo(() => engine.archivedSnapshots(), [engine])
+}
+
+/** 活跃策略中超过默认阈值未更新估值的数量（侧栏角标用） */
+export function useStrategyStaleCount() {
+  const snapshots = useStrategySnapshots()
+  return useMemo(
+    () => snapshots.filter((s) => isUpdateStale(s.lastUpdated)).length,
+    [snapshots],
+  )
 }

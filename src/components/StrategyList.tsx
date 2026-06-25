@@ -1,7 +1,7 @@
 import type { Asset, StrategySnapshot } from '../types'
 import { STRATEGY_KIND_LABEL } from '../types'
 import { Card, CardBody } from './ui/Card'
-import { fmtMoney, fmtPct, pnlColor } from '../utils/format'
+import { fmtMoney, fmtPct, pnlColor, staleUpdateCls } from '../utils/format'
 
 interface Props {
   snapshots: StrategySnapshot[]
@@ -73,6 +73,9 @@ function StrategyCard({
               </p>
             </div>
           </div>
+          <p className="text-xs">
+            <span className={staleUpdateCls(snap.lastUpdated)}>更新 {snap.lastUpdated ?? '—'}</span>
+          </p>
         </CardBody>
       </Card>
     </button>

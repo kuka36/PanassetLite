@@ -24,6 +24,8 @@ import AssistantPanel from './components/AssistantPanel'
 import AssistantConfirmModals from './components/AssistantConfirmModals'
 import ShortcutHelpModal from './components/ShortcutHelpModal'
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
+import { useAssetStaleCount } from './hooks/useSummary'
+import { useStrategyStaleCount } from './hooks/useStrategySummary'
 import { useAssistantStore } from './assistantStore'
 import type { AppPageId } from './types/assistant'
 
@@ -42,6 +44,25 @@ const SIDEBAR_COLLAPSED = 'w-[4.5rem]'
 const MAIN_EXPANDED = 'md:ml-56'
 const MAIN_COLLAPSED = 'md:ml-[4.5rem]'
 const ABOUT_URL = 'https://mp.weixin.qq.com/s/du0wh1As2s-casSadFAgZQ'
+
+function navStaleBadge(id: PageId, assetStaleCount: number, strategyStaleCount: number): number {
+  if (id === 'assets') return assetStaleCount
+  if (id === 'strategies') return strategyStaleCount
+  return 0
+}
+
+function navStaleTitle(label: string, id: PageId, count: number): string {
+  if (count <= 0) return label
+  if (id === 'assets') return `${label}（${count} 个资产待更新）`
+  if (id === 'strategies') return `${label}（${count} 个策略待更新估值）`
+  return label
+}
+
+function navStaleAria(id: PageId, count: number): string {
+  if (id === 'assets') return `${count} 个资产待更新`
+  if (id === 'strategies') return `${count} 个策略待更新估值`
+  return `${count} 个待更新`
+}
 
 function isStatsUrl(): boolean {
   return new URLSearchParams(window.location.search).get('stats') === 'true'
@@ -63,6 +84,8 @@ export default function App() {
   const [helpOpen, setHelpOpen] = useState(false)
   const addAssistantMessage = useAssistantStore((s) => s.addMessage)
   const toggleAssistant = useAssistantStore((s) => s.toggle)
+  const assetStaleCount = useAssetStaleCount()
+  const strategyStaleCount = useStrategyStaleCount()
 
   useEffect(() => {
     initAnalytics('dashboard')
@@ -166,6 +189,7 @@ export default function App() {
           {NAV.map((item) => {
             const Icon = item.icon
             const active = page === item.id
+            const staleBadge = navStaleBadge(item.id, assetStaleCount, strategyStaleCount)
             return (
               <button
                 key={item.id}
@@ -173,7 +197,7 @@ export default function App() {
                 onClick={() => goTo(item.id)}
                 title={
                   collapsed
-                    ? item.label
+                    ? navStaleTitle(item.label, item.id, staleBadge)
                     : `Alt+${NAV.findIndex((n) => n.id === item.id) + 1} · ${item.label}`
                 }
                 className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-all duration-200 active:scale-[0.98] ${
@@ -184,8 +208,27 @@ export default function App() {
                     : 'text-slate-600 hover:bg-slate-50 hover:text-slate-800'
                 }`}
               >
-                <Icon className={`h-[18px] w-[18px] shrink-0 ${active ? 'text-blue-600' : ''}`} />
-                {!collapsed && <span>{item.label}</span>}
+                <span className="relative shrink-0">
+                  <Icon className={`h-[18px] w-[18px] ${active ? 'text-blue-600' : ''}`} />
+                  {staleBadge > 0 && (
+                    <span
+                      className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-semibold leading-none text-white"
+                      aria-label={navStaleAria(item.id, staleBadge)}
+                    >
+                      {staleBadge > 9 ? '9+' : staleBadge}
+                    </span>
+                  )}
+                </span>
+                {!collapsed && (
+                  <span className="flex flex-1 items-center justify-between gap-2">
+                    <span>{item.label}</span>
+                    {staleBadge > 0 && (
+                      <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-amber-700">
+                        {staleBadge}
+                      </span>
+                    )}
+                  </span>
+                )}
               </button>
             )
           })}
