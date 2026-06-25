@@ -5,12 +5,12 @@ import { useStrategyEngine } from '../hooks/useStrategySummary'
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
 import Modal, { btnGhost, btnPrimary } from '../components/Modal'
 import AssetForm from '../components/AssetForm'
+import { RecordTxModals } from '../components/RecordTxModals'
 import {
   isRecordTxModal,
   openRecordTx,
-  RecordTxModals,
   type RecordTxModalState,
-} from '../components/RecordTxModals'
+} from '../components/recordTxModal'
 import TxForm from '../components/TxForm'
 import StrategyList from '../components/StrategyList'
 import StrategyDetail from '../components/StrategyDetail'

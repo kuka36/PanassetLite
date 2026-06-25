@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { useStore } from '../store'
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
 import Modal, { btnGhost, btnPrimary, inputCls, labelCls } from '../components/Modal'
@@ -78,12 +78,6 @@ export default function Transactions({ initial }: Props) {
     DEFAULT_STRATEGY_TX_SORT,
     STRATEGY_TX_TEXT_KEYS,
   )
-
-  useEffect(() => {
-    if (initial?.tab) setTab(initial.tab)
-    if (initial?.filterAssetId) setFilterAsset(initial.filterAssetId)
-    if (initial?.filterStrategyId) setFilterStrategy(initial.filterStrategyId)
-  }, [initial])
 
   const activeStrategies = useMemo(
     () => strategies.filter((s) => !s.archived),

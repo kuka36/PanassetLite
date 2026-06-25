@@ -29,7 +29,8 @@ export default function TxForm({ assets, fixedAssetId, defaultType, initial, onS
     initial?.type ??
       (defaultType && types.includes(defaultType) ? defaultType : types[0] ?? 'DEPOSIT'),
   )
-  const [occurredAtInput, setOccurredAtInput] = useState(
+  const [openedAt] = useState(() => Date.now())
+  const [occurredAtInput, setOccurredAtInput] = useState(() =>
     toDatetimeLocalValue(initial?.occurredAt ?? Date.now()),
   )
   const [quantity, setQuantity] = useState(initial?.quantity != null ? String(initial.quantity) : '')
@@ -49,7 +50,7 @@ export default function TxForm({ assets, fixedAssetId, defaultType, initial, onS
   const valid =
     !!asset &&
     occurredAt != null &&
-    occurredAt <= Date.now() &&
+    occurredAt <= openedAt &&
     (!needsQty || (Number(quantity) > 0 && Number(price) > 0)) &&
     (!needsAmount || Number(amount) > 0) &&
     (!needsValue || Number(value) >= 0)
@@ -69,7 +70,7 @@ export default function TxForm({ assets, fixedAssetId, defaultType, initial, onS
   }
 
   const cur = asset?.currency ?? 'CNY'
-  const maxDatetime = toDatetimeLocalValue(Date.now())
+  const maxDatetime = toDatetimeLocalValue(openedAt)
 
   return (
     <div className="space-y-4">
