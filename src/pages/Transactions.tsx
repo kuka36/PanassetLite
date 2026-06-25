@@ -2,11 +2,26 @@ import { useMemo, useState } from 'react'
 import { useStore } from '../store'
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
 import Modal, { btnPrimary, inputCls } from '../components/Modal'
+import { SortTh } from '../components/SortTh'
 import TxForm from '../components/TxForm'
 import { Card, CardBody } from '../components/ui/Card'
+import { useTableSort } from '../hooks/useTableSort'
 import type { Transaction } from '../types'
 import { TX_TYPE_LABEL } from '../types'
 import { fmtDateTime, fmtNum } from '../utils/format'
+import { sortBy, type SortState } from '../utils/tableSort'
+
+type TxSortKey = 'date' | 'updatedAt' | 'asset' | 'type' | 'detail' | 'note'
+
+const TX_TEXT_KEYS: readonly TxSortKey[] = ['asset', 'type', 'note']
+const DEFAULT_TX_SORT: SortState<TxSortKey> = { key: 'date', dir: 'desc' }
+
+function txDetailSortValue(t: Transaction): number | null {
+  if (t.amount != null) return t.amount
+  if (t.value != null) return t.value
+  if (t.quantity != null && t.price != null) return t.quantity * t.price
+  return null
+}
 
 type ModalState = { kind: 'add' } | { kind: 'edit'; tx: Transaction } | null
 
@@ -18,6 +33,7 @@ export default function Transactions() {
   const deleteTransaction = useStore((s) => s.deleteTransaction)
   const [filterAsset, setFilterAsset] = useState('')
   const [modal, setModal] = useState<ModalState>(null)
+  const { sort, handleSort } = useTableSort(DEFAULT_TX_SORT, TX_TEXT_KEYS)
 
   useKeyboardShortcuts(
     useMemo(
@@ -36,13 +52,22 @@ export default function Transactions() {
 
   const assetMap = useMemo(() => new Map(assets.map((a) => [a.id, a])), [assets])
 
-  const rows = useMemo(
-    () =>
-      transactions
-        .filter((t) => !filterAsset || t.assetId === filterAsset)
-        .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt),
-    [transactions, filterAsset],
+  const txAccessors = useMemo(
+    (): Record<TxSortKey, (t: Transaction) => string | number | null | undefined> => ({
+      date: (t) => t.date,
+      updatedAt: (t) => t.updatedAt,
+      asset: (t) => assetMap.get(t.assetId)?.name ?? '',
+      type: (t) => TX_TYPE_LABEL[t.type],
+      detail: (t) => txDetailSortValue(t),
+      note: (t) => t.note,
+    }),
+    [assetMap],
   )
+
+  const rows = useMemo(() => {
+    const filtered = transactions.filter((t) => !filterAsset || t.assetId === filterAsset)
+    return sortBy(filtered, sort, txAccessors, (a, b) => b.createdAt - a.createdAt)
+  }, [transactions, filterAsset, sort, txAccessors])
 
   return (
     <div className="space-y-6">
@@ -77,12 +102,49 @@ export default function Transactions() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-slate-100 text-left text-xs text-slate-500">
-                <th className="px-4 py-3 font-medium">日期</th>
-                <th className="px-3 py-3 font-medium">更新时间</th>
-                <th className="px-3 py-3 font-medium">资产</th>
-                <th className="px-3 py-3 font-medium">类型</th>
-                <th className="px-3 py-3 font-medium text-right">明细</th>
-                <th className="px-3 py-3 font-medium">备注</th>
+                <SortTh
+                  label="日期"
+                  sortKey="date"
+                  sort={sort}
+                  onSort={handleSort}
+                  className="px-4 py-3 font-medium"
+                />
+                <SortTh
+                  label="更新时间"
+                  sortKey="updatedAt"
+                  sort={sort}
+                  onSort={handleSort}
+                  className="px-3 py-3 font-medium"
+                />
+                <SortTh
+                  label="资产"
+                  sortKey="asset"
+                  sort={sort}
+                  onSort={handleSort}
+                  className="px-3 py-3 font-medium"
+                />
+                <SortTh
+                  label="类型"
+                  sortKey="type"
+                  sort={sort}
+                  onSort={handleSort}
+                  className="px-3 py-3 font-medium"
+                />
+                <SortTh
+                  label="明细"
+                  sortKey="detail"
+                  sort={sort}
+                  onSort={handleSort}
+                  className="px-3 py-3 font-medium"
+                  align="right"
+                />
+                <SortTh
+                  label="备注"
+                  sortKey="note"
+                  sort={sort}
+                  onSort={handleSort}
+                  className="px-3 py-3 font-medium"
+                />
                 <th className="px-4 py-3 font-medium text-right"></th>
               </tr>
             </thead>

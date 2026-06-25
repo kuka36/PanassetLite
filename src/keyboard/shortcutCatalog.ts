@@ -25,7 +25,7 @@ export const SHORTCUT_CATALOG: ShortcutEntry[] = [
   { id: 'toggle-assistant', label: '打开/关闭 AI 助手', keys: { key: 'k', mod: true }, scope: 'global' },
   { id: 'show-help', label: '显示快捷键帮助', keys: { key: '?', shift: true }, scope: 'global' },
   { id: 'add-asset', label: '添加资产', keys: { key: 'a' }, scope: 'assets' },
-  { id: 'nl-tx', label: '记一笔流水', keys: { key: 't' }, scope: 'assets' },
+  { id: 'nl-tx', label: '记一笔', keys: { key: 't' }, scope: 'assets' },
   { id: 'add-tx', label: '记一笔', keys: { key: 'n' }, scope: 'transactions' },
   { id: 'close-overlay', label: '关闭弹窗/面板', keys: { key: 'Escape' }, scope: 'overlay' },
 ]

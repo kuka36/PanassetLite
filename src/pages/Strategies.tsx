@@ -3,14 +3,22 @@ import { Target } from 'lucide-react'
 import { useStore } from '../store'
 import { useStrategyEngine, useStrategySnapshots } from '../hooks/useStrategySummary'
 import Modal, { btnPrimary } from '../components/Modal'
+import { SortTh } from '../components/SortTh'
 import StrategyForm from '../components/StrategyForm'
 import StrategyList from '../components/StrategyList'
 import StrategyDetail from '../components/StrategyDetail'
 import StrategyFilters from '../components/StrategyFilters'
 import { Card, CardHeader, MetricCard } from '../components/ui/Card'
+import { useTableSort } from '../hooks/useTableSort'
 import type { StrategySnapshot } from '../types'
 import { STRATEGY_KIND_LABEL } from '../types'
 import { fmtMoney, fmtPct, pnlColor } from '../utils/format'
+import { sortBy, type SortState } from '../utils/tableSort'
+
+type StrategySortKey = 'name' | 'kind' | 'asset' | 'valueCNY' | 'totalPnlCNY' | 'xirr' | 'lastUpdated'
+
+const STRATEGY_TEXT_KEYS: readonly StrategySortKey[] = ['name', 'kind', 'asset']
+const DEFAULT_STRATEGY_SORT: SortState<StrategySortKey> = { key: 'valueCNY', dir: 'desc' }
 
 type ModalState =
   | { kind: 'add' }
@@ -30,6 +38,7 @@ export default function Strategies() {
   const [filterAsset, setFilterAsset] = useState('')
   const [filterKind, setFilterKind] = useState('')
   const [modal, setModal] = useState<ModalState>(null)
+  const { sort, handleSort } = useTableSort(DEFAULT_STRATEGY_SORT, STRATEGY_TEXT_KEYS)
 
   const assetMap = useMemo(() => new Map(assets.map((a) => [a.id, a])), [assets])
   const activeAssets = assets.filter((a) => !a.archived)
@@ -53,6 +62,24 @@ export default function Strategies() {
       return true
     })
   }, [allSnapshots, filterAsset, filterKind])
+
+  const strategyAccessors = useMemo(
+    (): Record<StrategySortKey, (s: StrategySnapshot) => string | number | null | undefined> => ({
+      name: (s) => s.strategy.name,
+      kind: (s) => STRATEGY_KIND_LABEL[s.strategy.kind],
+      asset: (s) => assetMap.get(s.strategy.assetId)?.name ?? '',
+      valueCNY: (s) => s.valueCNY,
+      totalPnlCNY: (s) => s.totalPnlCNY,
+      xirr: (s) => s.xirr,
+      lastUpdated: (s) => s.lastUpdated,
+    }),
+    [assetMap],
+  )
+
+  const sorted = useMemo(
+    () => sortBy(filtered, sort, strategyAccessors),
+    [filtered, sort, strategyAccessors],
+  )
 
   const totalValue = filtered.reduce((sum, s) => sum + s.valueCNY, 0)
   const totalPnl = filtered.reduce((sum, s) => sum + s.totalPnlCNY, 0)
@@ -160,17 +187,63 @@ export default function Strategies() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-slate-100 bg-slate-50/80 text-left text-xs text-slate-500">
-                <th className="px-4 py-3 font-medium">策略名称</th>
-                <th className="px-3 py-3 font-medium">类型</th>
-                <th className="px-3 py-3 font-medium">归属账户</th>
-                <th className="px-3 py-3 font-medium text-right">市值</th>
-                <th className="px-3 py-3 font-medium text-right">累计盈亏</th>
-                <th className="px-3 py-3 font-medium text-right">年化(XIRR)</th>
-                <th className="px-3 py-3 font-medium text-right">更新于</th>
+                <SortTh
+                  label="策略名称"
+                  sortKey="name"
+                  sort={sort}
+                  onSort={handleSort}
+                  className="px-4 py-3 font-medium"
+                />
+                <SortTh
+                  label="类型"
+                  sortKey="kind"
+                  sort={sort}
+                  onSort={handleSort}
+                  className="px-3 py-3 font-medium"
+                />
+                <SortTh
+                  label="归属账户"
+                  sortKey="asset"
+                  sort={sort}
+                  onSort={handleSort}
+                  className="px-3 py-3 font-medium"
+                />
+                <SortTh
+                  label="市值"
+                  sortKey="valueCNY"
+                  sort={sort}
+                  onSort={handleSort}
+                  className="px-3 py-3 font-medium"
+                  align="right"
+                />
+                <SortTh
+                  label="累计盈亏"
+                  sortKey="totalPnlCNY"
+                  sort={sort}
+                  onSort={handleSort}
+                  className="px-3 py-3 font-medium"
+                  align="right"
+                />
+                <SortTh
+                  label="年化(XIRR)"
+                  sortKey="xirr"
+                  sort={sort}
+                  onSort={handleSort}
+                  className="px-3 py-3 font-medium"
+                  align="right"
+                />
+                <SortTh
+                  label="更新于"
+                  sortKey="lastUpdated"
+                  sort={sort}
+                  onSort={handleSort}
+                  className="px-3 py-3 font-medium"
+                  align="right"
+                />
               </tr>
             </thead>
             <tbody>
-              {filtered.map((snap) => {
+              {sorted.map((snap) => {
                 const { strategy } = snap
                 const asset = assetMap.get(strategy.assetId)
                 return (
@@ -221,7 +294,7 @@ export default function Strategies() {
       {/* 移动端卡片列表 */}
       <div className="md:hidden">
         <StrategyList
-          snapshots={filtered}
+          snapshots={sorted}
           assetMap={assetMap}
           onSelect={(snap) => setModal({ kind: 'detail', snap })}
           onAdd={() => setModal({ kind: 'add' })}

@@ -14,6 +14,8 @@ interface Props {
   fixedAssetId?: string
   /** 弹窗内使用,去掉外层卡片样式 */
   embedded?: boolean
+  /** 已有模式切换时隐藏「手动填写」按钮 */
+  hideManualAction?: boolean
   onParsed: (result: NlTxParseResult, rawInput: string) => void
   onManual: () => void
 }
@@ -24,6 +26,7 @@ export default function NlTxInput({
   disabled,
   fixedAssetId,
   embedded,
+  hideManualAction,
   onParsed,
   onManual,
 }: Props) {
@@ -81,11 +84,11 @@ export default function NlTxInput({
         </div>
       )}
       {embedded && (
-        <p className="text-xs text-slate-500">用一句话描述这笔交易,AI 解析后请你确认再写入。</p>
+        <p className="text-xs text-slate-500">用一句话描述这笔交易，AI 解析后请你确认再写入。</p>
       )}
-      <div className="flex flex-col gap-2 sm:flex-row">
+      <div className={`flex gap-2 ${hideManualAction ? 'flex-col sm:flex-row sm:items-stretch' : 'flex-col sm:flex-row'}`}>
         <input
-          className={inputCls}
+          className={`${inputCls} ${hideManualAction ? 'min-w-0 flex-1' : ''}`}
           value={input}
           disabled={disabled || loading || !canUseLlm}
           placeholder={placeholder}
@@ -97,24 +100,26 @@ export default function NlTxInput({
             }
           }}
         />
-        <div className="flex shrink-0 gap-2">
+        <div className={`flex shrink-0 gap-2 ${hideManualAction ? 'sm:w-auto' : ''}`}>
           <button
-            className={btnAi}
+            className={`${btnAi} ${hideManualAction ? 'w-full sm:w-auto' : ''}`}
             disabled={disabled || loading || !canUseLlm || !input.trim()}
             onClick={submit}
           >
             {loading ? '解析中…' : 'AI 解析'}
           </button>
-          <button className={btnGhost} disabled={disabled || loading} onClick={onManual}>
-            手动填写
-          </button>
+          {!hideManualAction && (
+            <button className={btnGhost} disabled={disabled || loading} onClick={onManual}>
+              手动填写
+            </button>
+          )}
         </div>
       </div>
       {error && (
         <div className={`mt-2 flex flex-wrap items-center gap-2 text-sm ${color.error}`}>
           <span>{error}</span>
           <button className={`text-xs ${color.link} hover:underline`} onClick={onManual}>
-            改用手动填写
+            {hideManualAction ? '切换到手动填写' : '改用手动填写'}
           </button>
         </div>
       )}

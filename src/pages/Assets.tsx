@@ -5,18 +5,23 @@ import { useStrategyEngine } from '../hooks/useStrategySummary'
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
 import Modal, { btnGhost, btnPrimary } from '../components/Modal'
 import AssetForm from '../components/AssetForm'
-import NlTxInput from '../components/NlTxInput'
+import {
+  isRecordTxModal,
+  openRecordTx,
+  RecordTxModals,
+  type RecordTxModalState,
+} from '../components/RecordTxModals'
 import TxForm from '../components/TxForm'
 import StrategyList from '../components/StrategyList'
 import StrategyDetail from '../components/StrategyDetail'
 import StrategyForm from '../components/StrategyForm'
+import { SortTh } from '../components/SortTh'
 import { Card, CardHeader } from '../components/ui/Card'
-import type { NlTxParseResult } from '../services/nlTx'
-import { nlResultToTxInitial } from '../services/nlTx'
-import type { Asset, AssetSnapshot, AssetType, StrategySnapshot, Transaction, TxLedgerRow, TxType } from '../types'
+import { useTableSort } from '../hooks/useTableSort'
+import type { Asset, AssetSnapshot, AssetType, StrategySnapshot, Transaction, TxLedgerRow } from '../types'
 import { ASSET_TYPE_COLOR, ASSET_TYPE_LABEL, TX_TYPE_LABEL, isQuantityBased } from '../types'
-import { color } from '../theme/colors'
 import { fmtMoney, fmtNum, fmtPct, isUpdateStale, pnlColor, staleUpdateCls } from '../utils/format'
+import { sortBy, type SortState } from '../utils/tableSort'
 
 const assetTheadCls = 'bg-slate-50/80'
 const assetTheadRowCls = 'border-b border-slate-200/70 text-left text-xs text-slate-500'
@@ -25,28 +30,45 @@ const assetThName = `px-4 ${assetThBase}`
 const assetThNum = `px-2 ${assetThBase} text-right`
 const assetThAction = `px-4 ${assetThBase} text-right`
 
+type AssetSortKey =
+  | 'name'
+  | 'quantity'
+  | 'valueCNY'
+  | 'totalPnlCNY'
+  | 'xirr'
+  | 'recentAnnualized'
+  | 'lastUpdated'
+
+const ASSET_TEXT_KEYS: readonly AssetSortKey[] = ['name']
+const DEFAULT_ASSET_SORT: SortState<AssetSortKey> = { key: 'valueCNY', dir: 'desc' }
+
+const ASSET_SORT_ACCESSORS: Record<AssetSortKey, (s: AssetSnapshot) => string | number | null | undefined> = {
+  name: (s) => s.asset.name,
+  quantity: (s) => s.quantity,
+  valueCNY: (s) => s.valueCNY,
+  totalPnlCNY: (s) => s.totalPnlCNY,
+  xirr: (s) => s.xirr,
+  recentAnnualized: (s) => s.recentAnnualized,
+  lastUpdated: (s) => s.lastUpdated,
+}
+
 type ModalState =
   | { kind: 'add' }
   | { kind: 'edit'; asset: Asset }
-  | { kind: 'nlTx'; asset?: Asset; returnAssetId?: string }
-  | { kind: 'tx'; asset?: Asset; defaultType?: TxType; returnAssetId?: string }
-  | { kind: 'nlConfirm'; asset?: Asset; result: NlTxParseResult; rawInput: string; returnAssetId?: string }
+  | RecordTxModalState
   | { kind: 'editTx'; tx: Transaction; returnAssetId?: string }
   | { kind: 'detail'; assetId: string }
   | null
+
+function closeRecordTxModal(txModal: RecordTxModalState, setModal: (m: ModalState) => void) {
+  setModal(txModal.returnAssetId ? { kind: 'detail', assetId: txModal.returnAssetId } : null)
+}
 
 function closeEditTx(
   editModal: Extract<ModalState, { kind: 'editTx' }>,
   setModal: (m: ModalState) => void,
 ) {
   setModal(editModal.returnAssetId ? { kind: 'detail', assetId: editModal.returnAssetId } : null)
-}
-
-function closeTx(
-  txModal: Extract<ModalState, { kind: 'tx' | 'nlTx' | 'nlConfirm' }>,
-  setModal: (m: ModalState) => void,
-) {
-  setModal(txModal.returnAssetId ? { kind: 'detail', assetId: txModal.returnAssetId } : null)
 }
 
 export default function Assets() {
@@ -59,6 +81,7 @@ export default function Assets() {
   const addTransaction = useStore((s) => s.addTransaction)
   const updateTransaction = useStore((s) => s.updateTransaction)
   const [modal, setModal] = useState<ModalState>(null)
+  const { sort, handleSort } = useTableSort(DEFAULT_ASSET_SORT, ASSET_TEXT_KEYS)
 
   useKeyboardShortcuts(
     useMemo(
@@ -67,7 +90,7 @@ export default function Assets() {
         {
           key: 't',
           action: () => {
-            if (assets.length > 0) setModal({ kind: 'nlTx' })
+            if (assets.length > 0) setModal(openRecordTx())
           },
         },
       ],
@@ -94,9 +117,9 @@ export default function Assets() {
           <button
             className={btnGhost}
             disabled={assets.length === 0}
-            onClick={() => setModal({ kind: 'nlTx' })}
+            onClick={() => setModal(openRecordTx())}
           >
-            记一笔流水
+            记一笔
           </button>
           <button className={btnPrimary} onClick={() => setModal({ kind: 'add' })}>
             + 添加资产
@@ -110,7 +133,9 @@ export default function Assets() {
         </p>
       )}
 
-      {groups.map(([type, snaps]) => (
+      {groups.map(([type, snaps]) => {
+        const sortedSnaps = sortBy(snaps, sort, ASSET_SORT_ACCESSORS)
+        return (
         <Card key={type}>
           <CardHeader>
             <div className="flex items-center gap-2">
@@ -130,54 +155,79 @@ export default function Assets() {
             <table className="w-full text-sm">
               <thead className={assetTheadCls}>
                 <tr className={assetTheadRowCls}>
-                  <th scope="col" className={assetThName}>
-                    名称
-                  </th>
-                  <th scope="col" className={assetThNum}>
-                    持有
-                  </th>
-                  <th scope="col" className={assetThNum}>
-                    市值
-                  </th>
-                  <th scope="col" className={assetThNum}>
-                    累计盈亏
-                  </th>
-                  <th
-                    scope="col"
+                  <SortTh
+                    label="名称"
+                    sortKey="name"
+                    sort={sort}
+                    onSort={handleSort}
+                    className={assetThName}
+                  />
+                  <SortTh
+                    label="持有"
+                    sortKey="quantity"
+                    sort={sort}
+                    onSort={handleSort}
                     className={assetThNum}
+                    align="right"
+                  />
+                  <SortTh
+                    label="市值"
+                    sortKey="valueCNY"
+                    sort={sort}
+                    onSort={handleSort}
+                    className={assetThNum}
+                    align="right"
+                  />
+                  <SortTh
+                    label="累计盈亏"
+                    sortKey="totalPnlCNY"
+                    sort={sort}
+                    onSort={handleSort}
+                    className={assetThNum}
+                    align="right"
+                  />
+                  <SortTh
+                    label="年化(XIRR)"
+                    sortKey="xirr"
+                    sort={sort}
+                    onSort={handleSort}
+                    className={assetThNum}
+                    align="right"
                     title="年化内部收益率（XIRR）：自持有以来的内部收益率，与「近期年化」口径不同"
-                  >
-                    年化(XIRR)
-                  </th>
-                  <th
-                    scope="col"
+                  />
+                  <SortTh
+                    label="近期年化"
+                    sortKey="recentAnnualized"
+                    sort={sort}
+                    onSort={handleSort}
                     className={assetThNum}
+                    align="right"
                     title="最近两次估值之间的区间年化（已扣除区间内存取），非固定天数"
-                  >
-                    近期年化
-                  </th>
-                  <th
-                    scope="col"
+                  />
+                  <SortTh
+                    label="更新于"
+                    sortKey="lastUpdated"
+                    sort={sort}
+                    onSort={handleSort}
                     className={assetThNum}
+                    align="right"
                     title="最近估值或行情更新日期；超过一个月未更新时数据行会标黄"
-                  >
-                    更新于
-                  </th>
+                  />
                   <th scope="col" className={assetThAction}>
                     操作
                   </th>
                 </tr>
               </thead>
               <tbody>
-                {snaps.map((s) => (
+                {sortedSnaps.map((s) => (
                   <AssetTableRow
                     key={s.asset.id}
                     snap={s}
                     type={type}
                     onOpen={() => setModal({ kind: 'detail', assetId: s.asset.id })}
-                    onNlTx={() => setModal({ kind: 'nlTx', asset: s.asset })}
+                    onRecordTx={() => setModal(openRecordTx({ asset: s.asset }))}
                     onValuation={() =>
-                      setModal({ kind: 'tx', asset: s.asset, defaultType: 'VALUATION' })
+                      setModal(openRecordTx({ asset: s.asset, defaultType: 'VALUATION' }))
                     }
                   />
                 ))}
@@ -187,21 +237,22 @@ export default function Assets() {
 
           {/* 移动端卡片 */}
           <div className="space-y-2 p-4 md:hidden">
-            {snaps.map((s) => (
+            {sortedSnaps.map((s) => (
               <AssetMobileCard
                 key={s.asset.id}
                 snap={s}
                 type={type}
                 onOpen={() => setModal({ kind: 'detail', assetId: s.asset.id })}
-                onNlTx={() => setModal({ kind: 'nlTx', asset: s.asset })}
+                onRecordTx={() => setModal(openRecordTx({ asset: s.asset }))}
                 onValuation={() =>
-                  setModal({ kind: 'tx', asset: s.asset, defaultType: 'VALUATION' })
+                  setModal(openRecordTx({ asset: s.asset, defaultType: 'VALUATION' }))
                 }
               />
             ))}
           </div>
         </Card>
-      ))}
+        )
+      })}
 
       {modal?.kind === 'add' && (
         <Modal title="添加资产" onClose={() => setModal(null)}>
@@ -228,93 +279,15 @@ export default function Assets() {
         </Modal>
       )}
 
-      {modal?.kind === 'nlTx' && (
-        <Modal
-          title={modal.asset ? `${modal.asset.name} · 记一笔` : '记一笔流水'}
-          onClose={() => closeTx(modal, setModal)}
-        >
-          <NlTxInput
-            embedded
-            assets={assets}
-            settings={settings}
-            fixedAssetId={modal.asset?.id}
-            onParsed={(result, rawInput) =>
-              setModal({
-                kind: 'nlConfirm',
-                asset: modal.asset,
-                result,
-                rawInput,
-                returnAssetId: modal.returnAssetId,
-              })
-            }
-            onManual={() =>
-              setModal({
-                kind: 'tx',
-                asset: modal.asset,
-                returnAssetId: modal.returnAssetId,
-              })
-            }
-          />
-        </Modal>
-      )}
-
-      {modal?.kind === 'nlConfirm' && (
-        <Modal
-          title={modal.asset ? `${modal.asset.name} · 确认解析结果` : '确认 AI 解析结果'}
-          onClose={() => closeTx(modal, setModal)}
-        >
-          <p className="mb-3 text-xs text-slate-500">
-            原文:「{modal.rawInput}」{!modal.asset && ' — 请核对字段后记录'}
-          </p>
-          {modal.result.warnings.map((w) => (
-            <p key={w} className={`mb-2 ${color.alertWarn}`}>
-              {w}
-            </p>
-          ))}
-          <TxForm
-            assets={assets}
-            fixedAssetId={modal.asset?.id}
-            initial={nlResultToTxInitial(modal.result, assets, modal.asset?.id)}
-            onSubmit={(t) => {
-              addTransaction(t)
-              closeTx(modal, setModal)
-            }}
-            onCancel={() => closeTx(modal, setModal)}
-          />
-        </Modal>
-      )}
-
-      {modal?.kind === 'tx' && (
-        <Modal
-          title={modal.asset ? `${modal.asset.name} · 手动填写` : '记一笔'}
-          onClose={() => closeTx(modal, setModal)}
-        >
-          <TxForm
-            assets={assets}
-            fixedAssetId={modal.asset?.id}
-            defaultType={modal.defaultType}
-            onSubmit={(t) => {
-              addTransaction(t)
-              closeTx(modal, setModal)
-            }}
-            onCancel={() => closeTx(modal, setModal)}
-          />
-          <p className="mt-3 text-center">
-            <button
-              type="button"
-              className={`text-xs ${color.link} hover:underline`}
-              onClick={() =>
-                setModal({
-                  kind: 'nlTx',
-                  asset: modal.asset,
-                  returnAssetId: modal.returnAssetId,
-                })
-              }
-            >
-              改用 AI 解析
-            </button>
-          </p>
-        </Modal>
+      {isRecordTxModal(modal) && (
+        <RecordTxModals
+          modal={modal}
+          assets={assets}
+          settings={settings}
+          onClose={() => closeRecordTxModal(modal, setModal)}
+          onChange={setModal}
+          onSubmit={addTransaction}
+        />
       )}
 
       {modal?.kind === 'editTx' && (
@@ -337,7 +310,7 @@ export default function Assets() {
           assetId={modal.assetId}
           onClose={() => setModal(null)}
           onEdit={(asset) => setModal({ kind: 'edit', asset })}
-          onAddTx={(asset) => setModal({ kind: 'tx', asset, returnAssetId: modal.assetId })}
+          onAddTx={(asset) => setModal(openRecordTx({ asset, returnAssetId: modal.assetId }))}
           onEditTx={(tx) => setModal({ kind: 'editTx', tx, returnAssetId: modal.assetId })}
           onDelete={(asset) => {
             if (confirm(`确定删除「${asset.name}」及其全部交易记录?此操作不可恢复。`)) {
@@ -355,13 +328,13 @@ function AssetTableRow({
   snap: s,
   type,
   onOpen,
-  onNlTx,
+  onRecordTx,
   onValuation,
 }: {
   snap: AssetSnapshot
   type: AssetType
   onOpen: () => void
-  onNlTx: () => void
+  onRecordTx: () => void
   onValuation: () => void
 }) {
   return (
@@ -403,7 +376,7 @@ function AssetTableRow({
       <td className="px-4 py-2.5 text-right" onClick={(e) => e.stopPropagation()}>
         <button
           className="rounded-lg px-2 py-1 text-xs text-blue-600 transition-colors hover:bg-blue-50"
-          onClick={onNlTx}
+          onClick={onRecordTx}
         >
           记一笔
         </button>
@@ -422,13 +395,13 @@ function AssetMobileCard({
   snap: s,
   type,
   onOpen,
-  onNlTx,
+  onRecordTx,
   onValuation,
 }: {
   snap: AssetSnapshot
   type: AssetType
   onOpen: () => void
-  onNlTx: () => void
+  onRecordTx: () => void
   onValuation: () => void
 }) {
   return (
@@ -471,7 +444,7 @@ function AssetMobileCard({
       <div className="mt-2 flex gap-2" onClick={(e) => e.stopPropagation()}>
         <button
           className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-blue-600"
-          onClick={onNlTx}
+          onClick={onRecordTx}
         >
           记一笔
         </button>
