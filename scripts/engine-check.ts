@@ -34,7 +34,7 @@ check('xirr 同向现金流返回 null', xirr([
   { date: '2025-06-01', amount: -50 },
 ]) === null)
 
-const demo = buildDemoData()
+const demo = buildDemoData(DEFAULT_SETTINGS)
 const engine = new PortfolioEngine(demo.assets, demo.transactions, demo.prices, DEFAULT_SETTINGS)
 const summary = engine.summary()
 
@@ -95,13 +95,17 @@ check('茅台 XIRR 为正', moutai.xirr != null && moutai.xirr > 0, moutai.xirr)
 const catl = summary.snapshots.find((s) => s.asset.name === '宁德时代')!
 check('宁德时代浮亏', catl.totalPnlCNY < 0, catl.totalPnlCNY)
 
-// 9. BTC 用行情缓存定价:0.08 × 510000 = 40800
+// 9. BTC 无假行情,按最近买入价 480000:0.08 × 480000 = 38400
 const btc = summary.snapshots.find((s) => s.asset.name === '比特币')!
-check('BTC 市值 = 0.08 × 510000', Math.abs(btc.valueCNY - 40800) < 1, btc.valueCNY)
+check('BTC 市值 = 0.08 × 480000', Math.abs(btc.valueCNY - 38400) < 1, btc.valueCNY)
 
-// 10. AAPL(USD):行情缓存 1480 CNY/股 × 20
+// 10. AAPL(USD):按最近估值 4120 USD(20 股 × 206)
 const aapl = summary.snapshots.find((s) => s.asset.symbol === 'AAPL')!
-check('AAPL 市值 = 20 × 1480 CNY', Math.abs(aapl.valueCNY - 29600) < 1, aapl.valueCNY)
+check('AAPL 市值 = 4120 USD × fx', Math.abs(aapl.valueCNY - 4120 * DEFAULT_SETTINGS.fxRates.USD) < 1, aapl.valueCNY)
+
+// 10b. USDT 买入价与行情均取自 fxRates,盈亏应≈0
+const usdt = summary.snapshots.find((s) => s.asset.name === 'USDT')!
+check('USDT 稳定币盈亏≈0', Math.abs(usdt.totalPnlCNY) < 1, usdt.totalPnlCNY)
 
 // 11. 净值历史:单调时间、首尾覆盖
 const h = summary.history

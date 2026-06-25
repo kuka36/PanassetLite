@@ -30,6 +30,8 @@ interface AppState {
   deleteStrategyTransaction: (id: string) => void
 
   saveSettings: (patch: Partial<Settings>) => void
+  /** 仅刷新 CoinGecko 加密货币行情,写入 panasset.prices */
+  refreshCryptoPrices: () => Promise<string>
   refreshPrices: () => Promise<string>
   importData: (json: string) => { assets: number; transactions: number }
   loadDemo: () => boolean
@@ -155,6 +157,32 @@ export const useStore = create<AppState>((set, get) => ({
     set({ settings })
   },
 
+  /** 仅刷新 CoinGecko 加密货币行情;同日重复点击覆盖当天价格点 */
+  async refreshCryptoPrices() {
+    const { assets, settings } = get()
+    const hasCrypto = assets.some(
+      (a) => !a.archived && a.priceSource === 'coingecko' && a.symbol,
+    )
+    if (!hasCrypto) return '当前没有配置 CoinGecko 自动行情的加密资产'
+
+    set({ refreshing: true })
+    try {
+      const prices: PriceHistory = JSON.parse(JSON.stringify(get().prices))
+      const r = await fetchCryptoPrices(assets, prices)
+      const newSettings = { ...settings, pricesUpdatedAt: Date.now() }
+      StorageService.savePrices(prices)
+      StorageService.saveSettings(newSettings)
+      set({ prices, settings: newSettings })
+
+      const messages: string[] = []
+      if (r.updated.length) messages.push(`已更新 ${r.updated.join('、')}`)
+      if (r.failed.length) messages.push(`失败:${r.failed.join('、')}`)
+      return messages.join('; ') || '没有获取到新价格'
+    } finally {
+      set({ refreshing: false })
+    }
+  },
+
   /** 一键刷新:汇率 → 加密货币 → 美股(已配置 key 时)。返回结果摘要 */
   async refreshPrices() {
     const { assets, settings } = get()
@@ -209,7 +237,7 @@ export const useStore = create<AppState>((set, get) => ({
 
   loadDemo() {
     if (get().assets.length > 0 && !confirm('当前已有数据,加载演示数据会覆盖它们。继续?')) return false
-    const demo = buildDemoData()
+    const demo = buildDemoData(get().settings)
     StorageService.saveAssets(demo.assets)
     StorageService.saveTransactions(demo.transactions)
     StorageService.savePrices(demo.prices)

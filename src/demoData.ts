@@ -1,8 +1,9 @@
-import type { Asset, PriceHistory, Strategy, StrategyTransaction, Transaction } from './types'
+import type { Asset, PriceHistory, Settings, Strategy, StrategyTransaction, Transaction } from './types'
+import { DEFAULT_SETTINGS } from './types'
 import { uid } from './services/storage'
 
 /** 生成演示数据:银行存款 + 两个支付宝理财 + 三只股票 + 房贷 + BTC/USDT + 若干策略 */
-export function buildDemoData(): {
+export function buildDemoData(settings: Settings = DEFAULT_SETTINGS): {
   assets: Asset[]
   transactions: Transaction[]
   prices: PriceHistory
@@ -14,11 +15,6 @@ export function buildDemoData(): {
     const d = new Date(now.getFullYear(), now.getMonth() - monthsAgo, dd, h, min, sec, 0)
     if (d > now) d.setMonth(d.getMonth() - 1)
     return d.getTime()
-  }
-
-  const dateKey = (monthsAgo: number, dd = 5): string => {
-    const d = new Date(at(monthsAgo, dd))
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
   }
 
   const mk = (a: Omit<Asset, 'id' | 'createdAt'>): Asset => ({
@@ -44,6 +40,9 @@ export function buildDemoData(): {
   const mortgage = mk({ name: '房贷(剩余本金)', type: 'debt', currency: 'CNY', priceSource: 'manual', platform: '建设银行' })
 
   const assets = [bank, yuebao, wealth2, moutai, catl, aapl, btc, usdt, mortgage]
+
+  const usdCny = settings.fxRates.USD
+  const usdtCny = settings.fxRates.USDT ?? usdCny
 
   const txs: Array<Omit<Transaction, 'id' | 'createdAt' | 'updatedAt'>> = [
     { assetId: bank.id, type: 'DEPOSIT', occurredAt: at(8), amount: 60000, note: '初始结余' },
@@ -75,7 +74,7 @@ export function buildDemoData(): {
     { assetId: btc.id, type: 'BUY', occurredAt: at(8, 25), quantity: 0.05, price: 430000 },
     { assetId: btc.id, type: 'BUY', occurredAt: at(3, 9), quantity: 0.03, price: 480000 },
 
-    { assetId: usdt.id, type: 'BUY', occurredAt: at(4, 6), quantity: 2000, price: 7.15 },
+    { assetId: usdt.id, type: 'BUY', occurredAt: at(4, 6), quantity: 2000, price: usdtCny },
 
     { assetId: mortgage.id, type: 'BORROW', occurredAt: at(8), amount: 800000, note: '剩余本金' },
     ...[7, 6, 5, 4, 3, 2, 1, 0].map((i) => ({
@@ -92,11 +91,8 @@ export function buildDemoData(): {
     return { ...t, id: uid(), createdAt: ts, updatedAt: ts }
   })
 
-  const prices: PriceHistory = {
-    bitcoin: { [dateKey(1, 22)]: 495000, [dateKey(0, 6)]: 510000 },
-    tether: { [dateKey(0, 6)]: 7.18 },
-    AAPL: { [dateKey(0, 6)]: 1480 },
-  }
+  // 不写入假行情:避免 panasset.prices 污染正式使用;演示资产靠流水定价,真实行情由设置页手动拉取
+  const prices: PriceHistory = {}
 
   const btcDca = mkStrategy({
     assetId: btc.id,

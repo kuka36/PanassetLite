@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useStore } from '../store'
 import { StorageService } from '../services/storage'
 import { fetchFxRates } from '../services/prices'
@@ -9,12 +9,27 @@ import { formatFxRate, staleUpdateCls } from '../utils/format'
 import { isLocalLlmBaseUrl, isLocalLlmUnavailableOnRemoteHost } from '../services/llmClient'
 
 const FX_STALE_DAYS = 7
+const PRICES_STALE_DAYS = 7
 
 export default function Settings() {
+  const assets = useStore((s) => s.assets)
   const settings = useStore((s) => s.settings)
   const saveSettings = useStore((s) => s.saveSettings)
+  const refreshCryptoPrices = useStore((s) => s.refreshCryptoPrices)
+  const refreshing = useStore((s) => s.refreshing)
   const loadDemoData = useStore((s) => s.loadDemo)
   const reload = useStore((s) => s.reload)
+
+  const cryptoSymbols = useMemo(
+    () => [
+      ...new Set(
+        assets
+          .filter((a) => !a.archived && a.priceSource === 'coingecko' && a.symbol)
+          .map((a) => a.symbol!.toLowerCase()),
+      ),
+    ],
+    [assets],
+  )
   const [msg, setMsg] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
 
@@ -52,6 +67,15 @@ export default function Settings() {
       flash('汇率已自动更新(Frankfurter/欧洲央行)')
     } catch (e) {
       flash(`自动更新失败:${(e as Error).message}`)
+    }
+  }
+
+  const autoCrypto = async () => {
+    try {
+      const result = await refreshCryptoPrices()
+      flash(result.startsWith('当前没有') || result.startsWith('失败:') ? result : `加密货币行情已更新:${result}`)
+    } catch (e) {
+      flash(`加密货币行情更新失败:${(e as Error).message}`)
     }
   }
 
@@ -129,7 +153,31 @@ export default function Settings() {
         title="行情 API(可选)"
         desc="加密货币行情使用 CoinGecko 免费接口,无需配置。美股行情需要 Finnhub 免费 key(finnhub.io 注册即得)。"
       >
-        <label className={labelCls}>Finnhub API Key</label>
+        <div className="space-y-3">
+          <div>
+            <p className="text-xs text-slate-500">
+              为行情来源选 CoinGecko 的加密资产拉取 CNY 单价,写入本地并按日保存(同一天重复获取以最后一次为准)。
+            </p>
+            {cryptoSymbols.length > 0 && (
+              <p className="mt-1 text-xs text-slate-500">
+                将更新:{cryptoSymbols.join('、')}
+              </p>
+            )}
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <button className={btnPrimary} onClick={autoCrypto} disabled={refreshing}>
+                {refreshing ? '获取中…' : '自动获取加密货币行情'}
+              </button>
+              {settings.pricesUpdatedAt && (
+                <span
+                  className={`text-xs ${staleUpdateCls(new Date(settings.pricesUpdatedAt).toISOString(), PRICES_STALE_DAYS)}`}
+                >
+                  上次更新:{new Date(settings.pricesUpdatedAt).toLocaleString('zh-CN')}
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+        <label className={`${labelCls} mt-5`}>Finnhub API Key</label>
         <input
           className={inputCls}
           type="password"
