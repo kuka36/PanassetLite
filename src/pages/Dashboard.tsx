@@ -5,6 +5,7 @@ import { useStore } from '../store'
 import EChart from '../components/EChart'
 import { lightAxis, lightTooltip } from '../components/chartTheme'
 import { Card, CardBody, CardHeader, MetricCard } from '../components/ui/Card'
+import PeriodReturnsCard from '../components/PeriodReturnsCard'
 import { btnGhost } from '../components/Modal'
 import { color, hexAlpha, palette } from '../theme/colors'
 import { ASSET_TYPE_COLOR, ASSET_TYPE_LABEL } from '../types'
@@ -180,27 +181,7 @@ export default function Dashboard({ goTo }: { goTo: (page: string) => void }) {
         />
       </div>
 
-      <Card>
-        <CardHeader>
-          <h3 className="text-sm font-medium text-slate-700">区间收益</h3>
-        </CardHeader>
-        <CardBody>
-          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-            {summary.periodReturns.map((p) => (
-              <div key={p.key}>
-                <p className="text-xs text-slate-500">{p.label}</p>
-                <p className={`mt-1 text-lg font-semibold tabular-nums ${pnlColor(p.pnlCNY)}`}>
-                  {p.pnlCNY > 0 ? '+' : ''}
-                  {fmtMoney(p.pnlCNY)}
-                </p>
-                <p className="mt-0.5 text-xs tabular-nums text-slate-500">
-                  {p.ratio != null ? `收益率 ${fmtPct(p.ratio)}` : '—'}
-                </p>
-              </div>
-            ))}
-          </div>
-        </CardBody>
-      </Card>
+      <PeriodReturnsCard returns={summary.periodReturns} />
 
       <div className="grid gap-4 xl:grid-cols-5">
         <Card className="xl:col-span-3">

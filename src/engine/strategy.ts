@@ -1,11 +1,17 @@
 import type {
+  PeriodReturn,
   Settings,
   Strategy,
   StrategyLedgerRow,
   StrategySnapshot,
   StrategyTransaction,
 } from '../types'
-import { buildValueLedgerRows, snapshotFromValueTxs } from './replayValue'
+import {
+  buildValueLedgerRows,
+  periodReturnsFor,
+  replayValueBalance,
+  snapshotFromValueTxs,
+} from './replayValue'
 import { today } from '../services/storage'
 
 /**
@@ -78,6 +84,36 @@ export class StrategyEngine {
       if (tx.type === 'VALUATION') return tx.value ?? null
       return tx.amount ?? null
     }).reverse()
+  }
+
+  /** 某日策略市值（CNY）。策略无行情插值，市值仅由 VALUATION/存取事件逐笔重放得出 */
+  valueAtCNY(strategy: Strategy, date: string): number {
+    const txs = (this.txByStrategy.get(strategy.id) ?? []).filter((t) => t.date <= date)
+    const valueNative = Math.max(0, replayValueBalance(txs))
+    return valueNative * this.fx(strategy.currency)
+  }
+
+  /** 累计现金流（CNY）截至某日：in = 投入(DEPOSIT)，out = 收回(WITHDRAW) */
+  private flowsUpTo(strategy: Strategy, date: string): { in: number; out: number } {
+    const fx = this.fx(strategy.currency)
+    let totalIn = 0
+    let totalOut = 0
+    for (const tx of this.txByStrategy.get(strategy.id) ?? []) {
+      if (tx.date > date) break
+      if (tx.type === 'DEPOSIT') totalIn += (tx.amount ?? 0) * fx
+      if (tx.type === 'WITHDRAW') totalOut += (tx.amount ?? 0) * fx
+    }
+    return { in: totalIn, out: totalOut }
+  }
+
+  /** 给定策略集合的区间收益（本周/本月/今年以来/近一年），与组合页同口径 */
+  periodReturnsForStrategies(strategies: Strategy[]): PeriodReturn[] {
+    return periodReturnsFor(
+      strategies,
+      (s, date) => this.valueAtCNY(s, date),
+      (s, date) => this.flowsUpTo(s, date),
+      today(),
+    )
   }
 
   /** 某资产下的所有策略快照（用于资产详情展示） */

@@ -13,6 +13,7 @@ import StrategyForm from '../components/StrategyForm'
 import StrategyList from '../components/StrategyList'
 import StrategyDetail from '../components/StrategyDetail'
 import StrategyFilters from '../components/StrategyFilters'
+import PeriodReturnsCard from '../components/PeriodReturnsCard'
 import { Card, CardHeader, MetricCard } from '../components/ui/Card'
 import { useTableSort } from '../hooks/useTableSort'
 import type { StrategySnapshot } from '../types'
@@ -20,7 +21,7 @@ import { STRATEGY_KIND_LABEL } from '../types'
 import { fmtMoney, fmtPct, isUpdateStale, pnlColor, staleUpdateCls } from '../utils/format'
 import { sortBy, type SortState } from '../utils/tableSort'
 
-type StrategySortKey = 'name' | 'kind' | 'asset' | 'valueCNY' | 'totalPnlCNY' | 'xirr' | 'lastUpdated'
+type StrategySortKey = 'name' | 'kind' | 'asset' | 'valueCNY' | 'totalPnlCNY' | 'xirr' | 'recentAnnualized' | 'lastUpdated'
 
 const STRATEGY_TEXT_KEYS: readonly StrategySortKey[] = ['name', 'kind', 'asset']
 const DEFAULT_STRATEGY_SORT: SortState<StrategySortKey> = { key: 'valueCNY', dir: 'desc' }
@@ -103,6 +104,9 @@ function StrategyTableRow({
       <td className={`px-3 py-2.5 text-right tabular-nums ${snap.xirr != null ? pnlColor(snap.xirr) : 'text-slate-400'}`}>
         {snap.xirr != null ? fmtPct(snap.xirr) : '—'}
       </td>
+      <td className={`px-3 py-2.5 text-right tabular-nums ${snap.recentAnnualized != null ? pnlColor(snap.recentAnnualized) : 'text-slate-400'}`}>
+        {snap.recentAnnualized != null ? fmtPct(snap.recentAnnualized) : '—'}
+      </td>
       <td
         className={`px-3 py-2.5 text-right text-xs tabular-nums ${staleUpdateCls(snap.lastUpdated)}`}
         title={isUpdateStale(snap.lastUpdated) ? '已超过一个月未更新,建议更新估值' : undefined}
@@ -170,6 +174,7 @@ export default function Strategies({ initial }: Props) {
       valueCNY: (s) => s.valueCNY,
       totalPnlCNY: (s) => s.totalPnlCNY,
       xirr: (s) => s.xirr,
+      recentAnnualized: (s) => s.recentAnnualized,
       lastUpdated: (s) => s.lastUpdated,
     }),
     [assetMap],
@@ -187,6 +192,12 @@ export default function Strategies({ initial }: Props) {
 
   const totalValue = filtered.reduce((sum, s) => sum + s.valueCNY, 0)
   const totalPnl = filtered.reduce((sum, s) => sum + s.totalPnlCNY, 0)
+
+  const filteredStrategies = useMemo(() => filtered.map((s) => s.strategy), [filtered])
+  const periodReturns = useMemo(
+    () => engine.periodReturnsForStrategies(filteredStrategies),
+    [engine, filteredStrategies],
+  )
 
   const refreshSnap = (old: StrategySnapshot): StrategySnapshot =>
     engine.snapshotById(old.strategy.id) ?? old
@@ -378,6 +389,8 @@ export default function Strategies({ initial }: Props) {
         />
       </div>
 
+      {filtered.length > 0 && <PeriodReturnsCard returns={periodReturns} />}
+
       <StrategyFilters
         filterAsset={filterAsset}
         filterKind={filterKind}
@@ -406,7 +419,16 @@ export default function Strategies({ initial }: Props) {
                 <SortTh label="归属账户" sortKey="asset" sort={sort} onSort={handleSort} className="px-3 py-3 font-medium" />
                 <SortTh label="市值" sortKey="valueCNY" sort={sort} onSort={handleSort} className="px-3 py-3 font-medium" align="right" />
                 <SortTh label="累计盈亏" sortKey="totalPnlCNY" sort={sort} onSort={handleSort} className="px-3 py-3 font-medium" align="right" />
-                <SortTh label="年化(XIRR)" sortKey="xirr" sort={sort} onSort={handleSort} className="px-3 py-3 font-medium" align="right" />
+                <SortTh label="年化(XIRR)" sortKey="xirr" sort={sort} onSort={handleSort} className="px-3 py-3 font-medium" align="right" title="自开始跟踪以来的内部收益率" />
+                <SortTh
+                  label="近期年化"
+                  sortKey="recentAnnualized"
+                  sort={sort}
+                  onSort={handleSort}
+                  className="px-3 py-3 font-medium"
+                  align="right"
+                  title="最近两次估值之间的区间年化"
+                />
                 <SortTh
                   label="更新于"
                   sortKey="lastUpdated"
@@ -429,7 +451,7 @@ export default function Strategies({ initial }: Props) {
               ))}
               {showClosed && sortedClosed.length > 0 && (
                 <tr className="border-t border-slate-200 bg-slate-50/50">
-                  <td colSpan={7} className="px-4 py-2 text-xs text-slate-400">
+                  <td colSpan={8} className="px-4 py-2 text-xs text-slate-400">
                     已关闭的策略
                   </td>
                 </tr>
@@ -446,7 +468,7 @@ export default function Strategies({ initial }: Props) {
                 ))}
               {tableEmpty && (
                 <tr>
-                  <td colSpan={7} className="px-4 py-12 text-center text-slate-500">
+                  <td colSpan={8} className="px-4 py-12 text-center text-slate-500">
                     没有符合筛选条件的策略
                   </td>
                 </tr>

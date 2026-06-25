@@ -11,7 +11,7 @@ import type {
 } from '../types'
 import { isQuantityBased } from '../types'
 import { xirr, type CashFlow } from './xirr'
-import { applyValueTxStep, buildValueFlows, buildValueLedgerRows, recentAnnualizedFromValueTxs } from './replayValue'
+import { applyValueTxStep, buildValueFlows, buildValueLedgerRows, periodReturnsFor, recentAnnualizedFromValueTxs } from './replayValue'
 import { today } from '../services/storage'
 
 const DAY_MS = 86400_000
@@ -287,38 +287,13 @@ export class PortfolioEngine {
    * 与 totalPnlCNY 同口径,自动剔除区间内存取/买卖的本金变动;负债不计入。
    */
   private periodReturns(assets: Asset[]): PeriodReturn[] {
-    const t = today()
-    const now = new Date()
-    const fmtDate = (d: Date) =>
-      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-
-    // 各区间的基准日(区间起点的前一天)
-    const dow = (now.getDay() + 6) % 7 // 周一=0
-    const periods: { key: PeriodReturn['key']; label: string; baseline: Date }[] = [
-      { key: 'week', label: '本周', baseline: new Date(now.getFullYear(), now.getMonth(), now.getDate() - dow - 1) },
-      { key: 'month', label: '本月', baseline: new Date(now.getFullYear(), now.getMonth(), 0) },
-      { key: 'ytd', label: '今年以来', baseline: new Date(now.getFullYear() - 1, 11, 31) },
-      { key: 'year', label: '近一年', baseline: new Date(now.getFullYear() - 1, now.getMonth(), now.getDate()) },
-    ]
-
     const nonDebt = assets.filter((a) => a.type !== 'debt')
-    return periods.map(({ key, label, baseline }) => {
-      const b = fmtDate(baseline)
-      let pnl = 0
-      let baseValue = 0
-      let netInflow = 0
-      for (const a of nonDebt) {
-        const v0 = this.valueAt(a, b)
-        const v1 = this.valueAt(a, t)
-        const f0 = this.flowsUpTo(a, b)
-        const f1 = this.flowsUpTo(a, t)
-        pnl += v1 + f1.out - f1.in - (v0 + f0.out - f0.in)
-        baseValue += v0
-        netInflow += f1.in - f0.in - (f1.out - f0.out)
-      }
-      const base = baseValue + Math.max(0, netInflow)
-      return { key, label, pnlCNY: pnl, ratio: base > 1 ? pnl / base : null }
-    })
+    return periodReturnsFor(
+      nonDebt,
+      (a, date) => this.valueAt(a, date),
+      (a, date) => this.flowsUpTo(a, date),
+      today(),
+    )
   }
 
   // ── 组合汇总 ────────────────────────────────────────────────────────────

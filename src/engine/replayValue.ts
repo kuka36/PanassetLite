@@ -1,3 +1,4 @@
+import type { PeriodReturn } from '../types'
 import { type CashFlow, xirr } from './xirr'
 
 const DAY_MS = 86400_000
@@ -188,6 +189,50 @@ export function buildValueLedgerRows<T extends ValueTx>(
   }
 
   return rows
+}
+
+/**
+ * 区间收益（本周/本月/今年以来/近一年）的通用计算。
+ * 收益 = 区间末盈亏 - 区间初盈亏（盈亏 = 市值 + 累计收回 - 累计投入），
+ * 与 totalPnlCNY 同口径，自动剔除区间内的存取/买卖本金变动。
+ * valueAt / flowsUpTo 由调用方按其领域语义提供（资产含行情插值，策略为余额重放）。
+ */
+export function periodReturnsFor<T>(
+  items: readonly T[],
+  valueAt: (item: T, date: string) => number,
+  flowsUpTo: (item: T, date: string) => { in: number; out: number },
+  todayStr: string,
+): PeriodReturn[] {
+  const now = new Date()
+  const fmtDate = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+
+  // 各区间的基准日（区间起点的前一天）
+  const dow = (now.getDay() + 6) % 7 // 周一=0
+  const periods: { key: PeriodReturn['key']; label: string; baseline: Date }[] = [
+    { key: 'week', label: '本周', baseline: new Date(now.getFullYear(), now.getMonth(), now.getDate() - dow - 1) },
+    { key: 'month', label: '本月', baseline: new Date(now.getFullYear(), now.getMonth(), 0) },
+    { key: 'ytd', label: '今年以来', baseline: new Date(now.getFullYear() - 1, 11, 31) },
+    { key: 'year', label: '近一年', baseline: new Date(now.getFullYear() - 1, now.getMonth(), now.getDate()) },
+  ]
+
+  return periods.map(({ key, label, baseline }) => {
+    const b = fmtDate(baseline)
+    let pnl = 0
+    let baseValue = 0
+    let netInflow = 0
+    for (const item of items) {
+      const v0 = valueAt(item, b)
+      const v1 = valueAt(item, todayStr)
+      const f0 = flowsUpTo(item, b)
+      const f1 = flowsUpTo(item, todayStr)
+      pnl += v1 + f1.out - f1.in - (v0 + f0.out - f0.in)
+      baseValue += v0
+      netInflow += f1.in - f0.in - (f1.out - f0.out)
+    }
+    const base = baseValue + Math.max(0, netInflow)
+    return { key, label, pnlCNY: pnl, ratio: base > 1 ? pnl / base : null }
+  })
 }
 
 /**

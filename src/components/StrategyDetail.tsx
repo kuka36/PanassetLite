@@ -1,12 +1,15 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import type { StrategyLedgerRow, StrategySnapshot, StrategyTransaction } from '../types'
 import { STRATEGY_KIND_LABEL, STRATEGY_TX_TYPE_LABEL } from '../types'
 import { useStore } from '../store'
 import { useStrategyEngine } from '../hooks/useStrategySummary'
 import Modal from './Modal'
 import StrategyTxForm from './StrategyTxForm'
+import EChart from './EChart'
+import { lightAxis, lightTooltip } from './chartTheme'
 import { btnGhost, btnPrimary } from './Modal'
-import { fmtMoney, fmtNum, fmtPct, pnlColor } from '../utils/format'
+import { hexAlpha, palette } from '../theme/colors'
+import { fmtCompact, fmtMoney, fmtNum, fmtPct, pnlColor } from '../utils/format'
 
 type ModalState =
   | { kind: 'addTx' }
@@ -85,6 +88,62 @@ export default function StrategyDetail({
   const cur = strategy.currency
   const kindLabel = STRATEGY_KIND_LABEL[strategy.kind]
 
+  // 市值趋势：ledger 为 newest-first，按日期取每日最终余额，按时间正序绘制
+  const trend = useMemo(() => {
+    const byDate = new Map<string, number>()
+    for (let i = ledger.length - 1; i >= 0; i--) {
+      byDate.set(ledger[i].tx.date, ledger[i].balanceAfter)
+    }
+    return { dates: [...byDate.keys()], values: [...byDate.values()] }
+  }, [ledger])
+
+  const trendOption = useMemo(
+    () => ({
+      tooltip: {
+        trigger: 'axis' as const,
+        ...lightTooltip,
+        valueFormatter: (v: unknown) => fmtNum(Number(v)),
+      },
+      grid: { left: 12, right: 16, top: 16, bottom: 8, containLabel: true },
+      xAxis: {
+        type: 'category' as const,
+        data: trend.dates,
+        ...lightAxis,
+        boundaryGap: false,
+      },
+      yAxis: {
+        type: 'value' as const,
+        ...lightAxis,
+        axisLabel: { color: palette.textMuted, formatter: (v: number) => fmtCompact(v) },
+        scale: true,
+      },
+      series: [
+        {
+          name: '市值',
+          type: 'line' as const,
+          data: trend.values.map((v) => Math.round(v)),
+          smooth: true,
+          showSymbol: false,
+          lineStyle: { width: 2.5, color: palette.blue600 },
+          areaStyle: {
+            color: {
+              type: 'linear' as const,
+              x: 0,
+              y: 0,
+              x2: 0,
+              y2: 1,
+              colorStops: [
+                { offset: 0, color: hexAlpha(palette.blue600, 0.2) },
+                { offset: 1, color: hexAlpha(palette.blue600, 0.02) },
+              ],
+            },
+          },
+        },
+      ],
+    }),
+    [trend],
+  )
+
   return (
     <Modal
       title={
@@ -148,6 +207,14 @@ export default function StrategyDetail({
           cls={snap.recentAnnualized != null ? pnlColor(snap.recentAnnualized) : ''}
         />
       </div>
+
+      {/* 市值趋势 */}
+      {trend.dates.length >= 2 && (
+        <div className="mb-4 rounded-xl border border-slate-100 bg-slate-50 p-3">
+          <p className="mb-1 text-xs text-slate-400">市值趋势（{cur}）</p>
+          <EChart option={trendOption} height={200} />
+        </div>
+      )}
 
       {/* 操作栏 */}
       <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">

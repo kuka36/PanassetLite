@@ -73,8 +73,13 @@ function StrategyCard({
               </p>
             </div>
           </div>
-          <p className="text-xs">
+          <p className="flex items-center justify-between text-xs">
             <span className={staleUpdateCls(snap.lastUpdated)}>更新 {snap.lastUpdated ?? '—'}</span>
+            {snap.recentAnnualized != null && (
+              <span className="text-slate-400">
+                近期年化 <span className={pnlColor(snap.recentAnnualized)}>{fmtPct(snap.recentAnnualized)}</span>
+              </span>
+            )}
           </p>
         </CardBody>
       </Card>
