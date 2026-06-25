@@ -1,5 +1,6 @@
 import type { Asset, PriceHistory, Settings, Strategy, StrategyTransaction, Transaction } from '../types'
 import { DEFAULT_SETTINGS } from '../types'
+import { migrateDateToOccurredAt } from '../utils/time'
 
 /**
  * StorageService — 本地优先持久化。
@@ -32,16 +33,38 @@ function write(key: string, value: unknown) {
   localStorage.setItem(key, JSON.stringify(value))
 }
 
+type LegacyTx = { date?: string; occurredAt?: number; createdAt?: number; updatedAt?: number }
+
+function normalizeTransaction(tx: LegacyTx & Transaction): Transaction {
+  const occurredAt =
+    tx.occurredAt ??
+    (tx.date ? migrateDateToOccurredAt(tx.date) : tx.createdAt ?? Date.now())
+  const { date: _d, ...rest } = tx as LegacyTx & Transaction & { date?: string }
+  return {
+    ...rest,
+    occurredAt,
+    updatedAt: tx.updatedAt ?? tx.createdAt ?? occurredAt,
+  }
+}
+
+function normalizeStrategyTransaction(tx: LegacyTx & StrategyTransaction): StrategyTransaction {
+  const occurredAt =
+    tx.occurredAt ??
+    (tx.date ? migrateDateToOccurredAt(tx.date) : tx.createdAt ?? Date.now())
+  const { date: _d, ...rest } = tx as LegacyTx & StrategyTransaction & { date?: string }
+  return {
+    ...rest,
+    occurredAt,
+  }
+}
+
 export const StorageService = {
   loadAssets: (): Asset[] => read(KEYS.assets, []),
   saveAssets: (assets: Asset[]) => write(KEYS.assets, assets),
 
   loadTransactions: (): Transaction[] => {
-    const txs = read<Array<Transaction & { updatedAt?: number }>>(KEYS.transactions, [])
-    return txs.map((tx) => ({
-      ...tx,
-      updatedAt: tx.updatedAt ?? tx.createdAt,
-    }))
+    const txs = read<Array<LegacyTx & Transaction>>(KEYS.transactions, [])
+    return txs.map(normalizeTransaction)
   },
   saveTransactions: (txs: Transaction[]) => write(KEYS.transactions, txs),
 
@@ -62,7 +85,10 @@ export const StorageService = {
   loadStrategies: (): Strategy[] => read(KEYS.strategies, []),
   saveStrategies: (strategies: Strategy[]) => write(KEYS.strategies, strategies),
 
-  loadStrategyTransactions: (): StrategyTransaction[] => read(KEYS.strategyTransactions, []),
+  loadStrategyTransactions: (): StrategyTransaction[] => {
+    const txs = read<Array<LegacyTx & StrategyTransaction>>(KEYS.strategyTransactions, [])
+    return txs.map(normalizeStrategyTransaction)
+  },
   saveStrategyTransactions: (txs: StrategyTransaction[]) => write(KEYS.strategyTransactions, txs),
 
   loadStrategiesShowClosed: (): boolean =>
@@ -77,7 +103,7 @@ export const StorageService = {
     return JSON.stringify(
       {
         app: 'PanassetLite',
-        version: 2,
+        version: 3,
         exportedAt: new Date().toISOString(),
         assets: this.loadAssets(),
         transactions: this.loadTransactions(),

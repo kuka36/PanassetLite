@@ -1,12 +1,11 @@
 import { useState } from 'react'
 import type { Asset, Transaction, TxType } from '../types'
 import { TX_TYPE_LABEL, isQuantityBased } from '../types'
-import { today } from '../services/storage'
+import { parseDatetimeLocal, toDatetimeLocalValue } from '../utils/time'
 import { btnGhost, btnPrimary, inputCls, labelCls } from './Modal'
 
 interface Props {
   assets: Asset[]
-  /** 固定资产时传入,否则可下拉选择 */
   fixedAssetId?: string
   defaultType?: TxType
   initial?: Transaction
@@ -30,7 +29,9 @@ export default function TxForm({ assets, fixedAssetId, defaultType, initial, onS
     initial?.type ??
       (defaultType && types.includes(defaultType) ? defaultType : types[0] ?? 'DEPOSIT'),
   )
-  const [date, setDate] = useState(initial?.date ?? today())
+  const [occurredAtInput, setOccurredAtInput] = useState(
+    toDatetimeLocalValue(initial?.occurredAt ?? Date.now()),
+  )
   const [quantity, setQuantity] = useState(initial?.quantity != null ? String(initial.quantity) : '')
   const [price, setPrice] = useState(initial?.price != null ? String(initial.price) : '')
   const [amount, setAmount] = useState(initial?.amount != null ? String(initial.amount) : '')
@@ -44,19 +45,21 @@ export default function TxForm({ assets, fixedAssetId, defaultType, initial, onS
     effType === 'BORROW' || effType === 'REPAY'
   const needsValue = effType === 'VALUATION'
 
+  const occurredAt = parseDatetimeLocal(occurredAtInput)
   const valid =
     !!asset &&
-    !!date &&
+    occurredAt != null &&
+    occurredAt <= Date.now() &&
     (!needsQty || (Number(quantity) > 0 && Number(price) > 0)) &&
     (!needsAmount || Number(amount) > 0) &&
     (!needsValue || Number(value) >= 0)
 
   const submit = () => {
-    if (!valid || !asset) return
+    if (!valid || !asset || occurredAt == null) return
     onSubmit({
       assetId: asset.id,
       type: effType,
-      date,
+      occurredAt,
       quantity: needsQty ? Number(quantity) : undefined,
       price: needsQty ? Number(price) : undefined,
       amount: needsAmount ? Number(amount) : undefined,
@@ -66,6 +69,7 @@ export default function TxForm({ assets, fixedAssetId, defaultType, initial, onS
   }
 
   const cur = asset?.currency ?? 'CNY'
+  const maxDatetime = toDatetimeLocalValue(Date.now())
 
   return (
     <div className="space-y-4">
@@ -98,13 +102,14 @@ export default function TxForm({ assets, fixedAssetId, defaultType, initial, onS
           </select>
         </div>
         <div>
-          <label className={labelCls}>日期 *</label>
+          <label className={labelCls}>发生时间 *</label>
           <input
-            type="date"
+            type="datetime-local"
+            step={1}
             className={inputCls}
-            value={date}
-            max={today()}
-            onChange={(e) => setDate(e.target.value)}
+            value={occurredAtInput}
+            max={maxDatetime}
+            onChange={(e) => setOccurredAtInput(e.target.value)}
           />
         </div>
       </div>

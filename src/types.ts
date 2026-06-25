@@ -75,8 +75,8 @@ export interface Transaction {
   id: string
   assetId: string
   type: TxType
-  /** YYYY-MM-DD */
-  date: string
+  /** 业务发生时刻（毫秒时间戳） */
+  occurredAt: number
   quantity?: number
   /** 单价(资产币种) */
   price?: number
@@ -140,8 +140,8 @@ export interface AssetSnapshot {
   totalPnlCNY: number
   /** 年化收益率(XIRR),无法计算时为 null */
   xirr: number | null
-  /** 最近一次估值/价格更新日期 */
-  lastUpdated?: string
+  /** 最近一次估值/价格更新时刻（毫秒时间戳） */
+  lastUpdated?: number
   /** 最近两次估值之间的区间年化(理财产品判断"还值不值得买") */
   recentAnnualized?: number | null
 }
@@ -225,8 +225,8 @@ export interface StrategyTransaction {
   id: string
   strategyId: string
   type: StrategyTxType
-  /** YYYY-MM-DD */
-  date: string
+  /** 业务发生时刻（毫秒时间戳） */
+  occurredAt: number
   /** DEPOSIT / WITHDRAW / INCOME 用 */
   amount?: number
   /** VALUATION：策略当日总市值（策略币种） */
@@ -250,7 +250,8 @@ export interface StrategySnapshot {
   xirr: number | null
   /** 最近两次 VALUATION 之间的区间年化 */
   recentAnnualized?: number | null
-  lastUpdated?: string
+  /** 最近一笔流水业务时刻（毫秒时间戳） */
+  lastUpdated?: number
 }
 
 /** 策略账本行（独立类型，不强转 TxLedgerRow，避免 tx: Transaction 硬类型） */

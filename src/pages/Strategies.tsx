@@ -18,7 +18,7 @@ import { Card, CardHeader, MetricCard } from '../components/ui/Card'
 import { useTableSort } from '../hooks/useTableSort'
 import type { StrategySnapshot } from '../types'
 import { STRATEGY_KIND_LABEL } from '../types'
-import { fmtMoney, fmtPct, isUpdateStale, pnlColor, staleUpdateCls } from '../utils/format'
+import { fmtDateTime, fmtMoney, fmtPct, isUpdateStale, pnlColor, staleUpdateCls } from '../utils/format'
 import { sortBy, type SortState } from '../utils/tableSort'
 
 type StrategySortKey = 'name' | 'kind' | 'asset' | 'valueCNY' | 'totalPnlCNY' | 'xirr' | 'recentAnnualized' | 'lastUpdated'
@@ -111,7 +111,7 @@ function StrategyTableRow({
         className={`px-3 py-2.5 text-right text-xs tabular-nums ${staleUpdateCls(snap.lastUpdated)}`}
         title={isUpdateStale(snap.lastUpdated) ? '已超过一个月未更新,建议更新估值' : undefined}
       >
-        {snap.lastUpdated ?? '—'}
+        {snap.lastUpdated != null ? fmtDateTime(snap.lastUpdated) : '—'}
       </td>
     </tr>
   )
@@ -430,13 +430,13 @@ export default function Strategies({ initial }: Props) {
                   title="最近两次估值之间的区间年化"
                 />
                 <SortTh
-                  label="更新于"
+                  label="最近记录"
                   sortKey="lastUpdated"
                   sort={sort}
                   onSort={handleSort}
                   className="px-3 py-3 font-medium"
                   align="right"
-                  title="最近估值更新日期；超过一个月未更新时数据行会标黄"
+                  title="末次流水对应的业务时间；超过一个月未更新时数据行会标黄"
                 />
               </tr>
             </thead>

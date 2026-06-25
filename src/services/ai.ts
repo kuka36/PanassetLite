@@ -194,7 +194,7 @@ export function analyzePortfolio(summary: PortfolioSummary): HealthReport {
       s.asset.type !== 'cash' &&
       s.asset.type !== 'debt' &&
       s.lastUpdated &&
-      now - Date.parse(s.lastUpdated) > 45 * 86400_000,
+      now - s.lastUpdated > 45 * 86400_000,
   )
   if (stale.length > 0) {
     score -= 4
@@ -264,7 +264,7 @@ export function buildPortfolioBrief(
       s.asset.type !== 'cash' &&
       s.asset.type !== 'debt' &&
       s.lastUpdated &&
-      now - Date.parse(s.lastUpdated) > 45 * 86400_000,
+      now - s.lastUpdated > 45 * 86400_000,
   )
   if (stale.length > 0) {
     if (privacy === 'detailed') {

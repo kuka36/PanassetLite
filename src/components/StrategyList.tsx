@@ -1,7 +1,7 @@
 import type { Asset, StrategySnapshot } from '../types'
 import { STRATEGY_KIND_LABEL } from '../types'
 import { Card, CardBody } from './ui/Card'
-import { fmtMoney, fmtPct, pnlColor, staleUpdateCls } from '../utils/format'
+import { fmtDateTime, fmtMoney, fmtPct, pnlColor, staleUpdateCls } from '../utils/format'
 
 interface Props {
   snapshots: StrategySnapshot[]
@@ -74,7 +74,9 @@ function StrategyCard({
             </div>
           </div>
           <p className="flex items-center justify-between text-xs">
-            <span className={staleUpdateCls(snap.lastUpdated)}>更新 {snap.lastUpdated ?? '—'}</span>
+            <span className={staleUpdateCls(snap.lastUpdated)}>
+              最近记录 {snap.lastUpdated != null ? fmtDateTime(snap.lastUpdated) : '—'}
+            </span>
             {snap.recentAnnualized != null && (
               <span className="text-slate-400">
                 近期年化 <span className={pnlColor(snap.recentAnnualized)}>{fmtPct(snap.recentAnnualized)}</span>

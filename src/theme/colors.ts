@@ -94,14 +94,14 @@ export function pnlTextCls(n: number): string {
   return color.pnlFlat
 }
 
-export function isUpdateStale(dateStr: string | undefined, thresholdDays = 30): boolean {
-  if (!dateStr) return false
-  const parsed = Date.parse(dateStr)
+export function isUpdateStale(date: string | number | undefined, thresholdDays = 30): boolean {
+  if (date == null) return false
+  const parsed = typeof date === 'number' ? date : Date.parse(date)
   if (Number.isNaN(parsed)) return false
   return Date.now() - parsed > thresholdDays * DAY_MS
 }
 
-/** 「更新于」列:超过一个月未更新时警示色 */
-export function staleTextCls(dateStr: string | undefined, thresholdDays = 30): string {
-  return isUpdateStale(dateStr, thresholdDays) ? color.stale : color.muted
+/** 「最近记录」列:超过一个月未更新时警示色 */
+export function staleTextCls(date: string | number | undefined, thresholdDays = 30): string {
+  return isUpdateStale(date, thresholdDays) ? color.stale : color.muted
 }

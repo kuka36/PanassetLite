@@ -11,10 +11,10 @@ import { TX_TYPE_LABEL } from '../types'
 import { fmtDateTime, fmtNum } from '../utils/format'
 import { sortBy, type SortState } from '../utils/tableSort'
 
-type TxSortKey = 'date' | 'updatedAt' | 'asset' | 'type' | 'detail' | 'note'
+type TxSortKey = 'occurredAt' | 'asset' | 'type' | 'detail' | 'note'
 
 const TX_TEXT_KEYS: readonly TxSortKey[] = ['asset', 'type', 'note']
-const DEFAULT_TX_SORT: SortState<TxSortKey> = { key: 'date', dir: 'desc' }
+const DEFAULT_TX_SORT: SortState<TxSortKey> = { key: 'occurredAt', dir: 'desc' }
 
 function txDetailSortValue(t: Transaction): number | null {
   if (t.amount != null) return t.amount
@@ -54,8 +54,7 @@ export default function Transactions() {
 
   const txAccessors = useMemo(
     (): Record<TxSortKey, (t: Transaction) => string | number | null | undefined> => ({
-      date: (t) => t.date,
-      updatedAt: (t) => t.updatedAt,
+      occurredAt: (t) => t.occurredAt,
       asset: (t) => assetMap.get(t.assetId)?.name ?? '',
       type: (t) => TX_TYPE_LABEL[t.type],
       detail: (t) => txDetailSortValue(t),
@@ -66,7 +65,7 @@ export default function Transactions() {
 
   const rows = useMemo(() => {
     const filtered = transactions.filter((t) => !filterAsset || t.assetId === filterAsset)
-    return sortBy(filtered, sort, txAccessors, (a, b) => b.createdAt - a.createdAt)
+    return sortBy(filtered, sort, txAccessors)
   }, [transactions, filterAsset, sort, txAccessors])
 
   return (
@@ -96,25 +95,17 @@ export default function Transactions() {
         </div>
       </div>
 
-      {/* 桌面端表格 */}
       <Card className="hidden overflow-hidden md:block">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-slate-100 text-left text-xs text-slate-500">
                 <SortTh
-                  label="日期"
-                  sortKey="date"
+                  label="时间"
+                  sortKey="occurredAt"
                   sort={sort}
                   onSort={handleSort}
                   className="px-4 py-3 font-medium"
-                />
-                <SortTh
-                  label="更新时间"
-                  sortKey="updatedAt"
-                  sort={sort}
-                  onSort={handleSort}
-                  className="px-3 py-3 font-medium"
                 />
                 <SortTh
                   label="资产"
@@ -157,9 +148,8 @@ export default function Transactions() {
                     key={t.id}
                     className="border-t border-slate-100 transition-colors duration-200 hover:bg-slate-50/50"
                   >
-                    <td className="px-4 py-2.5 tabular-nums text-slate-500">{t.date}</td>
-                    <td className="px-3 py-2.5 text-xs tabular-nums text-slate-500">
-                      {fmtDateTime(t.updatedAt)}
+                    <td className="px-4 py-2.5 text-xs tabular-nums text-slate-500">
+                      {fmtDateTime(t.occurredAt)}
                     </td>
                     <td className="px-3 py-2.5 text-slate-700">{asset?.name ?? '(已删除)'}</td>
                     <td className="px-3 py-2.5">
@@ -181,7 +171,7 @@ export default function Transactions() {
               })}
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-4 py-12 text-center text-slate-500">
+                  <td colSpan={6} className="px-4 py-12 text-center text-slate-500">
                     暂无记录。所有财务状态都由这里的事件流计算得出 —— 买入、卖出、存取、估值更新。
                   </td>
                 </tr>
@@ -191,7 +181,6 @@ export default function Transactions() {
         </div>
       </Card>
 
-      {/* 移动端卡片列表 */}
       <div className="space-y-3 md:hidden">
         {rows.map((t) => {
           const asset = assetMap.get(t.assetId)
@@ -202,8 +191,7 @@ export default function Transactions() {
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <p className="font-medium text-slate-800">{asset?.name ?? '(已删除)'}</p>
-                    <p className="text-xs text-slate-500">{t.date}</p>
-                    <p className="text-xs text-slate-400">更新于 {fmtDateTime(t.updatedAt)}</p>
+                    <p className="text-xs tabular-nums text-slate-500">{fmtDateTime(t.occurredAt)}</p>
                   </div>
                   <span className="shrink-0 rounded-full border border-slate-100 bg-slate-50 px-2 py-0.5 text-xs text-slate-600">
                     {TX_TYPE_LABEL[t.type]}

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { StrategyTransaction, StrategyTxType } from '../types'
 import { STRATEGY_TX_TYPE_LABEL } from '../types'
-import { today } from '../services/storage'
+import { parseDatetimeLocal, toDatetimeLocalValue } from '../utils/time'
 import { btnGhost, btnPrimary, inputCls, labelCls } from './Modal'
 
 interface Props {
@@ -16,7 +16,9 @@ const ALL_TYPES: StrategyTxType[] = ['DEPOSIT', 'WITHDRAW', 'INCOME', 'VALUATION
 
 export default function StrategyTxForm({ strategyId, currency, initial, onSubmit, onCancel }: Props) {
   const [type, setType] = useState<StrategyTxType>(initial?.type ?? 'DEPOSIT')
-  const [date, setDate] = useState(initial?.date ?? today())
+  const [occurredAtInput, setOccurredAtInput] = useState(
+    toDatetimeLocalValue(initial?.occurredAt ?? Date.now()),
+  )
   const [amount, setAmount] = useState(initial?.amount != null ? String(initial.amount) : '')
   const [value, setValue] = useState(initial?.value != null ? String(initial.value) : '')
   const [note, setNote] = useState(initial?.note ?? '')
@@ -24,21 +26,25 @@ export default function StrategyTxForm({ strategyId, currency, initial, onSubmit
   const needsValue = type === 'VALUATION'
   const needsAmount = !needsValue
 
+  const occurredAt = parseDatetimeLocal(occurredAtInput)
   const valid =
-    !!date &&
+    occurredAt != null &&
+    occurredAt <= Date.now() &&
     (needsValue ? Number(value) >= 0 && value !== '' : Number(amount) > 0)
 
   const submit = () => {
-    if (!valid) return
+    if (!valid || occurredAt == null) return
     onSubmit({
       strategyId,
       type,
-      date,
+      occurredAt,
       amount: needsAmount ? Number(amount) : undefined,
       value: needsValue ? Number(value) : undefined,
       note: note.trim() || undefined,
     })
   }
+
+  const maxDatetime = toDatetimeLocalValue(Date.now())
 
   return (
     <div className="space-y-4">
@@ -56,12 +62,14 @@ export default function StrategyTxForm({ strategyId, currency, initial, onSubmit
           </select>
         </div>
         <div>
-          <label className={labelCls}>日期 *</label>
+          <label className={labelCls}>发生时间 *</label>
           <input
-            type="date"
+            type="datetime-local"
+            step={1}
             className={inputCls}
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
+            value={occurredAtInput}
+            max={maxDatetime}
+            onChange={(e) => setOccurredAtInput(e.target.value)}
           />
         </div>
       </div>

@@ -66,7 +66,7 @@ export function fmtCountry(code: string): string {
 
 export { isUpdateStale }
 
-/** 「更新于」列文字颜色 */
-export function staleUpdateCls(dateStr: string | undefined, thresholdDays = 30): string {
-  return staleTextCls(dateStr, thresholdDays)
+/** 「最近记录」列文字颜色 */
+export function staleUpdateCls(date: string | number | undefined, thresholdDays = 30): string {
+  return staleTextCls(date, thresholdDays)
 }

@@ -20,7 +20,7 @@ import { Card, CardHeader } from '../components/ui/Card'
 import { useTableSort } from '../hooks/useTableSort'
 import type { Asset, AssetSnapshot, AssetType, StrategySnapshot, Transaction, TxLedgerRow } from '../types'
 import { ASSET_TYPE_COLOR, ASSET_TYPE_LABEL, TX_TYPE_LABEL, isQuantityBased } from '../types'
-import { fmtMoney, fmtNum, fmtPct, isUpdateStale, pnlColor, staleUpdateCls } from '../utils/format'
+import { fmtDateTime, fmtMoney, fmtNum, fmtPct, isUpdateStale, pnlColor, staleUpdateCls } from '../utils/format'
 import { sortBy, type SortState } from '../utils/tableSort'
 
 const assetTheadCls = 'bg-slate-50/80'
@@ -209,13 +209,13 @@ export default function Assets({
                     title="最近两次估值之间的区间年化（已扣除区间内存取），非固定天数"
                   />
                   <SortTh
-                    label="更新于"
+                    label="最近记录"
                     sortKey="lastUpdated"
                     sort={sort}
                     onSort={handleSort}
                     className={assetThNum}
                     align="right"
-                    title="最近估值或行情更新日期；超过一个月未更新时数据行会标黄"
+                    title="末次流水或行情对应的业务时间；超过一个月未更新时数据行会标黄"
                   />
                   <th scope="col" className={assetThAction}>
                     操作
@@ -376,7 +376,7 @@ function AssetTableRow({
         className={`px-2 py-2.5 text-right text-xs tabular-nums ${staleUpdateCls(s.lastUpdated)}`}
         title={isUpdateStale(s.lastUpdated) ? '已超过一个月未更新,建议更新估值' : undefined}
       >
-        {s.lastUpdated ?? '—'}
+        {s.lastUpdated != null ? fmtDateTime(s.lastUpdated) : '—'}
       </td>
       <td className="px-4 py-2.5 text-right" onClick={(e) => e.stopPropagation()}>
         <button
@@ -444,7 +444,9 @@ function AssetMobileCard({
             近期年化 {fmtPct(s.recentAnnualized)}
           </span>
         )}
-        <span className={staleUpdateCls(s.lastUpdated)}>更新 {s.lastUpdated ?? '—'}</span>
+        <span className={staleUpdateCls(s.lastUpdated)}>
+          最近记录 {s.lastUpdated != null ? fmtDateTime(s.lastUpdated) : '—'}
+        </span>
       </div>
       <div className="mt-2 flex gap-2" onClick={(e) => e.stopPropagation()}>
         <button
@@ -559,7 +561,7 @@ function AssetDetail({
         <table className="w-full text-sm">
           <thead className="sticky top-0 bg-white">
             <tr className="border-b border-slate-100 text-left text-xs text-slate-500">
-              <th className="px-3 py-2 font-medium">日期</th>
+              <th className="px-3 py-2 font-medium">时间</th>
               <th className="px-3 py-2 font-medium">类型</th>
               {qtyBased && (
                 <>
@@ -588,7 +590,7 @@ function AssetDetail({
           <tbody>
             {ledger.map(({ tx, amountNative, balanceAfter, balanceLabel, intervalGainNative, intervalAnnualized }) => (
               <tr key={tx.id} className="border-t border-slate-100 hover:bg-slate-50/50">
-                <td className="px-3 py-2 tabular-nums text-slate-500">{tx.date}</td>
+                <td className="px-3 py-2 text-xs tabular-nums text-slate-500">{fmtDateTime(tx.occurredAt)}</td>
                 <td className="px-3 py-2 text-slate-700">{TX_TYPE_LABEL[tx.type]}</td>
                 {qtyBased && (
                   <>

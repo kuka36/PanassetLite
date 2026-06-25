@@ -4,7 +4,8 @@ import type { AppPageId, PendingAction, ToolExecutionResult } from '../types/ass
 import { analyzePortfolio } from './ai'
 import { parseNaturalLanguageTx } from './nlTx'
 import { nlResultToTxInitial } from '../services/nlTx'
-import { today } from './storage'
+import { fmtDateTime } from '../utils/format'
+import { migrateDateToOccurredAt } from '../utils/time'
 import { appendAuditEntry } from './assistantAudit'
 import { validateToolArgs } from './assistantToolSchema'
 
@@ -319,13 +320,13 @@ export async function executeAssistantTool(
     case 'list_transactions': {
       const limit = typeof safeArgs.limit === 'number' ? safeArgs.limit : 20
       const assetId = typeof safeArgs.assetId === 'string' ? safeArgs.assetId : undefined
-      let txs = [...ctx.transactions].sort((a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt)
+      let txs = [...ctx.transactions].sort((a, b) => b.occurredAt - a.occurredAt)
       if (assetId) txs = txs.filter((t) => t.assetId === assetId)
       const list = txs.slice(0, limit).map((t) => {
         const asset = findAsset(ctx, t.assetId)
         return {
           id: t.id,
-          date: t.date,
+          occurredAt: t.occurredAt,
           type: TX_TYPE_LABEL[t.type],
           assetName: asset?.name,
           assetId: t.assetId,
@@ -441,7 +442,10 @@ export async function executeAssistantTool(
       const initial: Omit<Transaction, 'id' | 'createdAt' | 'updatedAt'> = {
         assetId,
         type: txType,
-        date: typeof safeArgs.date === 'string' ? safeArgs.date : today(),
+        occurredAt:
+          typeof safeArgs.date === 'string'
+            ? migrateDateToOccurredAt(safeArgs.date)
+            : Date.now(),
         amount: typeof safeArgs.amount === 'number' ? safeArgs.amount : undefined,
         quantity: typeof safeArgs.quantity === 'number' ? safeArgs.quantity : undefined,
         price: typeof safeArgs.price === 'number' ? safeArgs.price : undefined,
@@ -468,7 +472,7 @@ export async function executeAssistantTool(
       return {
         content: JSON.stringify({ status: 'pending_confirmation', kind: 'editTx', id: txId }),
         pendingAction: action,
-        pendingSummary: `编辑流水(${tx.date}, ${TX_TYPE_LABEL[tx.type]})`,
+        pendingSummary: `编辑流水(${fmtDateTime(tx.occurredAt)}, ${TX_TYPE_LABEL[tx.type]})`,
       }
     }
 
@@ -497,7 +501,7 @@ export async function executeAssistantTool(
       return {
         content: JSON.stringify({ status: 'pending_delete_confirmation', txId }),
         pendingAction: action,
-        pendingSummary: `删除流水(${tx.date}, ${asset?.name ?? ''}, ${TX_TYPE_LABEL[tx.type]})`,
+        pendingSummary: `删除流水(${fmtDateTime(tx.occurredAt)}, ${asset?.name ?? ''}, ${TX_TYPE_LABEL[tx.type]})`,
       }
     }
 

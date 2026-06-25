@@ -6,6 +6,7 @@ import {
   LOCAL_LLM_REMOTE_HOST_MSG,
   postChatCompletions,
 } from './llmClient'
+import { migrateDateToOccurredAt } from '../utils/time'
 import { today } from './storage'
 
 /** LLM 输出的交易草稿(尚未绑定 assetId) */
@@ -351,7 +352,7 @@ export function nlResultToTxInitial(
     id: '',
     assetId: fixedAssetId ?? assetId ?? active[0]?.id ?? '',
     type: draft.type,
-    date: draft.date,
+    occurredAt: migrateDateToOccurredAt(draft.date),
     amount: draft.amount,
     quantity: draft.quantity,
     price: draft.price,

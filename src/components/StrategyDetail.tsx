@@ -9,7 +9,8 @@ import EChart from './EChart'
 import { lightAxis, lightTooltip } from './chartTheme'
 import { btnGhost, btnPrimary } from './Modal'
 import { hexAlpha, palette } from '../theme/colors'
-import { fmtCompact, fmtMoney, fmtNum, fmtPct, pnlColor } from '../utils/format'
+import { fmtCompact, fmtDateTime, fmtMoney, fmtNum, fmtPct, pnlColor } from '../utils/format'
+import { formatDateKey } from '../utils/time'
 
 type ModalState =
   | { kind: 'addTx' }
@@ -32,11 +33,9 @@ function Mini({ label, value, cls = '', title }: MiniProps) {
   )
 }
 
-function needsValuationHint(lastUpdated?: string): boolean {
-  if (!lastUpdated) return true
-  const updated = new Date(lastUpdated)
-  if (Number.isNaN(updated.getTime())) return true
-  const days = (Date.now() - updated.getTime()) / (1000 * 60 * 60 * 24)
+function needsValuationHint(lastUpdated?: number): boolean {
+  if (lastUpdated == null) return true
+  const days = (Date.now() - lastUpdated) / (1000 * 60 * 60 * 24)
   return days > 90
 }
 
@@ -92,7 +91,7 @@ export default function StrategyDetail({
   const trend = useMemo(() => {
     const byDate = new Map<string, number>()
     for (let i = ledger.length - 1; i >= 0; i--) {
-      byDate.set(ledger[i].tx.date, ledger[i].balanceAfter)
+      byDate.set(formatDateKey(ledger[i].tx.occurredAt), ledger[i].balanceAfter)
     }
     return { dates: [...byDate.keys()], values: [...byDate.values()] }
   }, [ledger])
@@ -268,7 +267,7 @@ export default function StrategyDetail({
         <table className="w-full text-sm">
           <thead className="sticky top-0 bg-white">
             <tr className="border-b border-slate-100 text-left text-xs text-slate-500">
-              <th className="px-3 py-2 font-medium">日期</th>
+              <th className="px-3 py-2 font-medium">时间</th>
               <th className="px-3 py-2 font-medium">类型</th>
               <th className="px-3 py-2 font-medium text-right">发生额（{cur}）</th>
               <th className="px-3 py-2 font-medium text-right">余额（{cur}）</th>
@@ -286,7 +285,7 @@ export default function StrategyDetail({
           <tbody>
             {ledger.map(({ tx, amountNative, balanceAfter, intervalGainNative, intervalAnnualized }) => (
               <tr key={tx.id} className="border-t border-slate-100 hover:bg-slate-50/50">
-                <td className="px-3 py-2 tabular-nums text-slate-500">{tx.date}</td>
+                <td className="px-3 py-2 text-xs tabular-nums text-slate-500">{fmtDateTime(tx.occurredAt)}</td>
                 <td className="px-3 py-2 text-slate-700">{STRATEGY_TX_TYPE_LABEL[tx.type]}</td>
                 <td className="px-3 py-2 text-right tabular-nums text-slate-700">
                   {amountNative != null ? fmtNum(amountNative) : '—'}
