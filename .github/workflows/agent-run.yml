@@ -72,6 +72,7 @@ jobs:
 
       - name: Run agent
         id: agent
+        timeout-minutes: 90
         run: |
           set -euo pipefail
           printf '# Issue #%s: %s\n\n%s\n' "$ISSUE_NUMBER" "$ISSUE_TITLE" "$ISSUE_BODY" > /tmp/task.md

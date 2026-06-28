@@ -2,7 +2,8 @@ name: Agent Review
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, labeled]
+    # 不在 synchronize 上跑：agent-run 已 lint/build/路径校验；人工 push 后可用 ai-review 标签重跑
+    types: [opened, labeled]
 
 permissions:
   contents: read
