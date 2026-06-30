@@ -8,6 +8,7 @@ import { fmtDateTime } from '../utils/format'
 import { migrateDateToOccurredAt } from '../utils/time'
 import { appendAuditEntry } from './assistantAudit'
 import { validateToolArgs } from './assistantToolSchema'
+import { refreshPrices } from './priceRefreshActions'
 
 export interface AssistantToolContext {
   assets: Asset[]
@@ -15,7 +16,6 @@ export interface AssistantToolContext {
   settings: Settings
   summary: PortfolioSummary
   navigate: (page: AppPageId) => void
-  refreshPrices: () => Promise<string>
 }
 
 export const ASSISTANT_TOOL_DEFINITIONS = [
@@ -350,7 +350,7 @@ export async function executeAssistantTool(
     }
 
     case 'refresh_prices': {
-      const result = await ctx.refreshPrices()
+      const result = await refreshPrices()
       return { content: JSON.stringify({ ok: true, message: result }) }
     }
 

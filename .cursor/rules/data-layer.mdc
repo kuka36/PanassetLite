@@ -31,8 +31,10 @@ return useMemo(
 
 ## Store 边界
 
-- `store.ts` 负责 CRUD 与 orchestration（如 `refreshPrices`），不含复杂财务公式。
-- 财务逻辑放 `src/engine/`，外部 API 放 `src/services/`。
+- `store.ts` 负责 CRUD 与状态同步（读入 → 持久化 → `set()`），不含复杂财务公式、跨 API 编排或异步副作用。
+- 行情刷新：`priceRefresh.ts`（编排）→ `priceRefreshActions.ts`（读 store、持久化、写回）→ 页面/助手直接调用 action，不挂 store。
+- 底层 fetch 在 `src/services/prices.ts`。
+- 财务逻辑放 `src/engine/`。
 - 组件用细粒度 selector：`useStore((s) => s.assets)`，避免整 store 订阅引发多余渲染。
 
 ## 隐私

@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from 'react'
 import { useStore } from '../store'
 import { StorageService } from '../services/storage'
 import { fetchFxRates } from '../services/prices'
+import { refreshCryptoPrices } from '../services/priceRefreshActions'
 import { Card, CardBody, CardHeader } from '../components/ui/Card'
 import { btnGhost, btnPrimary, inputCls, labelCls } from '../components/Modal'
 import { color } from '../theme/colors'
@@ -15,8 +16,6 @@ export default function Settings() {
   const assets = useStore((s) => s.assets)
   const settings = useStore((s) => s.settings)
   const saveSettings = useStore((s) => s.saveSettings)
-  const refreshCryptoPrices = useStore((s) => s.refreshCryptoPrices)
-  const refreshing = useStore((s) => s.refreshing)
   const loadDemoData = useStore((s) => s.loadDemo)
   const reload = useStore((s) => s.reload)
 
@@ -31,6 +30,7 @@ export default function Settings() {
     [assets],
   )
   const [msg, setMsg] = useState('')
+  const [cryptoRefreshing, setCryptoRefreshing] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
   const [fx, setFx] = useState<Record<string, string>>(
@@ -71,11 +71,14 @@ export default function Settings() {
   }
 
   const autoCrypto = async () => {
+    setCryptoRefreshing(true)
     try {
       const result = await refreshCryptoPrices()
       flash(result.startsWith('当前没有') || result.startsWith('失败:') ? result : `加密货币行情已更新:${result}`)
     } catch (e) {
       flash(`加密货币行情更新失败:${(e as Error).message}`)
+    } finally {
+      setCryptoRefreshing(false)
     }
   }
 
@@ -164,8 +167,8 @@ export default function Settings() {
               </p>
             )}
             <div className="mt-3 flex flex-wrap items-center gap-2">
-              <button className={btnPrimary} onClick={autoCrypto} disabled={refreshing}>
-                {refreshing ? '获取中…' : '自动获取加密货币行情'}
+              <button className={btnPrimary} onClick={autoCrypto} disabled={cryptoRefreshing}>
+                {cryptoRefreshing ? '获取中…' : '自动获取加密货币行情'}
               </button>
               {settings.pricesUpdatedAt && (
                 <span

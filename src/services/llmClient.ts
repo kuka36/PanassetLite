@@ -103,6 +103,38 @@ export async function postChatCompletions(
   return llmFetch(baseUrl, apiKey, body, signal)
 }
 
+export interface ChatCompletionMessage {
+  content?: string | null
+  tool_calls?: Array<{
+    id: string
+    type: 'function'
+    function: { name: string; arguments: string }
+  }>
+}
+
+type ChatCompletionPayload = {
+  choices?: Array<{ message?: ChatCompletionMessage }>
+  error?: { message?: string }
+}
+
+/** 检查 HTTP 状态;非 2xx 时抛出含响应片段的错误。 */
+export async function assertChatCompletionOk(res: Response): Promise<void> {
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(`LLM 请求失败 (${res.status}): ${text.slice(0, 200)}`)
+  }
+}
+
+/** 解析 OpenAI 兼容 chat/completions 非流式 JSON 响应。 */
+export async function parseChatCompletionResponse(
+  res: Response,
+): Promise<ChatCompletionMessage | undefined> {
+  await assertChatCompletionOk(res)
+  const data = (await res.json()) as ChatCompletionPayload
+  if (data.error?.message) throw new Error(data.error.message)
+  return data.choices?.[0]?.message
+}
+
 function parseSsePayload(payload: string): string {
   if (payload === '[DONE]') return ''
   const json = JSON.parse(payload) as {

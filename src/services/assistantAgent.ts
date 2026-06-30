@@ -5,6 +5,7 @@ import {
   isLocalLlmBaseUrl,
   isLocalLlmUnavailableOnRemoteHost,
   LOCAL_LLM_REMOTE_HOST_MSG,
+  parseChatCompletionResponse,
   postChatCompletions,
 } from './llmClient'
 import {
@@ -99,18 +100,8 @@ async function synthesizeAssistantReply(
     signal,
   )
 
-  if (!res.ok) {
-    const text = await res.text()
-    throw new Error(`LLM 请求失败 (${res.status}): ${text.slice(0, 200)}`)
-  }
-
-  const data = (await res.json()) as {
-    choices?: Array<{ message?: { content?: string | null } }>
-    error?: { message?: string }
-  }
-  if (data.error?.message) throw new Error(data.error.message)
-
-  return data.choices?.[0]?.message?.content?.trim() ?? ''
+  const message = await parseChatCompletionResponse(res)
+  return message?.content?.trim() ?? ''
 }
 
 function chatHistoryToApi(messages: ChatMessage[]): ApiMessage[] {
@@ -284,18 +275,7 @@ export async function runAssistantTurn(
       signal,
     )
 
-    if (!res.ok) {
-      const text = await res.text()
-      throw new Error(`LLM 请求失败 (${res.status}): ${text.slice(0, 200)}`)
-    }
-
-    const data = (await res.json()) as {
-      choices?: Array<{ message?: { content?: string | null; tool_calls?: ToolCall[] } }>
-      error?: { message?: string }
-    }
-    if (data.error?.message) throw new Error(data.error.message)
-
-    const message = data.choices?.[0]?.message
+    const message = await parseChatCompletionResponse(res)
     if (!message) throw new Error('LLM 返回为空')
 
     if (message.tool_calls?.length) {

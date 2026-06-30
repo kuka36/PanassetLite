@@ -4,6 +4,7 @@ import {
   isLocalLlmBaseUrl,
   isLocalLlmUnavailableOnRemoteHost,
   LOCAL_LLM_REMOTE_HOST_MSG,
+  parseChatCompletionResponse,
   postChatCompletions,
 } from './llmClient'
 import { migrateDateToOccurredAt } from '../utils/time'
@@ -273,23 +274,12 @@ async function requestNlTxJson(
       delete body.response_format
       res = await postChatCompletions(baseUrl, apiKey, body, signal)
     } else {
-      throw new Error(`LLM 接口请求失败 (${res.status}): ${errText.slice(0, 200)}`)
+      throw new Error(`LLM 请求失败 (${res.status}): ${errText.slice(0, 200)}`)
     }
   }
 
-  if (!res.ok) {
-    const text = await res.text()
-    throw new Error(`LLM 接口请求失败 (${res.status}): ${text.slice(0, 200)}`)
-  }
-
-  const data = (await res.json()) as {
-    choices?: Array<{ message?: { content?: string } }>
-    error?: { message?: string }
-  }
-  const err = data.error?.message
-  if (err) throw new Error(err)
-
-  const content = data.choices?.[0]?.message?.content?.trim()
+  const message = await parseChatCompletionResponse(res)
+  const content = message?.content?.trim()
   if (!content) throw new Error('LLM 返回内容为空')
   return content
 }

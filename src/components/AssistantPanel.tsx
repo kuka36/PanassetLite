@@ -42,7 +42,6 @@ export default function AssistantPanel({ currentPage, onNavigate }: Props) {
   const assets = useStore((s) => s.assets)
   const transactions = useStore((s) => s.transactions)
   const settings = useStore((s) => s.settings)
-  const refreshPrices = useStore((s) => s.refreshPrices)
   const summary = useSummary()
 
   const [input, setInput] = useState('')
@@ -92,7 +91,6 @@ export default function AssistantPanel({ currentPage, onNavigate }: Props) {
     settings,
     summary,
     navigate: onNavigate,
-    refreshPrices,
   })
 
   const pendingCount = actionQueue.filter((q) => q.status === 'pending' || q.status === 'active').length
