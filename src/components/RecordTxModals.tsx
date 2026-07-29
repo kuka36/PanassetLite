@@ -7,7 +7,7 @@ import { nlResultToTxInitial } from '../services/nlTx'
 import type { Asset, Settings, Transaction } from '../types'
 import { color } from '../theme/colors'
 import type { RecordTxModalState } from './recordTxModal'
-import type { TransferSubmit } from './TxForm'
+import type { TransferSubmit } from '../utils/transfer'
 
 function recordTxTitle(modal: RecordTxModalState): string {
   if (modal.kind === 'nlConfirm') {

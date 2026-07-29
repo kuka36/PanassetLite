@@ -12,7 +12,8 @@ import {
   openRecordTx,
   type RecordTxModalState,
 } from '../components/recordTxModal'
-import TxForm, { transferToTransactions } from '../components/TxForm'
+import TxForm from '../components/TxForm'
+import { transferToTransactions } from '../utils/transfer'
 import AssetFilters from '../components/AssetFilters'
 import { SortTh } from '../components/SortTh'
 import { Card, CardHeader } from '../components/ui/Card'
