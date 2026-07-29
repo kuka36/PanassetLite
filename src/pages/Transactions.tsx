@@ -1,16 +1,22 @@
 import { useCallback, useMemo, useState } from 'react'
 import { useStore } from '../store'
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
-import Modal, { btnGhost, btnPrimary, inputCls, labelCls } from '../components/Modal'
-import { SortTh } from '../components/SortTh'
+import Modal, { btnPrimary } from '../components/Modal'
 import TxForm from '../components/TxForm'
 import StrategyTxForm from '../components/StrategyTxForm'
 import FlowFilters from '../components/FlowFilters'
-import { Card, CardBody } from '../components/ui/Card'
+import FlowTable, { FlowTypeBadge } from '../components/FlowTable'
+import FlowEntityPicker from '../components/FlowEntityPicker'
 import { useTableSort } from '../hooks/useTableSort'
-import type { Strategy, StrategyTransaction, Transaction } from '../types'
+import type { StrategyTransaction, Transaction } from '../types'
 import { STRATEGY_TX_TYPE_LABEL, TX_TYPE_LABEL } from '../types'
-import { fmtDateTime, fmtNum } from '../utils/format'
+import { fmtDateTime } from '../utils/format'
+import {
+  assetFlowDetailSortValue,
+  formatAssetFlowDetail,
+  formatStrategyFlowDetail,
+  strategyFlowDetailSortValue,
+} from '../utils/flowFormat'
 import { sortBy, type SortState } from '../utils/tableSort'
 
 export interface FlowsInit {
@@ -29,18 +35,10 @@ const STRATEGY_TX_TEXT_KEYS: readonly StrategyTxSortKey[] = ['strategy', 'asset'
 const DEFAULT_TX_SORT: SortState<TxSortKey> = { key: 'occurredAt', dir: 'desc' }
 const DEFAULT_STRATEGY_TX_SORT: SortState<StrategyTxSortKey> = { key: 'occurredAt', dir: 'desc' }
 
-function txDetailSortValue(t: Transaction): number | null {
-  if (t.amount != null) return t.amount
-  if (t.value != null) return t.value
-  if (t.quantity != null && t.price != null) return t.quantity * t.price
-  return null
-}
-
-function strategyTxDetailSortValue(t: StrategyTransaction): number | null {
-  if (t.amount != null) return t.amount
-  if (t.value != null) return t.value
-  return null
-}
+const ASSET_FLOW_EMPTY =
+  '暂无流水。所有财务状态都由这里的事件流计算得出 —— 买入、卖出、存取、估值更新。'
+const STRATEGY_FLOW_EMPTY =
+  '暂无策略流水。策略流水与资产流水完全隔离，不影响净资产统计。'
 
 type AssetModalState = { kind: 'add'; assetId?: string } | { kind: 'edit'; tx: Transaction } | null
 type StrategyModalState =
@@ -129,7 +127,7 @@ export default function Transactions({ initial }: Props) {
       occurredAt: (t) => t.occurredAt,
       asset: (t) => assetMap.get(t.assetId)?.name ?? '',
       type: (t) => TX_TYPE_LABEL[t.type],
-      detail: (t) => txDetailSortValue(t),
+      detail: (t) => assetFlowDetailSortValue(t),
       note: (t) => t.note,
     }),
     [assetMap],
@@ -147,7 +145,7 @@ export default function Transactions({ initial }: Props) {
         return s ? (assetMap.get(s.assetId)?.name ?? '') : ''
       },
       type: (t) => STRATEGY_TX_TYPE_LABEL[t.type],
-      detail: (t) => strategyTxDetailSortValue(t),
+      detail: (t) => strategyFlowDetailSortValue(t),
       note: (t) => t.note,
     }),
     [assetMap, strategyMap],
@@ -257,6 +255,115 @@ export default function Transactions({ initial }: Props) {
       : undefined
   const addStrategy = addStrategyId ? strategyMap.get(addStrategyId) : undefined
 
+  const assetPickerOptions = useMemo(
+    () =>
+      activeAssets.map((a) => ({
+        id: a.id,
+        label: `${a.name}${a.platform ? ` · ${a.platform}` : ''}`,
+      })),
+    [activeAssets],
+  )
+
+  const strategyPickerSelectOptions = useMemo(
+    () =>
+      strategyPickerOptions.map((s) => ({
+        id: s.id,
+        label: `${s.name} · ${assetMap.get(s.assetId)?.name ?? '(已删除)'}`,
+      })),
+    [strategyPickerOptions, assetMap],
+  )
+
+  const assetColumns = useMemo(
+    () =>
+      [
+        {
+          key: 'occurredAt' as const,
+          label: '时间',
+          headerClassName: 'px-4 py-3 font-medium',
+          cellClassName: 'px-4 py-2.5 text-xs tabular-nums text-slate-500',
+          render: (t: Transaction) => fmtDateTime(t.occurredAt),
+        },
+        {
+          key: 'asset' as const,
+          label: '资产',
+          cellClassName: 'px-3 py-2.5 text-slate-700',
+          render: (t: Transaction) => assetMap.get(t.assetId)?.name ?? '(已删除)',
+        },
+        {
+          key: 'type' as const,
+          label: '类型',
+          cellClassName: 'px-3 py-2.5',
+          render: (t: Transaction) => <FlowTypeBadge label={TX_TYPE_LABEL[t.type]} />,
+        },
+        {
+          key: 'detail' as const,
+          label: '明细',
+          align: 'right' as const,
+          cellClassName: 'px-3 py-2.5 text-right tabular-nums text-slate-700',
+          render: (t: Transaction) =>
+            formatAssetFlowDetail(t, assetMap.get(t.assetId)?.currency ?? ''),
+        },
+        {
+          key: 'note' as const,
+          label: '备注',
+          cellClassName: 'max-w-40 truncate px-3 py-2.5 text-xs text-slate-500',
+          render: (t: Transaction) => t.note,
+        },
+      ],
+    [assetMap],
+  )
+
+  const strategyColumns = useMemo(
+    () =>
+      [
+        {
+          key: 'occurredAt' as const,
+          label: '时间',
+          headerClassName: 'px-4 py-3 font-medium',
+          cellClassName: 'px-4 py-2.5 text-xs tabular-nums text-slate-500',
+          render: (t: StrategyTransaction) => fmtDateTime(t.occurredAt),
+        },
+        {
+          key: 'strategy' as const,
+          label: '策略',
+          cellClassName: 'px-3 py-2.5 text-slate-700',
+          render: (t: StrategyTransaction) => strategyMap.get(t.strategyId)?.name ?? '(已删除)',
+        },
+        {
+          key: 'asset' as const,
+          label: '关联资产',
+          cellClassName: 'px-3 py-2.5 text-slate-600',
+          render: (t: StrategyTransaction) => {
+            const strategy = strategyMap.get(t.strategyId)
+            return strategy ? (assetMap.get(strategy.assetId)?.name ?? '(已删除)') : '(已删除)'
+          },
+        },
+        {
+          key: 'type' as const,
+          label: '类型',
+          cellClassName: 'px-3 py-2.5',
+          render: (t: StrategyTransaction) => (
+            <FlowTypeBadge label={STRATEGY_TX_TYPE_LABEL[t.type]} variant="strategy" />
+          ),
+        },
+        {
+          key: 'detail' as const,
+          label: '发生额',
+          align: 'right' as const,
+          cellClassName: 'px-3 py-2.5 text-right tabular-nums text-slate-700',
+          render: (t: StrategyTransaction) =>
+            formatStrategyFlowDetail(t, strategyMap.get(t.strategyId)?.currency ?? ''),
+        },
+        {
+          key: 'note' as const,
+          label: '备注',
+          cellClassName: 'max-w-40 truncate px-3 py-2.5 text-xs text-slate-500',
+          render: (t: StrategyTransaction) => t.note,
+        },
+      ],
+    [assetMap, strategyMap],
+  )
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -288,23 +395,66 @@ export default function Transactions({ initial }: Props) {
       />
 
       {tab === 'asset' ? (
-        <AssetFlowTable
+        <FlowTable
           rows={assetRows}
-          assetMap={assetMap}
+          columns={assetColumns}
           sort={assetSort}
           onSort={handleAssetSort}
+          rowKey={(t) => t.id}
+          getId={(t) => t.id}
+          emptyMessage={ASSET_FLOW_EMPTY}
           onEdit={(tx) => setAssetModal({ kind: 'edit', tx })}
-          onDelete={(id) => deleteTransaction(id)}
+          onDelete={deleteTransaction}
+          renderMobileCard={(t, actions) => {
+            const asset = assetMap.get(t.assetId)
+            const cur = asset?.currency ?? ''
+            return (
+              <>
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <p className="font-medium text-slate-800">{asset?.name ?? '(已删除)'}</p>
+                    <p className="text-xs tabular-nums text-slate-500">{fmtDateTime(t.occurredAt)}</p>
+                  </div>
+                  <FlowTypeBadge label={TX_TYPE_LABEL[t.type]} />
+                </div>
+                <p className="text-sm tabular-nums text-slate-700">{formatAssetFlowDetail(t, cur)}</p>
+                {t.note && <p className="text-xs text-slate-500">{t.note}</p>}
+                {actions}
+              </>
+            )
+          }}
         />
       ) : (
-        <StrategyFlowTable
+        <FlowTable
           rows={strategyRows}
-          assetMap={assetMap}
-          strategyMap={strategyMap}
+          columns={strategyColumns}
           sort={strategySort}
           onSort={handleStrategySort}
+          rowKey={(t) => t.id}
+          getId={(t) => t.id}
+          emptyMessage={STRATEGY_FLOW_EMPTY}
           onEdit={(tx) => setStrategyModal({ kind: 'edit', tx })}
-          onDelete={(id) => deleteStrategyTransaction(id)}
+          onDelete={deleteStrategyTransaction}
+          renderMobileCard={(t, actions) => {
+            const strategy = strategyMap.get(t.strategyId)
+            const asset = strategy ? assetMap.get(strategy.assetId) : undefined
+            const cur = strategy?.currency ?? ''
+            return (
+              <>
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <p className="font-medium text-slate-800">{strategy?.name ?? '(已删除)'}</p>
+                    <p className="text-xs text-slate-500">{asset?.name ?? '(已删除)'}</p>
+                    <p className="text-xs tabular-nums text-slate-500">{fmtDateTime(t.occurredAt)}</p>
+                  </div>
+                  <FlowTypeBadge label={STRATEGY_TX_TYPE_LABEL[t.type]} variant="strategy" />
+                </div>
+                <p className="text-sm tabular-nums text-slate-700">{formatStrategyFlowDetail(t, cur)}</p>
+                {t.note && <p className="text-xs text-slate-500">{t.note}</p>}
+                {actions}
+              </>
+            )
+          }}
         />
       )}
 
@@ -317,44 +467,18 @@ export default function Transactions({ initial }: Props) {
           }}
         >
           {!addAsset ? (
-            <div className="space-y-4">
-              <div>
-                <label className={labelCls}>选择资产 *</label>
-                <select
-                  className={inputCls}
-                  value={pickAssetId}
-                  onChange={(e) => setPickAssetId(e.target.value)}
-                >
-                  <option value="">请选择资产</option>
-                  {activeAssets.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.name}
-                      {a.platform ? ` · ${a.platform}` : ''}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="flex justify-end gap-2">
-                <button
-                  type="button"
-                  className={btnGhost}
-                  onClick={() => {
-                    setAssetModal(null)
-                    setPickAssetId('')
-                  }}
-                >
-                  取消
-                </button>
-                <button
-                  type="button"
-                  className={btnPrimary}
-                  disabled={!pickAssetId}
-                  onClick={() => setAssetModal({ kind: 'add', assetId: pickAssetId })}
-                >
-                  继续
-                </button>
-              </div>
-            </div>
+            <FlowEntityPicker
+              label="选择资产 *"
+              placeholder="请选择资产"
+              options={assetPickerOptions}
+              value={pickAssetId}
+              onChange={setPickAssetId}
+              onCancel={() => {
+                setAssetModal(null)
+                setPickAssetId('')
+              }}
+              onContinue={() => setAssetModal({ kind: 'add', assetId: pickAssetId })}
+            />
           ) : (
             <TxForm
               assets={assets}
@@ -396,45 +520,18 @@ export default function Transactions({ initial }: Props) {
           }}
         >
           {!addStrategy ? (
-            <div className="space-y-4">
-              <div>
-                <label className={labelCls}>选择策略 *</label>
-                <select
-                  className={inputCls}
-                  value={pickStrategyId}
-                  onChange={(e) => setPickStrategyId(e.target.value)}
-                >
-                  <option value="">请选择策略</option>
-                  {strategyPickerOptions.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name} · {assetMap.get(s.assetId)?.name ?? '(已删除)'}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="flex justify-end gap-2">
-                <button
-                  type="button"
-                  className={btnGhost}
-                  onClick={() => {
-                    setStrategyModal(null)
-                    setPickStrategyId('')
-                  }}
-                >
-                  取消
-                </button>
-                <button
-                  type="button"
-                  className={btnPrimary}
-                  disabled={!pickStrategyId}
-                  onClick={() =>
-                    setStrategyModal({ kind: 'add', strategyId: pickStrategyId })
-                  }
-                >
-                  继续
-                </button>
-              </div>
-            </div>
+            <FlowEntityPicker
+              label="选择策略 *"
+              placeholder="请选择策略"
+              options={strategyPickerSelectOptions}
+              value={pickStrategyId}
+              onChange={setPickStrategyId}
+              onCancel={() => {
+                setStrategyModal(null)
+                setPickStrategyId('')
+              }}
+              onContinue={() => setStrategyModal({ kind: 'add', strategyId: pickStrategyId })}
+            />
           ) : (
             <StrategyTxForm
               strategyId={addStrategy.id}
@@ -472,337 +569,5 @@ export default function Transactions({ initial }: Props) {
         )
       })()}
     </div>
-  )
-}
-
-function AssetFlowTable({
-  rows,
-  assetMap,
-  sort,
-  onSort,
-  onEdit,
-  onDelete,
-}: {
-  rows: Transaction[]
-  assetMap: Map<string, { name: string; currency: string }>
-  sort: SortState<TxSortKey>
-  onSort: (key: TxSortKey) => void
-  onEdit: (tx: Transaction) => void
-  onDelete: (id: string) => void
-}) {
-  return (
-    <>
-      <Card className="hidden overflow-hidden md:block">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-slate-100 text-left text-xs text-slate-500">
-                <SortTh
-                  label="时间"
-                  sortKey="occurredAt"
-                  sort={sort}
-                  onSort={onSort}
-                  className="px-4 py-3 font-medium"
-                />
-                <SortTh
-                  label="资产"
-                  sortKey="asset"
-                  sort={sort}
-                  onSort={onSort}
-                  className="px-3 py-3 font-medium"
-                />
-                <SortTh
-                  label="类型"
-                  sortKey="type"
-                  sort={sort}
-                  onSort={onSort}
-                  className="px-3 py-3 font-medium"
-                />
-                <SortTh
-                  label="明细"
-                  sortKey="detail"
-                  sort={sort}
-                  onSort={onSort}
-                  className="px-3 py-3 font-medium"
-                  align="right"
-                />
-                <SortTh
-                  label="备注"
-                  sortKey="note"
-                  sort={sort}
-                  onSort={onSort}
-                  className="px-3 py-3 font-medium"
-                />
-                <th className="px-4 py-3 font-medium text-right"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((t) => {
-                const asset = assetMap.get(t.assetId)
-                const cur = asset?.currency ?? ''
-                return (
-                  <tr
-                    key={t.id}
-                    className="border-t border-slate-100 transition-colors duration-200 hover:bg-slate-50/50"
-                  >
-                    <td className="px-4 py-2.5 text-xs tabular-nums text-slate-500">
-                      {fmtDateTime(t.occurredAt)}
-                    </td>
-                    <td className="px-3 py-2.5 text-slate-700">{asset?.name ?? '(已删除)'}</td>
-                    <td className="px-3 py-2.5">
-                      <span className="rounded-full border border-slate-100 bg-slate-50 px-2 py-0.5 text-xs text-slate-600">
-                        {TX_TYPE_LABEL[t.type]}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2.5 text-right tabular-nums text-slate-700">
-                      {formatAssetDetail(t, cur)}
-                    </td>
-                    <td className="max-w-40 truncate px-3 py-2.5 text-xs text-slate-500">
-                      {t.note}
-                    </td>
-                    <td className="px-4 py-2.5 text-right">
-                      <FlowActions onEdit={() => onEdit(t)} onDelete={() => onDelete(t.id)} />
-                    </td>
-                  </tr>
-                )
-              })}
-              {rows.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="px-4 py-12 text-center text-slate-500">
-                    暂无流水。所有财务状态都由这里的事件流计算得出 —— 买入、卖出、存取、估值更新。
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </Card>
-
-      <div className="space-y-3 md:hidden">
-        {rows.map((t) => {
-          const asset = assetMap.get(t.assetId)
-          const cur = asset?.currency ?? ''
-          return (
-            <Card key={t.id}>
-              <CardBody className="space-y-2">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <p className="font-medium text-slate-800">{asset?.name ?? '(已删除)'}</p>
-                    <p className="text-xs tabular-nums text-slate-500">{fmtDateTime(t.occurredAt)}</p>
-                  </div>
-                  <span className="shrink-0 rounded-full border border-slate-100 bg-slate-50 px-2 py-0.5 text-xs text-slate-600">
-                    {TX_TYPE_LABEL[t.type]}
-                  </span>
-                </div>
-                <p className="text-sm tabular-nums text-slate-700">{formatAssetDetail(t, cur)}</p>
-                {t.note && <p className="text-xs text-slate-500">{t.note}</p>}
-                <div className="flex justify-end pt-1">
-                  <FlowActions onEdit={() => onEdit(t)} onDelete={() => onDelete(t.id)} />
-                </div>
-              </CardBody>
-            </Card>
-          )
-        })}
-        {rows.length === 0 && (
-          <p className="py-12 text-center text-sm text-slate-500">
-            暂无流水。所有财务状态都由这里的事件流计算得出 —— 买入、卖出、存取、估值更新。
-          </p>
-        )}
-      </div>
-    </>
-  )
-}
-
-function StrategyFlowTable({
-  rows,
-  assetMap,
-  strategyMap,
-  sort,
-  onSort,
-  onEdit,
-  onDelete,
-}: {
-  rows: StrategyTransaction[]
-  assetMap: Map<string, { name: string }>
-  strategyMap: Map<string, Strategy>
-  sort: SortState<StrategyTxSortKey>
-  onSort: (key: StrategyTxSortKey) => void
-  onEdit: (tx: StrategyTransaction) => void
-  onDelete: (id: string) => void
-}) {
-  const emptyMsg =
-    '暂无策略流水。策略流水与资产流水完全隔离，不影响净资产统计。'
-
-  return (
-    <>
-      <Card className="hidden overflow-hidden md:block">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-slate-100 text-left text-xs text-slate-500">
-                <SortTh
-                  label="时间"
-                  sortKey="occurredAt"
-                  sort={sort}
-                  onSort={onSort}
-                  className="px-4 py-3 font-medium"
-                />
-                <SortTh
-                  label="策略"
-                  sortKey="strategy"
-                  sort={sort}
-                  onSort={onSort}
-                  className="px-3 py-3 font-medium"
-                />
-                <SortTh
-                  label="关联资产"
-                  sortKey="asset"
-                  sort={sort}
-                  onSort={onSort}
-                  className="px-3 py-3 font-medium"
-                />
-                <SortTh
-                  label="类型"
-                  sortKey="type"
-                  sort={sort}
-                  onSort={onSort}
-                  className="px-3 py-3 font-medium"
-                />
-                <SortTh
-                  label="发生额"
-                  sortKey="detail"
-                  sort={sort}
-                  onSort={onSort}
-                  className="px-3 py-3 font-medium"
-                  align="right"
-                />
-                <SortTh
-                  label="备注"
-                  sortKey="note"
-                  sort={sort}
-                  onSort={onSort}
-                  className="px-3 py-3 font-medium"
-                />
-                <th className="px-4 py-3 font-medium text-right"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((t) => {
-                const strategy = strategyMap.get(t.strategyId)
-                const asset = strategy ? assetMap.get(strategy.assetId) : undefined
-                const cur = strategy?.currency ?? ''
-                return (
-                  <tr
-                    key={t.id}
-                    className="border-t border-slate-100 transition-colors duration-200 hover:bg-slate-50/50"
-                  >
-                    <td className="px-4 py-2.5 text-xs tabular-nums text-slate-500">
-                      {fmtDateTime(t.occurredAt)}
-                    </td>
-                    <td className="px-3 py-2.5 text-slate-700">
-                      {strategy?.name ?? '(已删除)'}
-                    </td>
-                    <td className="px-3 py-2.5 text-slate-600">{asset?.name ?? '(已删除)'}</td>
-                    <td className="px-3 py-2.5">
-                      <span className="rounded-full border border-sky-100 bg-sky-50 px-2 py-0.5 text-xs text-sky-700">
-                        {STRATEGY_TX_TYPE_LABEL[t.type]}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2.5 text-right tabular-nums text-slate-700">
-                      {formatStrategyDetail(t, cur)}
-                    </td>
-                    <td className="max-w-40 truncate px-3 py-2.5 text-xs text-slate-500">
-                      {t.note}
-                    </td>
-                    <td className="px-4 py-2.5 text-right">
-                      <FlowActions onEdit={() => onEdit(t)} onDelete={() => onDelete(t.id)} />
-                    </td>
-                  </tr>
-                )
-              })}
-              {rows.length === 0 && (
-                <tr>
-                  <td colSpan={7} className="px-4 py-12 text-center text-slate-500">
-                    {emptyMsg}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </Card>
-
-      <div className="space-y-3 md:hidden">
-        {rows.map((t) => {
-          const strategy = strategyMap.get(t.strategyId)
-          const asset = strategy ? assetMap.get(strategy.assetId) : undefined
-          const cur = strategy?.currency ?? ''
-          return (
-            <Card key={t.id}>
-              <CardBody className="space-y-2">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <p className="font-medium text-slate-800">{strategy?.name ?? '(已删除)'}</p>
-                    <p className="text-xs text-slate-500">{asset?.name ?? '(已删除)'}</p>
-                    <p className="text-xs tabular-nums text-slate-500">{fmtDateTime(t.occurredAt)}</p>
-                  </div>
-                  <span className="shrink-0 rounded-full border border-sky-100 bg-sky-50 px-2 py-0.5 text-xs text-sky-700">
-                    {STRATEGY_TX_TYPE_LABEL[t.type]}
-                  </span>
-                </div>
-                <p className="text-sm tabular-nums text-slate-700">{formatStrategyDetail(t, cur)}</p>
-                {t.note && <p className="text-xs text-slate-500">{t.note}</p>}
-                <div className="flex justify-end pt-1">
-                  <FlowActions onEdit={() => onEdit(t)} onDelete={() => onDelete(t.id)} />
-                </div>
-              </CardBody>
-            </Card>
-          )
-        })}
-        {rows.length === 0 && (
-          <p className="py-12 text-center text-sm text-slate-500">{emptyMsg}</p>
-        )}
-      </div>
-    </>
-  )
-}
-
-function formatAssetDetail(t: Transaction, cur: string): string {
-  if (t.quantity != null && t.price != null) return `${fmtNum(t.quantity)} × ${fmtNum(t.price)} ${cur}`
-  if (t.amount != null) return `${fmtNum(t.amount, 2)} ${cur}`
-  if (t.value != null) return `市值 ${fmtNum(t.value, 2)} ${cur}`
-  return '—'
-}
-
-function formatStrategyDetail(t: StrategyTransaction, cur: string): string {
-  if (t.amount != null) return `${fmtNum(t.amount, 2)} ${cur}`
-  if (t.value != null) return `市值 ${fmtNum(t.value, 2)} ${cur}`
-  return '—'
-}
-
-function FlowActions({
-  onEdit,
-  onDelete,
-}: {
-  onEdit: () => void
-  onDelete: () => void
-}) {
-  return (
-    <>
-      <button
-        className="mr-3 text-xs text-blue-600 transition-colors hover:text-blue-700"
-        onClick={onEdit}
-      >
-        编辑
-      </button>
-      <button
-        className="text-xs text-slate-500 transition-colors hover:text-red-600"
-        onClick={() => {
-          if (confirm('删除这条流水?')) onDelete()
-        }}
-      >
-        删除
-      </button>
-    </>
   )
 }

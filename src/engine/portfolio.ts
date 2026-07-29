@@ -16,6 +16,35 @@ import { applyValueTxStep, buildValueFlows, buildValueLedgerRows, compareValueTx
 
 const DAY_MS = 86400_000
 
+export type AssetSnapshotOverview = Pick<
+  PortfolioSummary,
+  'totalAssetsCNY' | 'totalDebtCNY' | 'netWorthCNY' | 'totalPnlCNY' | 'totalPnlRatio'
+>
+
+/** 由快照列表汇总净资产与盈亏（筛选视图与全量 summary 共用） */
+export function aggregateAssetSnapshots(snapshots: AssetSnapshot[]): AssetSnapshotOverview {
+  let totalAssets = 0
+  let totalDebt = 0
+  let totalPnl = 0
+  let totalNetInvested = 0
+  for (const s of snapshots) {
+    if (s.asset.type === 'debt') {
+      totalDebt += s.valueCNY
+    } else {
+      totalAssets += s.valueCNY
+      totalPnl += s.totalPnlCNY
+      totalNetInvested += s.netInvestedCNY
+    }
+  }
+  return {
+    totalAssetsCNY: totalAssets,
+    totalDebtCNY: totalDebt,
+    netWorthCNY: totalAssets - totalDebt,
+    totalPnlCNY: totalPnl,
+    totalPnlRatio: totalNetInvested > 0 ? totalPnl / totalNetInvested : null,
+  }
+}
+
 export class PortfolioEngine {
   private txByAsset = new Map<string, Transaction[]>()
   private assets: Asset[]
@@ -286,28 +315,14 @@ export class PortfolioEngine {
     const active = this.assets.filter((a) => !a.archived)
     const snapshots = active.map((a) => this.snapshot(a))
 
-    let totalAssets = 0
-    let totalDebt = 0
-    let totalPnl = 0
-    let totalNetInvested = 0
+    const overview = aggregateAssetSnapshots(snapshots)
     const byTypeMap = new Map<AssetType, number>()
     for (const s of snapshots) {
-      if (s.asset.type === 'debt') {
-        totalDebt += s.valueCNY
-      } else {
-        totalAssets += s.valueCNY
-        totalPnl += s.totalPnlCNY
-        totalNetInvested += s.netInvestedCNY
-      }
       byTypeMap.set(s.asset.type, (byTypeMap.get(s.asset.type) ?? 0) + s.valueCNY)
     }
 
     return {
-      totalAssetsCNY: totalAssets,
-      totalDebtCNY: totalDebt,
-      netWorthCNY: totalAssets - totalDebt,
-      totalPnlCNY: totalPnl,
-      totalPnlRatio: totalNetInvested > 0 ? totalPnl / totalNetInvested : null,
+      ...overview,
       byType: [...byTypeMap.entries()]
         .map(([type, valueCNY]) => ({ type, valueCNY }))
         .sort((a, b) => b.valueCNY - a.valueCNY),

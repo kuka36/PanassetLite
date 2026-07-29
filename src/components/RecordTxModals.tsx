@@ -2,6 +2,7 @@ import { Sparkles, PenLine } from 'lucide-react'
 import Modal from './Modal'
 import TxForm from './TxForm'
 import NlTxInput from './NlTxInput'
+import SegmentedTabs from './ui/SegmentedTabs'
 import { nlResultToTxInitial } from '../services/nlTx'
 import type { Asset, Settings, Transaction } from '../types'
 import { color } from '../theme/colors'
@@ -12,48 +13,6 @@ function recordTxTitle(modal: RecordTxModalState): string {
     return modal.asset ? `${modal.asset.name} · 确认解析结果` : '确认 AI 解析结果'
   }
   return modal.asset ? `${modal.asset.name} · 记一笔` : '记一笔'
-}
-
-function RecordTxModeTabs({
-  mode,
-  onModeChange,
-}: {
-  mode: 'manual' | 'ai'
-  onModeChange: (mode: 'manual' | 'ai') => void
-}) {
-  const tabCls = (active: boolean) =>
-    `flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-      active ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-    }`
-
-  return (
-    <div
-      className="mb-4 flex rounded-xl border border-slate-200 bg-slate-50 p-1"
-      role="tablist"
-      aria-label="记一笔方式"
-    >
-      <button
-        type="button"
-        role="tab"
-        aria-selected={mode === 'manual'}
-        className={tabCls(mode === 'manual')}
-        onClick={() => onModeChange('manual')}
-      >
-        <PenLine className="h-4 w-4" aria-hidden />
-        手动填写
-      </button>
-      <button
-        type="button"
-        role="tab"
-        aria-selected={mode === 'ai'}
-        className={tabCls(mode === 'ai')}
-        onClick={() => onModeChange('ai')}
-      >
-        <Sparkles className="h-4 w-4" aria-hidden />
-        AI 解析
-      </button>
-    </div>
-  )
 }
 
 interface Props {
@@ -86,7 +45,33 @@ export function RecordTxModals({ modal, assets, settings, onClose, onChange, onS
     const mode = modal.kind === 'tx' ? 'manual' : 'ai'
     return (
       <Modal title={recordTxTitle(modal)} onClose={onClose}>
-        <RecordTxModeTabs mode={mode} onModeChange={(next) => switchRecordMode(next, modal)} />
+        <SegmentedTabs
+          className="mb-4"
+          stretch
+          value={mode}
+          onChange={(next) => switchRecordMode(next, modal)}
+          ariaLabel="记一笔方式"
+          tabs={[
+            {
+              id: 'manual',
+              label: (
+                <>
+                  <PenLine className="h-4 w-4" aria-hidden />
+                  手动填写
+                </>
+              ),
+            },
+            {
+              id: 'ai',
+              label: (
+                <>
+                  <Sparkles className="h-4 w-4" aria-hidden />
+                  AI 解析
+                </>
+              ),
+            },
+          ]}
+        />
         {mode === 'manual' ? (
           <TxForm
             assets={assets}

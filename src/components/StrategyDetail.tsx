@@ -6,32 +6,18 @@ import { useStrategyEngine } from '../hooks/useStrategySummary'
 import Modal from './Modal'
 import StrategyTxForm from './StrategyTxForm'
 import EChart from './EChart'
+import MiniStat from './ui/MiniStat'
+import ValueLedgerTable from './ValueLedgerTable'
 import { lightAxis, lightTooltip } from './chartTheme'
 import { btnGhost, btnPrimary } from './Modal'
 import { hexAlpha, palette } from '../theme/colors'
-import { fmtCompact, fmtDateTime, fmtMoney, fmtNum, fmtPct, pnlColor } from '../utils/format'
+import { fmtCompact, fmtMoney, fmtNum, fmtPct, pnlColor } from '../utils/format'
 import { formatDateKey } from '../utils/time'
 
 type ModalState =
   | { kind: 'addTx' }
   | { kind: 'editTx'; tx: StrategyTransaction }
   | null
-
-interface MiniProps {
-  label: string
-  value: string
-  cls?: string
-  title?: string
-}
-
-function Mini({ label, value, cls = '', title }: MiniProps) {
-  return (
-    <div className="rounded-xl border border-slate-100 bg-slate-50 p-3" title={title}>
-      <p className="mb-1 text-xs text-slate-400">{label}</p>
-      <p className={`text-sm font-semibold ${cls || 'text-slate-700'}`}>{value}</p>
-    </div>
-  )
-}
 
 function needsValuationHint(lastUpdated?: number): boolean {
   if (lastUpdated == null) return true
@@ -183,19 +169,19 @@ export default function StrategyDetail({
 
       {/* 指标卡 */}
       <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Mini label="当前市值" value={fmtMoney(snap.valueCNY)} />
-        <Mini
+        <MiniStat label="当前市值" value={fmtMoney(snap.valueCNY)} />
+        <MiniStat
           label="累计盈亏"
           value={fmtMoney(snap.totalPnlCNY)}
-          cls={pnlColor(snap.totalPnlCNY)}
+          valueClassName={pnlColor(snap.totalPnlCNY)}
         />
-        <Mini
+        <MiniStat
           label="年化（XIRR）"
           title="自开始跟踪以来的内部收益率"
           value={snap.xirr != null ? fmtPct(snap.xirr) : '—'}
-          cls={snap.xirr != null ? pnlColor(snap.xirr) : ''}
+          valueClassName={snap.xirr != null ? pnlColor(snap.xirr) : 'text-slate-800'}
         />
-        <Mini
+        <MiniStat
           label={snap.recentAnnualized != null ? '近期年化' : '净投入'}
           title={snap.recentAnnualized != null ? '最近两次估值之间的区间年化' : undefined}
           value={
@@ -203,7 +189,9 @@ export default function StrategyDetail({
               ? fmtPct(snap.recentAnnualized)
               : fmtMoney(snap.netInvestedCNY)
           }
-          cls={snap.recentAnnualized != null ? pnlColor(snap.recentAnnualized) : ''}
+          valueClassName={
+            snap.recentAnnualized != null ? pnlColor(snap.recentAnnualized) : 'text-slate-800'
+          }
         />
       </div>
 
@@ -263,86 +251,19 @@ export default function StrategyDetail({
       </div>
 
       {/* 流水表 */}
-      <div className="max-h-[min(50vh,28rem)] overflow-x-auto overflow-y-auto rounded-xl border border-slate-100">
-        <table className="w-full text-sm">
-          <thead className="sticky top-0 bg-white">
-            <tr className="border-b border-slate-100 text-left text-xs text-slate-500">
-              <th className="px-3 py-2 font-medium">时间</th>
-              <th className="px-3 py-2 font-medium">类型</th>
-              <th className="px-3 py-2 font-medium text-right">发生额（{cur}）</th>
-              <th className="px-3 py-2 font-medium text-right">余额（{cur}）</th>
-              <th className="px-3 py-2 font-medium text-right">区间变化</th>
-              <th
-                className="px-3 py-2 font-medium text-right"
-                title="相对上一笔流水，扣除存取后的区间收益年化"
-              >
-                近期年化
-              </th>
-              <th className="px-3 py-2 font-medium">备注</th>
-              <th className="px-3 py-2 font-medium text-right"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {ledger.map(({ tx, amountNative, balanceAfter, intervalGainNative, intervalAnnualized }) => (
-              <tr key={tx.id} className="border-t border-slate-100 hover:bg-slate-50/50">
-                <td className="px-3 py-2 text-xs tabular-nums text-slate-500">{fmtDateTime(tx.occurredAt)}</td>
-                <td className="px-3 py-2 text-slate-700">{STRATEGY_TX_TYPE_LABEL[tx.type]}</td>
-                <td className="px-3 py-2 text-right tabular-nums text-slate-700">
-                  {amountNative != null ? fmtNum(amountNative) : '—'}
-                </td>
-                <td className="px-3 py-2 text-right tabular-nums text-slate-700">
-                  {fmtNum(balanceAfter)}
-                </td>
-                <td
-                  className={`px-3 py-2 text-right tabular-nums ${
-                    intervalGainNative != null && intervalGainNative !== 0
-                      ? pnlColor(intervalGainNative)
-                      : 'text-slate-500'
-                  }`}
-                >
-                  {intervalGainNative != null && intervalGainNative !== 0
-                    ? fmtNum(intervalGainNative)
-                    : '—'}
-                </td>
-                <td
-                  className={`px-3 py-2 text-right tabular-nums ${
-                    intervalAnnualized != null ? pnlColor(intervalAnnualized) : 'text-slate-500'
-                  }`}
-                  title="相对上一笔流水，扣除存取后的区间收益年化"
-                >
-                  {intervalAnnualized != null ? fmtPct(intervalAnnualized) : '—'}
-                </td>
-                <td className="max-w-32 truncate px-3 py-2 text-xs text-slate-500">{tx.note}</td>
-                <td className="px-3 py-2 text-right">
-                  <button
-                    type="button"
-                    className="mr-3 text-xs text-blue-600 hover:underline"
-                    onClick={() => setModal({ kind: 'editTx', tx })}
-                  >
-                    编辑
-                  </button>
-                  <button
-                    type="button"
-                    className="text-xs text-slate-400 hover:text-red-600"
-                    onClick={() => {
-                      if (confirm('删除这条流水？')) deleteStrategyTransaction(tx.id)
-                    }}
-                  >
-                    删除
-                  </button>
-                </td>
-              </tr>
-            ))}
-            {ledger.length === 0 && (
-              <tr>
-                <td colSpan={8} className="px-3 py-8 text-center text-sm text-slate-400">
-                  {archived ? '暂无流水记录' : '还没有流水，点击「记一笔」开始'}
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+      <ValueLedgerTable
+        rows={ledger}
+        typeLabel={(row) => STRATEGY_TX_TYPE_LABEL[row.tx.type]}
+        formatAmount={(amount) => (amount != null ? fmtNum(amount) : '—')}
+        formatBalance={(balance) => fmtNum(balance)}
+        formatIntervalGain={(gain) => fmtNum(gain)}
+        amountHeader={`发生额（${cur}）`}
+        balanceHeader={`余额（${cur}）`}
+        emptyColSpan={8}
+        emptyMessage={archived ? '暂无流水记录' : '还没有流水，点击「记一笔」开始'}
+        onEdit={(row) => setModal({ kind: 'editTx', tx: row.tx })}
+        onDelete={deleteStrategyTransaction}
+      />
 
       {modal?.kind === 'addTx' && (
         <Modal title="记一笔" onClose={() => setModal(null)}>

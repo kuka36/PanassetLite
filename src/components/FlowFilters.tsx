@@ -1,6 +1,7 @@
 import { FilterBar, FilterClearButton } from './ui/FilterBar'
 import { FilterRow } from './ui/FilterRow'
 import { FilterChip } from './ui/FilterChip'
+import SegmentedTabs from './ui/SegmentedTabs'
 
 type FlowTab = 'asset' | 'strategy'
 
@@ -31,46 +32,6 @@ interface Props {
   onClear: () => void
 }
 
-function FlowTabBar({
-  tab,
-  onChange,
-}: {
-  tab: FlowTab
-  onChange: (t: FlowTab) => void
-}) {
-  const tabCls = (active: boolean) =>
-    `rounded-lg px-3 py-2 text-sm font-medium whitespace-nowrap transition-colors ${
-      active ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-    }`
-
-  return (
-    <div
-      className="flex rounded-xl border border-slate-200 bg-slate-50 p-1"
-      role="tablist"
-      aria-label="流水类型"
-    >
-      <button
-        type="button"
-        role="tab"
-        aria-selected={tab === 'asset'}
-        className={tabCls(tab === 'asset')}
-        onClick={() => onChange('asset')}
-      >
-        资产流水
-      </button>
-      <button
-        type="button"
-        role="tab"
-        aria-selected={tab === 'strategy'}
-        className={tabCls(tab === 'strategy')}
-        onClick={() => onChange('strategy')}
-      >
-        策略流水
-      </button>
-    </div>
-  )
-}
-
 export default function FlowFilters({
   tab,
   onTabChange,
@@ -92,7 +53,15 @@ export default function FlowFilters({
   return (
     <FilterBar actions={hasFilter ? <FilterClearButton onClick={onClear} /> : undefined}>
       <FilterRow label="账本">
-        <FlowTabBar tab={tab} onChange={onTabChange} />
+        <SegmentedTabs
+          value={tab}
+          onChange={onTabChange}
+          ariaLabel="流水类型"
+          tabs={[
+            { id: 'asset', label: '资产流水' },
+            { id: 'strategy', label: '策略流水' },
+          ]}
+        />
       </FilterRow>
 
       {tab === 'asset' ? (

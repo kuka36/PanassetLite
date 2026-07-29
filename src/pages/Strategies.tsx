@@ -1,11 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Target } from 'lucide-react'
 import { useStore } from '../store'
-import {
-  useArchivedStrategySnapshots,
-  useStrategyEngine,
-  useStrategySnapshots,
-} from '../hooks/useStrategySummary'
+import { useStrategyEngine } from '../hooks/useStrategySummary'
 import { StorageService } from '../services/storage'
 import Modal, { btnGhost, btnPrimary } from '../components/Modal'
 import { SortTh } from '../components/SortTh'
@@ -124,9 +120,9 @@ export default function Strategies({ initial, onViewAllFlows }: Props) {
   const updateStrategy = useStore((s) => s.updateStrategy)
   const deleteStrategy = useStore((s) => s.deleteStrategy)
 
-  const allSnapshots = useStrategySnapshots()
-  const archivedSnapshots = useArchivedStrategySnapshots()
   const engine = useStrategyEngine()
+  const allSnapshots = useMemo(() => engine.allSnapshots(), [engine])
+  const archivedSnapshots = useMemo(() => engine.archivedSnapshots(), [engine])
 
   const [filterAsset, setFilterAsset] = useState(
     () => initial?.filterAsset ?? StorageService.loadStrategiesFilterAsset(),

@@ -3,7 +3,7 @@ import { useStore } from '../store'
 import { StrategyEngine } from '../engine/strategy'
 import { isUpdateStale } from '../utils/format'
 
-/** 获取 StrategyEngine 实例（供快照列表与账本计算） */
+/** 获取 StrategyEngine 实例（策略计算的唯一入口） */
 export function useStrategyEngine() {
   const strategies = useStore((s) => s.strategies)
   const strategyTransactions = useStore((s) => s.strategyTransactions)
@@ -29,9 +29,12 @@ export function useArchivedStrategySnapshots() {
 
 /** 活跃策略中超过默认阈值未更新估值的数量（侧栏角标用） */
 export function useStrategyStaleCount() {
-  const snapshots = useStrategySnapshots()
+  const engine = useStrategyEngine()
   return useMemo(
-    () => snapshots.filter((s) => isUpdateStale(s.lastUpdated)).length,
-    [snapshots],
+    () =>
+      engine
+        .allSnapshots()
+        .filter((s) => isUpdateStale(s.lastUpdated)).length,
+    [engine],
   )
 }

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { PortfolioEngine } from '../portfolio'
+import { aggregateAssetSnapshots, PortfolioEngine } from '../portfolio'
 import { asset, emptyPrices, NOW, settings, T0, T1, T2, tx } from './helpers'
 
 describe('PortfolioEngine', () => {
@@ -262,5 +262,27 @@ describe('PortfolioEngine', () => {
       expect(ledger[0].balanceLabel).toBe('debt')
       expect(ledger[0].balanceAfter).toBe(1000)
     })
+  })
+})
+
+describe('aggregateAssetSnapshots', () => {
+  it('汇总正资产、负债与盈亏', () => {
+    const cash = asset({ id: 'c1', type: 'cash' })
+    const debt = asset({ id: 'd1', type: 'debt' })
+    const engine = new PortfolioEngine(
+      [cash, debt],
+      [
+        tx({ id: 'd1', assetId: 'c1', type: 'DEPOSIT', occurredAt: T0, amount: 1000 }),
+        tx({ id: 'b1', assetId: 'd1', type: 'BORROW', occurredAt: T0, amount: 300 }),
+      ],
+      emptyPrices,
+      settings(),
+    )
+    const overview = aggregateAssetSnapshots([engine.snapshot(cash), engine.snapshot(debt)])
+    expect(overview.totalAssetsCNY).toBe(1000)
+    expect(overview.totalDebtCNY).toBe(300)
+    expect(overview.netWorthCNY).toBe(700)
+    expect(overview.totalPnlCNY).toBe(0)
+    expect(overview.totalPnlRatio).toBe(0)
   })
 })
