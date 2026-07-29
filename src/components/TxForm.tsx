@@ -1,8 +1,48 @@
 import { useState } from 'react'
 import type { Asset, Transaction, TxType } from '../types'
-import { TX_TYPE_LABEL, isQuantityBased } from '../types'
+import { TX_TYPE_LABEL, isQuantityBased, isTransferableAsset } from '../types'
 import { parseDatetimeLocal, toDatetimeLocalValue } from '../utils/time'
 import { btnGhost, btnPrimary, inputCls, labelCls } from './Modal'
+
+/** UI 伪类型：记一笔时选「转账」，不写入领域 TxType */
+const TRANSFER_UI = '__TRANSFER__' as const
+type FormType = TxType | typeof TRANSFER_UI
+
+export interface TransferSubmit {
+  fromAssetId: string
+  toAssetId: string
+  amount: number
+  occurredAt: number
+  note?: string
+}
+
+/** 将转账表单拆成取出 + 存入两条流水（备注留空时自动标注对方资产） */
+export function transferToTransactions(
+  t: TransferSubmit,
+  assets: Asset[],
+): Omit<Transaction, 'id' | 'createdAt' | 'updatedAt'>[] {
+  const from = assets.find((a) => a.id === t.fromAssetId)
+  const to = assets.find((a) => a.id === t.toAssetId)
+  const fromName = from?.name ?? '未知资产'
+  const toName = to?.name ?? '未知资产'
+  const userNote = t.note?.trim()
+  return [
+    {
+      assetId: t.fromAssetId,
+      type: 'WITHDRAW',
+      amount: t.amount,
+      occurredAt: t.occurredAt,
+      note: userNote || `转至「${toName}」`,
+    },
+    {
+      assetId: t.toAssetId,
+      type: 'DEPOSIT',
+      amount: t.amount,
+      occurredAt: t.occurredAt,
+      note: userNote || `来自「${fromName}」`,
+    },
+  ]
+}
 
 interface Props {
   assets: Asset[]
@@ -10,6 +50,8 @@ interface Props {
   defaultType?: TxType
   initial?: Transaction
   onSubmit: (t: Omit<Transaction, 'id' | 'createdAt' | 'updatedAt'>) => void
+  /** 新建且事件类型为转账时调用；编辑流水不提供此入口 */
+  onTransferSubmit?: (t: TransferSubmit) => void
   onCancel: () => void
 }
 
@@ -20,15 +62,30 @@ function allowedTypes(asset: Asset | undefined): TxType[] {
   return ['DEPOSIT', 'WITHDRAW', 'INCOME', 'VALUATION']
 }
 
-export default function TxForm({ assets, fixedAssetId, defaultType, initial, onSubmit, onCancel }: Props) {
+function assetOptionLabel(a: Asset): string {
+  return a.platform ? `${a.name}(${a.platform})` : a.name
+}
+
+export default function TxForm({
+  assets,
+  fixedAssetId,
+  defaultType,
+  initial,
+  onSubmit,
+  onTransferSubmit,
+  onCancel,
+}: Props) {
   const active = assets.filter((a) => !a.archived)
   const [assetId, setAssetId] = useState(fixedAssetId ?? initial?.assetId ?? active[0]?.id ?? '')
   const asset = active.find((a) => a.id === assetId)
   const types = allowedTypes(asset)
-  const [type, setType] = useState<TxType>(
+  const allowTransfer = !initial && !!onTransferSubmit && !!asset && isTransferableAsset(asset)
+
+  const [type, setType] = useState<FormType>(
     initial?.type ??
       (defaultType && types.includes(defaultType) ? defaultType : types[0] ?? 'DEPOSIT'),
   )
+  const [toAssetId, setToAssetId] = useState('')
   const [openedAt] = useState(() => Date.now())
   const [occurredAtInput, setOccurredAtInput] = useState(() =>
     toDatetimeLocalValue(initial?.occurredAt ?? Date.now()),
@@ -39,24 +96,61 @@ export default function TxForm({ assets, fixedAssetId, defaultType, initial, onS
   const [value, setValue] = useState(initial?.value != null ? String(initial.value) : '')
   const [note, setNote] = useState(initial?.note ?? '')
 
-  const effType = types.includes(type) ? type : types[0]
-  const needsQty = effType === 'BUY' || effType === 'SELL'
+  const isTransfer = type === TRANSFER_UI && allowTransfer
+  const effType: TxType = isTransfer
+    ? 'DEPOSIT'
+    : types.includes(type as TxType)
+      ? (type as TxType)
+      : (types[0] ?? 'DEPOSIT')
+
+  const transferTargets = active.filter(
+    (a) =>
+      a.id !== assetId &&
+      isTransferableAsset(a) &&
+      asset != null &&
+      a.currency === asset.currency,
+  )
+  const toAsset = transferTargets.find((a) => a.id === toAssetId)
+
+  const needsQty = !isTransfer && (effType === 'BUY' || effType === 'SELL')
   const needsAmount =
-    effType === 'DEPOSIT' || effType === 'WITHDRAW' || effType === 'INCOME' ||
-    effType === 'BORROW' || effType === 'REPAY'
-  const needsValue = effType === 'VALUATION'
+    isTransfer ||
+    effType === 'DEPOSIT' ||
+    effType === 'WITHDRAW' ||
+    effType === 'INCOME' ||
+    effType === 'BORROW' ||
+    effType === 'REPAY'
+  const needsValue = !isTransfer && effType === 'VALUATION'
 
   const occurredAt = parseDatetimeLocal(occurredAtInput)
-  const valid =
-    !!asset &&
-    occurredAt != null &&
-    occurredAt <= openedAt &&
-    (!needsQty || (Number(quantity) > 0 && Number(price) > 0)) &&
-    (!needsAmount || Number(amount) > 0) &&
-    (!needsValue || Number(value) >= 0)
+  const valid = isTransfer
+    ? !!asset &&
+      !!toAsset &&
+      occurredAt != null &&
+      occurredAt <= openedAt &&
+      Number(amount) > 0
+    : !!asset &&
+      occurredAt != null &&
+      occurredAt <= openedAt &&
+      (!needsQty || (Number(quantity) > 0 && Number(price) > 0)) &&
+      (!needsAmount || Number(amount) > 0) &&
+      (!needsValue || Number(value) >= 0)
 
   const submit = () => {
     if (!valid || !asset || occurredAt == null) return
+
+    if (isTransfer && toAsset && onTransferSubmit) {
+      const trimmed = note.trim()
+      onTransferSubmit({
+        fromAssetId: asset.id,
+        toAssetId: toAsset.id,
+        amount: Number(amount),
+        occurredAt,
+        note: trimmed || undefined,
+      })
+      return
+    }
+
     onSubmit({
       assetId: asset.id,
       type: effType,
@@ -71,17 +165,35 @@ export default function TxForm({ assets, fixedAssetId, defaultType, initial, onS
 
   const cur = asset?.currency ?? 'CNY'
   const maxDatetime = toDatetimeLocalValue(openedAt)
+  const selectValue: FormType = isTransfer ? TRANSFER_UI : effType
+
+  const onAssetChange = (nextId: string) => {
+    setAssetId(nextId)
+    setToAssetId('')
+    const next = active.find((a) => a.id === nextId)
+    if (type === TRANSFER_UI && (!next || !isTransferableAsset(next))) {
+      setType(allowedTypes(next)[0] ?? 'DEPOSIT')
+    }
+  }
+
+  const onTypeChange = (v: string) => {
+    if (v === TRANSFER_UI) {
+      setType(TRANSFER_UI)
+      setToAssetId('')
+      return
+    }
+    setType(v as TxType)
+  }
 
   return (
     <div className="space-y-4">
       {!fixedAssetId && (
         <div>
-          <label className={labelCls}>资产 *</label>
-          <select className={inputCls} value={assetId} onChange={(e) => setAssetId(e.target.value)}>
+          <label className={labelCls}>{isTransfer ? '转出资产 *' : '资产 *'}</label>
+          <select className={inputCls} value={assetId} onChange={(e) => onAssetChange(e.target.value)}>
             {active.map((a) => (
               <option key={a.id} value={a.id}>
-                {a.name}
-                {a.platform ? `(${a.platform})` : ''}
+                {assetOptionLabel(a)}
               </option>
             ))}
           </select>
@@ -90,16 +202,13 @@ export default function TxForm({ assets, fixedAssetId, defaultType, initial, onS
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className={labelCls}>事件类型 *</label>
-          <select
-            className={inputCls}
-            value={effType}
-            onChange={(e) => setType(e.target.value as TxType)}
-          >
+          <select className={inputCls} value={selectValue} onChange={(e) => onTypeChange(e.target.value)}>
             {types.map((t) => (
               <option key={t} value={t}>
                 {TX_TYPE_LABEL[t]}
               </option>
             ))}
+            {allowTransfer && <option value={TRANSFER_UI}>转账</option>}
           </select>
         </div>
         <div>
@@ -114,6 +223,29 @@ export default function TxForm({ assets, fixedAssetId, defaultType, initial, onS
           />
         </div>
       </div>
+
+      {isTransfer && (
+        <div>
+          <label className={labelCls}>转入资产 *</label>
+          <select
+            className={inputCls}
+            value={toAssetId}
+            onChange={(e) => setToAssetId(e.target.value)}
+          >
+            <option value="">请选择转入资产</option>
+            {transferTargets.map((a) => (
+              <option key={a.id} value={a.id}>
+                {assetOptionLabel(a)}
+              </option>
+            ))}
+          </select>
+          {transferTargets.length === 0 && (
+            <p className="mt-1 text-xs text-slate-500">
+              没有同币种({cur})的其他可转账资产
+            </p>
+          )}
+        </div>
+      )}
 
       {needsQty && (
         <div className="grid grid-cols-2 gap-3">

@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState } from 'react'
 import { useStore } from '../store'
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
 import Modal, { btnPrimary } from '../components/Modal'
-import TxForm from '../components/TxForm'
+import TxForm, { transferToTransactions } from '../components/TxForm'
 import StrategyTxForm from '../components/StrategyTxForm'
 import FlowFilters from '../components/FlowFilters'
 import FlowTable, { FlowTypeBadge } from '../components/FlowTable'
@@ -56,6 +56,7 @@ export default function Transactions({ initial }: Props) {
   const transactions = useStore((s) => s.transactions)
   const strategyTransactions = useStore((s) => s.strategyTransactions)
   const addTransaction = useStore((s) => s.addTransaction)
+  const addTransactions = useStore((s) => s.addTransactions)
   const updateTransaction = useStore((s) => s.updateTransaction)
   const deleteTransaction = useStore((s) => s.deleteTransaction)
   const addStrategyTransaction = useStore((s) => s.addStrategyTransaction)
@@ -485,6 +486,11 @@ export default function Transactions({ initial }: Props) {
               fixedAssetId={addAsset.id}
               onSubmit={(t) => {
                 addTransaction(t)
+                setAssetModal(null)
+                setPickAssetId('')
+              }}
+              onTransferSubmit={(t) => {
+                addTransactions(transferToTransactions(t, assets))
                 setAssetModal(null)
                 setPickAssetId('')
               }}

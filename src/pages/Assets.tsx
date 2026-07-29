@@ -12,7 +12,7 @@ import {
   openRecordTx,
   type RecordTxModalState,
 } from '../components/recordTxModal'
-import TxForm from '../components/TxForm'
+import TxForm, { transferToTransactions } from '../components/TxForm'
 import AssetFilters from '../components/AssetFilters'
 import { SortTh } from '../components/SortTh'
 import { Card, CardHeader } from '../components/ui/Card'
@@ -91,6 +91,7 @@ export default function Assets({
   const deleteAsset = useStore((s) => s.deleteAsset)
   const settings = useStore((s) => s.settings)
   const addTransaction = useStore((s) => s.addTransaction)
+  const addTransactions = useStore((s) => s.addTransactions)
   const updateTransaction = useStore((s) => s.updateTransaction)
   const [modal, setModal] = useState<ModalState>(null)
   const [filterType, setFilterType] = useState(() => StorageService.loadAssetsFilterType())
@@ -387,6 +388,7 @@ export default function Assets({
           onClose={() => closeRecordTxModal(modal, setModal)}
           onChange={setModal}
           onSubmit={addTransaction}
+          onTransferSubmit={(t) => addTransactions(transferToTransactions(t, assets))}
         />
       )}
 

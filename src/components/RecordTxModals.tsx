@@ -7,6 +7,7 @@ import { nlResultToTxInitial } from '../services/nlTx'
 import type { Asset, Settings, Transaction } from '../types'
 import { color } from '../theme/colors'
 import type { RecordTxModalState } from './recordTxModal'
+import type { TransferSubmit } from './TxForm'
 
 function recordTxTitle(modal: RecordTxModalState): string {
   if (modal.kind === 'nlConfirm') {
@@ -22,9 +23,18 @@ interface Props {
   onClose: () => void
   onChange: (modal: RecordTxModalState) => void
   onSubmit: (t: Omit<Transaction, 'id' | 'createdAt' | 'updatedAt'>) => void
+  onTransferSubmit?: (t: TransferSubmit) => void
 }
 
-export function RecordTxModals({ modal, assets, settings, onClose, onChange, onSubmit }: Props) {
+export function RecordTxModals({
+  modal,
+  assets,
+  settings,
+  onClose,
+  onChange,
+  onSubmit,
+  onTransferSubmit,
+}: Props) {
   const { asset, defaultType, returnAssetId } = modal
 
   const switchRecordMode = (
@@ -81,6 +91,14 @@ export function RecordTxModals({ modal, assets, settings, onClose, onChange, onS
               onSubmit(t)
               onClose()
             }}
+            onTransferSubmit={
+              onTransferSubmit
+                ? (t) => {
+                    onTransferSubmit(t)
+                    onClose()
+                  }
+                : undefined
+            }
             onCancel={onClose}
           />
         ) : (

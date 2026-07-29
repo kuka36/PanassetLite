@@ -49,6 +49,11 @@ export interface Asset {
   createdAt: number
 }
 
+/** 可转账：价值类且非负债（底层用取出+存入） */
+export function isTransferableAsset(asset: Asset): boolean {
+  return !asset.archived && asset.type !== 'debt' && !isQuantityBased(asset.type)
+}
+
 /** 流水事件类型(事件溯源的事实来源) */
 export type TxType =
   | 'BUY'        // 买入:quantity + price

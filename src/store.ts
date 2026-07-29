@@ -16,6 +16,7 @@ interface AppState {
   deleteAsset: (id: string) => void
 
   addTransaction: (t: Omit<Transaction, 'id' | 'createdAt' | 'updatedAt'>) => void
+  addTransactions: (ts: Omit<Transaction, 'id' | 'createdAt' | 'updatedAt'>[]) => void
   updateTransaction: (id: string, t: Omit<Transaction, 'id' | 'createdAt' | 'updatedAt'>) => void
   deleteTransaction: (id: string) => void
 
@@ -78,6 +79,20 @@ export const useStore = create<AppState>((set, get) => ({
     const now = Date.now()
     const tx: Transaction = { ...t, id: uid(), createdAt: now, updatedAt: now }
     const transactions = [...get().transactions, tx]
+    StorageService.saveTransactions(transactions)
+    set({ transactions })
+  },
+
+  addTransactions(ts) {
+    if (ts.length === 0) return
+    const now = Date.now()
+    const added: Transaction[] = ts.map((t) => ({
+      ...t,
+      id: uid(),
+      createdAt: now,
+      updatedAt: now,
+    }))
+    const transactions = [...get().transactions, ...added]
     StorageService.saveTransactions(transactions)
     set({ transactions })
   },
