@@ -8,8 +8,62 @@ import { lightAxis, lightTooltip } from '../components/chartTheme'
 import { Card, CardBody, CardHeader } from '../components/ui/Card'
 import { btnGhost } from '../components/Modal'
 import { hexAlpha, palette } from '../theme/colors'
-import { ASSET_TYPE_COLOR, ASSET_TYPE_LABEL } from '../types'
+import { ASSET_TYPE_COLOR, ASSET_TYPE_LABEL, type AssetSnapshot } from '../types'
 import { fmtCompact, fmtMoney, fmtPct, pnlColor } from '../utils/format'
+
+const NAME_PIE_COLORS = [
+  palette.blue500,
+  palette.pink400,
+  palette.green600,
+  palette.violet400,
+  palette.amber500,
+  palette.orange400,
+  palette.indigo600,
+  palette.emerald400,
+  palette.blue700,
+  palette.red500,
+]
+
+function pieOption(data: { name: string; value: number; itemStyle?: { color: string } }[]) {
+  return {
+    tooltip: {
+      trigger: 'item' as const,
+      ...lightTooltip,
+      formatter: (p: unknown) => {
+        const { name, value, percent } = p as { name: string; value: number; percent: number }
+        return `${name}<br/>${fmtMoney(value)}(${percent}%)`
+      },
+    },
+    legend: {
+      type: 'scroll' as const,
+      orient: 'vertical' as const,
+      right: 8,
+      top: 'center',
+      textStyle: { color: palette.textMuted },
+    },
+    series: [
+      {
+        type: 'pie' as const,
+        radius: ['52%', '76%'],
+        center: ['38%', '50%'],
+        itemStyle: { borderColor: palette.surface, borderWidth: 2 },
+        label: { show: false },
+        data,
+      },
+    ],
+  }
+}
+
+function groupSnapshotsByName(snapshots: AssetSnapshot[]) {
+  const map = new Map<string, number>()
+  for (const s of snapshots) {
+    if (s.asset.type === 'debt' || s.valueCNY <= 0) continue
+    map.set(s.asset.name, (map.get(s.asset.name) ?? 0) + s.valueCNY)
+  }
+  return [...map.entries()]
+    .map(([name, valueCNY]) => ({ name, valueCNY }))
+    .sort((a, b) => b.valueCNY - a.valueCNY)
+}
 
 export default function Dashboard({ goTo }: { goTo: (page: string) => void }) {
   const loadDemo = useStore((s) => s.loadDemo)
@@ -84,40 +138,30 @@ export default function Dashboard({ goTo }: { goTo: (page: string) => void }) {
     [history],
   )
 
-  const pieOption = useMemo(
-    () => ({
-      tooltip: {
-        trigger: 'item' as const,
-        ...lightTooltip,
-        formatter: (p: unknown) => {
-          const { name, value, percent } = p as { name: string; value: number; percent: number }
-          return `${name}<br/>${fmtMoney(value)}(${percent}%)`
-        },
-      },
-      legend: {
-        orient: 'vertical' as const,
-        right: 8,
-        top: 'center',
-        textStyle: { color: palette.textMuted },
-      },
-      series: [
-        {
-          type: 'pie' as const,
-          radius: ['52%', '76%'],
-          center: ['38%', '50%'],
-          itemStyle: { borderColor: palette.surface, borderWidth: 2 },
-          label: { show: false },
-          data: summary.byType
-            .filter((t) => t.type !== 'debt' && t.valueCNY > 0)
-            .map((t) => ({
-              name: ASSET_TYPE_LABEL[t.type],
-              value: Math.round(t.valueCNY),
-              itemStyle: { color: ASSET_TYPE_COLOR[t.type] },
-            })),
-        },
-      ],
-    }),
+  const typePieOption = useMemo(
+    () =>
+      pieOption(
+        summary.byType
+          .filter((t) => t.type !== 'debt' && t.valueCNY > 0)
+          .map((t) => ({
+            name: ASSET_TYPE_LABEL[t.type],
+            value: Math.round(t.valueCNY),
+            itemStyle: { color: ASSET_TYPE_COLOR[t.type] },
+          })),
+      ),
     [summary.byType],
+  )
+
+  const namePieOption = useMemo(
+    () =>
+      pieOption(
+        groupSnapshotsByName(summary.snapshots).map((item, i) => ({
+          name: item.name,
+          value: Math.round(item.valueCNY),
+          itemStyle: { color: NAME_PIE_COLORS[i % NAME_PIE_COLORS.length] },
+        })),
+      ),
+    [summary.snapshots],
   )
 
   const topAssets = summary.snapshots.filter((s) => s.asset.type !== 'debt' && s.valueCNY > 0).slice(0, 6)
@@ -162,21 +206,30 @@ export default function Dashboard({ goTo }: { goTo: (page: string) => void }) {
     <div className="space-y-6">
       <h1 className="text-xl font-semibold text-slate-800">总览</h1>
 
-      <div className="grid gap-4 xl:grid-cols-5">
-        <Card className="xl:col-span-3">
+      <Card>
+        <CardHeader>
+          <h3 className="text-sm font-medium text-slate-700">净资产趋势</h3>
+        </CardHeader>
+        <CardBody className="pt-2">
+          <EChart option={trendOption} height={300} />
+        </CardBody>
+      </Card>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card>
           <CardHeader>
-            <h3 className="text-sm font-medium text-slate-700">净资产趋势</h3>
+            <h3 className="text-sm font-medium text-slate-700">资产分布 · 按类型</h3>
           </CardHeader>
           <CardBody className="pt-2">
-            <EChart option={trendOption} height={300} />
+            <EChart option={typePieOption} height={300} />
           </CardBody>
         </Card>
-        <Card className="xl:col-span-2">
+        <Card>
           <CardHeader>
-            <h3 className="text-sm font-medium text-slate-700">资产分布</h3>
+            <h3 className="text-sm font-medium text-slate-700">资产分布 · 按名称</h3>
           </CardHeader>
           <CardBody className="pt-2">
-            <EChart option={pieOption} height={300} />
+            <EChart option={namePieOption} height={300} />
           </CardBody>
         </Card>
       </div>
