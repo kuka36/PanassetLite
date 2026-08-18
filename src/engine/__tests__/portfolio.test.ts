@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { aggregateAssetSnapshots, PortfolioEngine } from '../portfolio'
 import { asset, emptyPrices, NOW, settings, T0, T1, T2, tx } from './helpers'
+import { startOfDay, todayEndMs } from '../../utils/time'
+
+const DAY_MS = 86400_000
 
 describe('PortfolioEngine', () => {
   beforeEach(() => {
@@ -261,6 +264,42 @@ describe('PortfolioEngine', () => {
       const ledger = engine.txLedger(debt)
       expect(ledger[0].balanceLabel).toBe('debt')
       expect(ledger[0].balanceAfter).toBe(1000)
+    })
+  })
+
+  describe('history()', () => {
+    const cash = asset({ id: 'c1', type: 'cash' })
+
+    it('近 7 天按日取样，且包含窗口前流水', () => {
+      const engine = new PortfolioEngine(
+        [cash],
+        [tx({ id: 'd1', assetId: 'c1', type: 'DEPOSIT', occurredAt: T0, amount: 1000 })],
+        emptyPrices,
+        settings(),
+      )
+      const fromMs = startOfDay(new Date(2025, 4, 26).getTime())
+      const h = engine.history([cash], { fromMs, toMs: todayEndMs() })
+      expect(h).toHaveLength(7)
+      expect(h[0].date).toBe('2025-05-26')
+      expect(h[6].date).toBe('2025-06-01')
+      expect(h.every((p) => p.netWorth === 1000)).toBe(true)
+    })
+
+    it('跨度超过 730 天时按周取样', () => {
+      const early = new Date(2022, 0, 1, 12).getTime()
+      const engine = new PortfolioEngine(
+        [cash],
+        [tx({ id: 'd1', assetId: 'c1', type: 'DEPOSIT', occurredAt: early, amount: 1000 })],
+        emptyPrices,
+        settings(),
+      )
+      const h = engine.history([cash])
+      const spanDays = Math.round((todayEndMs() - startOfDay(early)) / DAY_MS)
+      expect(spanDays).toBeGreaterThan(730)
+      expect(h.length).toBeGreaterThan(1)
+      expect(h.length).toBeLessThan(spanDays / 2)
+      expect(h[0].date).toBe('2022-01-01')
+      expect(h[1].date).toBe('2022-01-08')
     })
   })
 })

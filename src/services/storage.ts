@@ -16,12 +16,22 @@ const KEYS = {
   ui: 'panasset.ui',
 } as const
 
+export const DASHBOARD_TREND_RANGES = ['d7', 'd30', 'd90', 'd180', 'all', 'custom'] as const
+export type DashboardTrendRange = (typeof DASHBOARD_TREND_RANGES)[number]
+
+function isDashboardTrendRange(value: string | undefined): value is DashboardTrendRange {
+  return value != null && (DASHBOARD_TREND_RANGES as readonly string[]).includes(value)
+}
+
 type UiPrefs = {
   strategiesShowClosed?: boolean
   assetsFilterType?: string
   assetsFilterAsset?: string
   strategiesFilterAsset?: string
   strategiesFilterKind?: string
+  dashboardTrendRange?: DashboardTrendRange
+  dashboardTrendCustomFrom?: string
+  dashboardTrendCustomTo?: string
 }
 
 function loadUiPrefs(): UiPrefs {
@@ -135,6 +145,27 @@ export const StorageService = {
 
   saveStrategiesFilterKind: (value: string) => {
     patchUiPrefs({ strategiesFilterKind: value })
+  },
+
+  loadDashboardTrendRange: (): DashboardTrendRange => {
+    const value = loadUiPrefs().dashboardTrendRange
+    return isDashboardTrendRange(value) ? value : 'all'
+  },
+
+  saveDashboardTrendRange: (value: DashboardTrendRange) => {
+    patchUiPrefs({ dashboardTrendRange: value })
+  },
+
+  loadDashboardTrendCustomFrom: (): string => loadUiPrefs().dashboardTrendCustomFrom ?? '',
+
+  saveDashboardTrendCustomFrom: (value: string) => {
+    patchUiPrefs({ dashboardTrendCustomFrom: value })
+  },
+
+  loadDashboardTrendCustomTo: (): string => loadUiPrefs().dashboardTrendCustomTo ?? '',
+
+  saveDashboardTrendCustomTo: (value: string) => {
+    patchUiPrefs({ dashboardTrendCustomTo: value })
   },
 
   exportAll(): string {

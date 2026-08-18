@@ -332,7 +332,11 @@ export class PortfolioEngine {
     }
   }
 
-  private history(assets: Asset[]) {
+  /**
+   * 按日（跨度 >730 天则按周）取样净资产曲线。
+   * `range` 只限制取样日历范围；每个点仍 `valueAt(..., atMs)`，重放该日及之前全部流水。
+   */
+  history(assets: Asset[], range?: { fromMs: number; toMs: number }) {
     let earliestMs: number | undefined
     for (const list of this.txByAsset.values()) {
       for (const tx of list) {
@@ -341,8 +345,12 @@ export class PortfolioEngine {
     }
     if (earliestMs == null) return []
 
-    const start = startOfDay(earliestMs)
-    const end = todayEndMs()
+    const earliestStart = startOfDay(earliestMs)
+    const todayEnd = todayEndMs()
+    const start = startOfDay(Math.max(earliestStart, range?.fromMs ?? earliestStart))
+    const end = Math.min(todayEnd, range?.toMs ?? todayEnd)
+    if (start > end) return []
+
     const spanDays = Math.max(1, Math.round((end - start) / DAY_MS))
     const step = spanDays > 730 ? 7 : 1
 
