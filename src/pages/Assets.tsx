@@ -23,7 +23,7 @@ import { useTableSort } from '../hooks/useTableSort'
 import { aggregateAssetSnapshots } from '../engine/portfolio'
 import type { Asset, AssetSnapshot, AssetType, Transaction } from '../types'
 import { ASSET_TYPE_LABEL } from '../types'
-import { fmtDateTime, fmtMoney, fmtNum, fmtPct, isUpdateStale, pnlColor, staleUpdateCls } from '../utils/format'
+import { fmtDateTime, fmtMoney, fmtNum, fmtPct, isAssetUpdateReminderStale, pnlColor, assetStaleUpdateCls } from '../utils/format'
 import { sortBy, type SortState } from '../utils/tableSort'
 
 const assetTheadCls = 'bg-slate-50/80'
@@ -483,8 +483,8 @@ function AssetTableRow({
         {s.recentAnnualized != null ? fmtPct(s.recentAnnualized) : '—'}
       </td>
       <td
-        className={`px-2 py-2.5 text-right text-xs tabular-nums ${staleUpdateCls(s.lastUpdated)}`}
-        title={isUpdateStale(s.lastUpdated) ? '已超过一个月未更新,建议更新估值' : undefined}
+        className={`px-2 py-2.5 text-right text-xs tabular-nums ${assetStaleUpdateCls(s)}`}
+        title={isAssetUpdateReminderStale(s) ? '已超过一个月未更新,建议更新估值' : undefined}
       >
         {s.lastUpdated != null ? fmtDateTime(s.lastUpdated) : '—'}
       </td>
@@ -556,7 +556,7 @@ function AssetMobileCard({
             近期年化 {fmtPct(s.recentAnnualized)}
           </span>
         )}
-        <span className={staleUpdateCls(s.lastUpdated)}>
+        <span className={assetStaleUpdateCls(s)}>
           最近记录 {s.lastUpdated != null ? fmtDateTime(s.lastUpdated) : '—'}
         </span>
       </div>

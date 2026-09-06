@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { useStore } from '../store'
 import { PortfolioEngine } from '../engine/portfolio'
-import { isUpdateStale } from '../utils/format'
+import { isAssetUpdateReminderStale } from '../utils/format'
 
 /** 获取 PortfolioEngine 实例（组合计算的唯一入口） */
 export function usePortfolioEngine() {
@@ -29,7 +29,7 @@ export function useAssetStaleCount() {
     () =>
       engine
         .summary()
-        .snapshots.filter((s) => isUpdateStale(s.lastUpdated)).length,
+        .snapshots.filter((s) => isAssetUpdateReminderStale(s)).length,
     [engine],
   )
 }

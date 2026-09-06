@@ -26,6 +26,9 @@ export default function AssetForm({ initial, onSubmit, onCancel }: Props) {
   const [symbol, setSymbol] = useState(initial?.symbol ?? '')
   const [priceSource, setPriceSource] = useState<PriceSource>(initial?.priceSource ?? 'manual')
   const [note, setNote] = useState(initial?.note ?? '')
+  const [suppressUpdateReminder, setSuppressUpdateReminder] = useState(
+    initial?.suppressUpdateReminder ?? false,
+  )
 
   const canAutoPrice = type === 'crypto' || type === 'stock' || type === 'fund'
 
@@ -40,6 +43,7 @@ export default function AssetForm({ initial, onSubmit, onCancel }: Props) {
       priceSource: canAutoPrice ? priceSource : 'manual',
       note: note.trim() || undefined,
       archived: initial?.archived,
+      suppressUpdateReminder: suppressUpdateReminder || undefined,
     })
   }
 
@@ -147,6 +151,21 @@ export default function AssetForm({ initial, onSubmit, onCancel }: Props) {
         <label className={labelCls}>备注</label>
         <input className={inputCls} value={note} onChange={(e) => setNote(e.target.value)} />
       </div>
+
+      <label className="flex cursor-pointer items-start gap-2 text-sm text-slate-700">
+        <input
+          type="checkbox"
+          className="mt-0.5 accent-sky-600"
+          checked={suppressUpdateReminder}
+          onChange={(e) => setSuppressUpdateReminder(e.target.checked)}
+        />
+        <span>
+          关闭更新提醒
+          <span className="mt-0.5 block text-xs text-slate-500">
+            长期不动的资产可不提醒（侧栏角标与列表着色）
+          </span>
+        </span>
+      </label>
 
       <div className="flex justify-end gap-2 pt-2">
         <button className={btnGhost} onClick={onCancel}>

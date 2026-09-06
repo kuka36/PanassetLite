@@ -46,6 +46,8 @@ export interface Asset {
   platform?: string
   note?: string
   archived?: boolean
+  /** 关闭「长期未更新」提醒（侧栏角标 / 列表着色 / AI 洞察） */
+  suppressUpdateReminder?: boolean
   createdAt: number
 }
 

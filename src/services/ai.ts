@@ -190,6 +190,7 @@ export function analyzePortfolio(summary: PortfolioSummary): HealthReport {
   const now = Date.now()
   const stale = snapshots.filter(
     (s) =>
+      !s.asset.suppressUpdateReminder &&
       s.asset.priceSource === 'manual' &&
       s.asset.type !== 'cash' &&
       s.asset.type !== 'debt' &&
@@ -260,6 +261,7 @@ export function buildPortfolioBrief(
   const now = Date.now()
   const stale = summary.snapshots.filter(
     (s) =>
+      !s.asset.suppressUpdateReminder &&
       s.asset.priceSource === 'manual' &&
       s.asset.type !== 'cash' &&
       s.asset.type !== 'debt' &&

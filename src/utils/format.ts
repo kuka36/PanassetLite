@@ -1,4 +1,5 @@
-import { isUpdateStale, pnlTextCls, staleTextCls } from '../theme/colors'
+import { color, isUpdateStale, pnlTextCls, staleTextCls } from '../theme/colors'
+import type { AssetSnapshot } from '../types'
 
 /** 金额格式化:¥1,234,567 */
 export function fmtMoney(n: number, digits = 0): string {
@@ -74,4 +75,22 @@ export { isUpdateStale }
 /** 「最近记录」列文字颜色 */
 export function staleUpdateCls(date: string | number | undefined, thresholdDays = 30): string {
   return staleTextCls(date, thresholdDays)
+}
+
+/** 资产是否应计入「待更新」提醒（尊重 suppressUpdateReminder） */
+export function isAssetUpdateReminderStale(
+  snap: Pick<AssetSnapshot, 'lastUpdated' | 'asset'>,
+  thresholdDays = 30,
+): boolean {
+  if (snap.asset.suppressUpdateReminder) return false
+  return isUpdateStale(snap.lastUpdated, thresholdDays)
+}
+
+/** 资产「最近记录」列颜色（关闭提醒时不标黄） */
+export function assetStaleUpdateCls(
+  snap: Pick<AssetSnapshot, 'lastUpdated' | 'asset'>,
+  thresholdDays = 30,
+): string {
+  if (snap.asset.suppressUpdateReminder) return color.muted
+  return staleUpdateCls(snap.lastUpdated, thresholdDays)
 }
