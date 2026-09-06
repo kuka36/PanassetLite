@@ -34,7 +34,7 @@ export default function StrategyForm({
     fixedAssetId ?? initial?.assetId ?? active[0]?.id ?? '',
   )
   const [name, setName] = useState(initial?.name ?? '')
-  const [kind, setKind] = useState<StrategyKind>(initial?.kind ?? 'dca')
+  const [kind, setKind] = useState<StrategyKind>(initial?.kind ?? 'manual')
   const [note, setNote] = useState(initial?.note ?? '')
   const [openedAt] = useState(() => Date.now())
   const [amount, setAmount] = useState('')
