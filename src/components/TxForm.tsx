@@ -70,7 +70,8 @@ export default function TxForm({
   const [amount, setAmount] = useState(initial?.amount != null ? String(initial.amount) : '')
   const [value, setValue] = useState(initial?.value != null ? String(initial.value) : '')
   const [note, setNote] = useState(initial?.note ?? '')
-  const [priceHint, setPriceHint] = useState<string | null>(null)
+  /** 与当前 suggestKey 对齐的提示；text 为 null 表示用户已手改清除；key 不匹配时推导「加载中」 */
+  const [priceHint, setPriceHint] = useState<{ key: string; text: string | null } | null>(null)
   const settings = useStore((s) => s.settings)
 
   const isTransfer = type === TRANSFER_UI && allowTransfer
@@ -108,18 +109,23 @@ export default function TxForm({
     asset.type === 'crypto' &&
     asset.priceSource === 'coingecko' &&
     !!asset.symbol
+  const suggestKey =
+    canSuggestPrice && asset && dateKey != null ? `${assetId}:${dateKey}` : null
+  const shownPriceHint =
+    suggestKey == null
+      ? null
+      : priceHint?.key === suggestKey
+        ? priceHint.text
+        : '行情获取中…'
 
   useEffect(() => {
-    if (!canSuggestPrice || !asset || dateKey == null) {
-      setPriceHint(null)
-      return
-    }
+    if (!suggestKey || !asset || dateKey == null) return
 
     const ac = new AbortController()
     let cancelled = false
-    setPriceHint('行情获取中…')
+    const key = suggestKey
 
-    ;(async () => {
+    void (async () => {
       try {
         const { prices: storePrices } = useStore.getState()
         const result = await suggestCryptoUnitPrice(
@@ -136,15 +142,15 @@ export default function TxForm({
         }
         if (result.price != null && result.price > 0) {
           setPrice(formatSuggestedPrice(result.price))
-          setPriceHint('已按当日行情预填，可修改')
+          setPriceHint({ key, text: '已按当日行情预填，可修改' })
         } else {
           setPrice('')
-          setPriceHint('未取到行情，请手填单价')
+          setPriceHint({ key, text: '未取到行情，请手填单价' })
         }
       } catch (e) {
         if (cancelled || (e instanceof DOMException && e.name === 'AbortError')) return
         setPrice('')
-        setPriceHint('未取到行情，请手填单价')
+        setPriceHint({ key, text: '未取到行情，请手填单价' })
       }
     })()
 
@@ -153,7 +159,7 @@ export default function TxForm({
       ac.abort()
     }
     // asset 取自 assetId；切换资产/业务日时重新预填
-  }, [canSuggestPrice, assetId, asset, dateKey, settings])
+  }, [suggestKey, assetId, asset, dateKey, settings])
 
   const valid = isTransfer
     ? !!asset &&
@@ -305,7 +311,7 @@ export default function TxForm({
               value={price}
               onChange={(e) => {
                 setPrice(e.target.value)
-                if (priceHint) setPriceHint(null)
+                if (suggestKey) setPriceHint({ key: suggestKey, text: null })
               }}
               placeholder="0.00"
               min="0"
@@ -314,8 +320,8 @@ export default function TxForm({
           </div>
         </div>
       )}
-      {needsQty && canSuggestPrice && priceHint && (
-        <p className="text-xs text-slate-500">{priceHint}</p>
+      {needsQty && shownPriceHint && (
+        <p className="text-xs text-slate-500">{shownPriceHint}</p>
       )}
       {needsQty && Number(quantity) > 0 && Number(price) > 0 && (
         <p className="text-xs text-slate-500">
