@@ -375,7 +375,7 @@ export async function executeAssistantTool(
         platform: typeof safeArgs.platform === 'string' ? safeArgs.platform : undefined,
         symbol: typeof safeArgs.symbol === 'string' ? safeArgs.symbol : undefined,
         note: typeof safeArgs.note === 'string' ? safeArgs.note : undefined,
-        priceSource: 'manual',
+        priceSource: assetType === 'crypto' ? 'coingecko' : 'manual',
       }
       const action: PendingAction = { kind: 'addAsset', initial }
       return {

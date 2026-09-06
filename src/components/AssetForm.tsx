@@ -61,7 +61,15 @@ export default function AssetForm({ initial, onSubmit, onCancel }: Props) {
           <select
             className={inputCls}
             value={type}
-            onChange={(e) => setType(e.target.value as AssetType)}
+            onChange={(e) => {
+              const next = e.target.value as AssetType
+              setType(next)
+              if (next === 'crypto') {
+                setPriceSource('coingecko')
+              } else if (priceSource === 'coingecko' || priceSource === 'finnhub') {
+                setPriceSource('manual')
+              }
+            }}
           >
             {(Object.keys(ASSET_TYPE_LABEL) as AssetType[]).map((t) => (
               <option key={t} value={t}>
@@ -105,12 +113,14 @@ export default function AssetForm({ initial, onSubmit, onCancel }: Props) {
               onChange={(e) => setPriceSource(e.target.value as PriceSource)}
             >
               <option value="manual">手动更新估值</option>
-              {type === 'crypto' && <option value="coingecko">CoinGecko 自动(免 key)</option>}
+              {type === 'crypto' && (
+                <option value="coingecko">自动行情 Gate.io / CoinGecko 备用(免 key)</option>
+              )}
               {type !== 'crypto' && <option value="finnhub">Finnhub 自动(美股,需 key)</option>}
             </select>
-            {type === 'crypto' && (currency === 'BTC' || symbol.trim().toLowerCase() === 'bitcoin') && (
+            {type === 'crypto' && priceSource === 'coingecko' && (
               <p className="mt-1 text-xs text-slate-500">
-                记买入/卖出时可只填币数，成本按设置中的 BTC 汇率；记一笔不联网。
+                记买入/卖出时单价必填；有行情代码时会按业务日行情预填，可再修改。
               </p>
             )}
           </div>

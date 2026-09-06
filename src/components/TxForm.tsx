@@ -1,12 +1,13 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { Asset, Transaction, TxType } from '../types'
 import { TX_TYPE_LABEL, isQuantityBased, isTransferableAsset } from '../types'
 import type { TransferSubmit } from '../utils/transfer'
-import { parseDatetimeLocal, toDatetimeLocalValue } from '../utils/time'
+import { formatDateKey, parseDatetimeLocal, toDatetimeLocalValue } from '../utils/time'
 import { btnGhost, btnPrimary, inputCls, labelCls } from './Modal'
 import { useStore } from '../store'
-import { unitPriceFromSettingsFx } from '../services/prices'
-import { fmtMoney, fmtNum, nativeAmountDigits } from '../utils/format'
+import { StorageService } from '../services/storage'
+import { suggestCryptoUnitPrice } from '../services/prices'
+import { fmtNum, nativeAmountDigits } from '../utils/format'
 
 /** UI 伪类型：记一笔时选「转账」，不写入领域 TxType */
 const TRANSFER_UI = '__TRANSFER__' as const
@@ -32,6 +33,12 @@ function allowedTypes(asset: Asset | undefined): TxType[] {
 
 function assetOptionLabel(a: Asset): string {
   return a.platform ? `${a.name}(${a.platform})` : a.name
+}
+
+function formatSuggestedPrice(n: number): string {
+  if (n >= 1000) return n.toFixed(2)
+  if (n >= 1) return n.toFixed(4).replace(/\.?0+$/, '') || String(n)
+  return n.toPrecision(6).replace(/\.?0+$/, '')
 }
 
 export default function TxForm({
@@ -63,6 +70,7 @@ export default function TxForm({
   const [amount, setAmount] = useState(initial?.amount != null ? String(initial.amount) : '')
   const [value, setValue] = useState(initial?.value != null ? String(initial.value) : '')
   const [note, setNote] = useState(initial?.note ?? '')
+  const [priceHint, setPriceHint] = useState<string | null>(null)
   const settings = useStore((s) => s.settings)
 
   const isTransfer = type === TRANSFER_UI && allowTransfer
@@ -90,16 +98,63 @@ export default function TxForm({
     effType === 'BORROW' ||
     effType === 'REPAY'
   const needsValue = !isTransfer && effType === 'VALUATION'
-  const impliedPrice = asset ? unitPriceFromSettingsFx(asset, settings) : undefined
-  const canOmitPrice = impliedPrice != null
-  const impliedCostCny =
-    asset && impliedPrice != null && Number(quantity) > 0
-      ? Number(quantity) *
-        impliedPrice *
-        (asset.currency === settings.baseCurrency ? 1 : (settings.fxRates[asset.currency] ?? 1))
-      : null
 
   const occurredAt = parseDatetimeLocal(occurredAtInput)
+  const dateKey = occurredAt != null ? formatDateKey(occurredAt) : null
+  const canSuggestPrice =
+    !initial &&
+    needsQty &&
+    !!asset &&
+    asset.type === 'crypto' &&
+    asset.priceSource === 'coingecko' &&
+    !!asset.symbol
+
+  useEffect(() => {
+    if (!canSuggestPrice || !asset || dateKey == null) {
+      setPriceHint(null)
+      return
+    }
+
+    const ac = new AbortController()
+    let cancelled = false
+    setPriceHint('行情获取中…')
+
+    ;(async () => {
+      try {
+        const { prices: storePrices } = useStore.getState()
+        const result = await suggestCryptoUnitPrice(
+          asset,
+          dateKey,
+          storePrices,
+          settings,
+          ac.signal,
+        )
+        if (cancelled) return
+        if (result.fetched) {
+          StorageService.savePrices(result.prices)
+          useStore.setState({ prices: result.prices })
+        }
+        if (result.price != null && result.price > 0) {
+          setPrice(formatSuggestedPrice(result.price))
+          setPriceHint('已按当日行情预填，可修改')
+        } else {
+          setPrice('')
+          setPriceHint('未取到行情，请手填单价')
+        }
+      } catch (e) {
+        if (cancelled || (e instanceof DOMException && e.name === 'AbortError')) return
+        setPrice('')
+        setPriceHint('未取到行情，请手填单价')
+      }
+    })()
+
+    return () => {
+      cancelled = true
+      ac.abort()
+    }
+    // asset 取自 assetId；切换资产/业务日时重新预填
+  }, [canSuggestPrice, assetId, asset, dateKey, settings])
+
   const valid = isTransfer
     ? !!asset &&
       !!toAsset &&
@@ -109,7 +164,7 @@ export default function TxForm({
     : !!asset &&
       occurredAt != null &&
       occurredAt <= openedAt &&
-      (!needsQty || (Number(quantity) > 0 && (Number(price) > 0 || canOmitPrice))) &&
+      (!needsQty || (Number(quantity) > 0 && Number(price) > 0)) &&
       (!needsAmount || Number(amount) > 0) &&
       (!needsValue || Number(value) >= 0)
 
@@ -128,18 +183,12 @@ export default function TxForm({
       return
     }
 
-    const unitPrice = needsQty
-      ? Number(price) > 0
-        ? Number(price)
-        : impliedPrice
-      : undefined
-
     onSubmit({
       assetId: asset.id,
       type: effType,
       occurredAt,
       quantity: needsQty ? Number(quantity) : undefined,
-      price: needsQty ? unitPrice : undefined,
+      price: needsQty ? Number(price) : undefined,
       amount: needsAmount ? Number(amount) : undefined,
       value: needsValue ? Number(value) : undefined,
       note: note.trim() || undefined,
@@ -153,6 +202,10 @@ export default function TxForm({
   const onAssetChange = (nextId: string) => {
     setAssetId(nextId)
     setToAssetId('')
+    if (!initial) {
+      setPrice('')
+      setPriceHint(null)
+    }
     const next = active.find((a) => a.id === nextId)
     if (type === TRANSFER_UI && (!next || !isTransferableAsset(next))) {
       setType(allowedTypes(next)[0] ?? 'DEPOSIT')
@@ -245,34 +298,28 @@ export default function TxForm({
             />
           </div>
           <div>
-            <label className={labelCls}>
-              {canOmitPrice ? `成本单价(${cur})` : `单价(${cur})*`}
-            </label>
+            <label className={labelCls}>{`单价(${cur})*`}</label>
             <input
               type="number"
               className={inputCls}
               value={price}
-              onChange={(e) => setPrice(e.target.value)}
-              placeholder={canOmitPrice ? '留空则用设置汇率' : '0.00'}
+              onChange={(e) => {
+                setPrice(e.target.value)
+                if (priceHint) setPriceHint(null)
+              }}
+              placeholder="0.00"
               min="0"
               step="any"
             />
           </div>
         </div>
       )}
-      {needsQty && canOmitPrice && Number(price) <= 0 && (
-        <p className="text-xs text-slate-500">
-          未填单价时，按设置中的 BTC → CNY 汇率计成本。记一笔不联网，请在设置页更新汇率。
-        </p>
+      {needsQty && canSuggestPrice && priceHint && (
+        <p className="text-xs text-slate-500">{priceHint}</p>
       )}
       {needsQty && Number(quantity) > 0 && Number(price) > 0 && (
         <p className="text-xs text-slate-500">
           成交金额:{fmtNum(Number(quantity) * Number(price), nativeAmountDigits(cur))} {cur}
-        </p>
-      )}
-      {needsQty && canOmitPrice && Number(quantity) > 0 && Number(price) <= 0 && impliedCostCny != null && (
-        <p className="text-xs text-slate-500">
-          约计成本:{fmtMoney(impliedCostCny, 2)}
         </p>
       )}
 

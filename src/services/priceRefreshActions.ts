@@ -12,7 +12,7 @@ export async function refreshPrices(): Promise<string> {
   return result.message
 }
 
-/** 仅刷新 CoinGecko 加密货币行情并写回 store + localStorage */
+/** 仅刷新加密货币行情并写回 store + localStorage */
 export async function refreshCryptoPrices(): Promise<string> {
   const { assets, settings, prices } = useStore.getState()
   const result = await runRefreshCryptoPrices({ assets, settings, prices })

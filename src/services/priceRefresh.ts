@@ -13,7 +13,7 @@ export type CryptoRefreshResult =
   | { kind: 'skip'; message: string }
   | { kind: 'ok'; prices: PriceHistory; settings: Settings; message: string }
 
-/** 仅刷新 CoinGecko 加密货币行情；同日重复调用覆盖当天价格点 */
+/** 仅刷新加密货币行情（Gate.io，失败时 CoinGecko）；同日重复调用覆盖当天价格点 */
 export async function runRefreshCryptoPrices(params: {
   assets: Asset[]
   settings: Settings
@@ -21,11 +21,11 @@ export async function runRefreshCryptoPrices(params: {
 }): Promise<CryptoRefreshResult> {
   const { assets, settings, prices: pricesIn } = params
   if (!hasCryptoAssets(assets)) {
-    return { kind: 'skip', message: '当前没有配置 CoinGecko 自动行情的加密资产' }
+    return { kind: 'skip', message: '当前没有配置自动行情的加密资产' }
   }
 
   const prices = clonePrices(pricesIn)
-  const r = await fetchCryptoPrices(assets, prices)
+  const r = await fetchCryptoPrices(assets, prices, settings)
   const newSettings = { ...settings, pricesUpdatedAt: Date.now() }
 
   const messages: string[] = []
@@ -56,7 +56,7 @@ export async function runRefreshAllPrices(params: {
   }
 
   try {
-    const r = await fetchCryptoPrices(assets, prices)
+    const r = await fetchCryptoPrices(assets, prices, newSettings)
     if (r.updated.length) messages.push(`加密货币 ${r.updated.length} 项已更新`)
     if (r.failed.length) messages.push(`加密货币失败:${r.failed.join(', ')}`)
   } catch (e) {

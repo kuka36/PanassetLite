@@ -64,7 +64,7 @@ export default function Settings() {
       const fxRates = await fetchFxRates(settings)
       saveSettings({ fxRates, fxUpdatedAt: Date.now() })
       setFx(Object.fromEntries(Object.entries(fxRates).map(([k, v]) => [k, formatFxRate(v)])))
-      flash('汇率已自动更新(法币欧洲央行 / BTC CoinGecko)')
+      flash('汇率已自动更新(法币欧洲央行 / BTC Gate 或 CoinGecko)')
     } catch (e) {
       flash(`自动更新失败:${(e as Error).message}`)
     }
@@ -119,7 +119,7 @@ export default function Settings() {
 
       <Section
         title="汇率"
-        desc="非人民币资产按此汇率折算为 CNY 展示。可手动填写,或一键更新(法币来自欧洲央行,BTC 来自 CoinGecko)。"
+        desc="非人民币资产按此汇率折算为 CNY 展示。可手动填写,或一键更新(法币来自欧洲央行,BTC 优先 Gate.io，备用 CoinGecko)。"
       >
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {Object.keys(fx).map((k) => (
@@ -154,12 +154,12 @@ export default function Settings() {
 
       <Section
         title="行情 API(可选)"
-        desc="加密货币行情使用 CoinGecko 免费接口,无需配置。美股行情需要 Finnhub 免费 key(finnhub.io 注册即得)。"
+        desc="加密货币优先 Gate.io，失败时备用 CoinGecko。Gate 为 USDT 价×设置中汇率折算 CNY，均无需 key。美股需 Finnhub 免费 key(finnhub.io)。"
       >
         <div className="space-y-3">
           <div>
             <p className="text-xs text-slate-500">
-              为行情来源选 CoinGecko 的加密资产拉取 CNY 单价,写入本地并按日保存(同一天重复获取以最后一次为准)。
+              为行情来源选自动行情的加密资产拉取 CNY 单价,写入本地并按日保存(同一天重复获取以最后一次为准)。主线路 Gate.io，备用 CoinGecko。
             </p>
             {cryptoSymbols.length > 0 && (
               <p className="mt-1 text-xs text-slate-500">

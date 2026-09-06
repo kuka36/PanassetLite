@@ -14,7 +14,7 @@
 - **统一记账**:8 类资产(现金存款 / 理财 / 股票 / 基金 / 加密货币 / 房产 / 负债 / 其他),多币种自动折算 CNY
 - **事件溯源**:持仓、市值、盈亏、收益率、净值历史全部由流水事件流重放计算(`PortfolioEngine`),不存派生状态
 - **手动估值也能算收益率**:支付宝理财、银行产品每月更新一次总值,自动算出区间年化,判断"还值不值得买"
-- **自动行情**:加密货币(CoinGecko,免 key)、汇率(Frankfurter,免 key)、美股(Finnhub,免费 key)
+- **自动行情**:加密货币(Gate.io 主线路 / CoinGecko 备用,免 key)、汇率(Frankfurter,免 key)、美股(Finnhub,免费 key)
 - **强大图表**:净资产趋势、资产分布、持仓占比(ECharts)
 - **AI 智能顾问**:内置本地规则引擎做风险评估、健康评分、配置建议(零配置可用);可选接入 DeepSeek 或任意 OpenAI 兼容 LLM 做深度分析
 - **数据自主**:一键导出 / 导入 JSON 备份,一键清空
@@ -31,7 +31,7 @@ npm run dev
 ## 使用说明
 
 - [如何记录股票资产](doc/record-stock-assets.md) — 逐只记股票 vs 记整个证券账户总资产，以及「持有」「近期年化」等说明
-- [如何记录加密货币资产](doc/record-crypto-assets.md) — 逐币种记持仓 vs 记交易所账户总资产，CoinGecko 自动行情与策略定投
+- [如何记录加密货币资产](doc/record-crypto-assets.md) — 逐币种记持仓 vs 记交易所账户总资产，Gate.io / CoinGecko 自动行情与策略定投
 - [如何记录银行贷款](doc/record-bank-loan.md) — 负债资产、借入/还款/估值更新，以及等额本息等常见场景
 
 ## 构建部署
