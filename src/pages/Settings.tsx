@@ -64,7 +64,7 @@ export default function Settings() {
       const fxRates = await fetchFxRates(settings)
       saveSettings({ fxRates, fxUpdatedAt: Date.now() })
       setFx(Object.fromEntries(Object.entries(fxRates).map(([k, v]) => [k, formatFxRate(v)])))
-      flash('汇率已自动更新(Frankfurter/欧洲央行)')
+      flash('汇率已自动更新(法币欧洲央行 / BTC CoinGecko)')
     } catch (e) {
       flash(`自动更新失败:${(e as Error).message}`)
     }
@@ -119,7 +119,7 @@ export default function Settings() {
 
       <Section
         title="汇率"
-        desc="非人民币资产按此汇率折算为 CNY 展示。可手动填写,或一键从免费接口更新。"
+        desc="非人民币资产按此汇率折算为 CNY 展示。可手动填写,或一键更新(法币来自欧洲央行,BTC 来自 CoinGecko)。"
       >
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {Object.keys(fx).map((k) => (

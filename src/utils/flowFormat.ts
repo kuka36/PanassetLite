@@ -1,5 +1,5 @@
 import type { StrategyTransaction, Transaction } from '../types'
-import { fmtNum } from './format'
+import { fmtNum, nativeAmountDigits } from './format'
 
 /** 资产流水明细排序值 */
 export function assetFlowDetailSortValue(t: Transaction): number | null {
@@ -17,16 +17,18 @@ export function strategyFlowDetailSortValue(t: StrategyTransaction): number | nu
 }
 
 export function formatAssetFlowDetail(t: Transaction, currency: string): string {
+  const digits = nativeAmountDigits(currency)
   if (t.quantity != null && t.price != null) {
-    return `${fmtNum(t.quantity)} × ${fmtNum(t.price)} ${currency}`
+    return `${fmtNum(t.quantity)} × ${fmtNum(t.price, digits)} ${currency}`
   }
-  if (t.amount != null) return `${fmtNum(t.amount, 2)} ${currency}`
-  if (t.value != null) return `市值 ${fmtNum(t.value, 2)} ${currency}`
+  if (t.amount != null) return `${fmtNum(t.amount, digits)} ${currency}`
+  if (t.value != null) return `市值 ${fmtNum(t.value, digits)} ${currency}`
   return '—'
 }
 
 export function formatStrategyFlowDetail(t: StrategyTransaction, currency: string): string {
-  if (t.amount != null) return `${fmtNum(t.amount, 2)} ${currency}`
-  if (t.value != null) return `市值 ${fmtNum(t.value, 2)} ${currency}`
+  const digits = nativeAmountDigits(currency)
+  if (t.amount != null) return `${fmtNum(t.amount, digits)} ${currency}`
+  if (t.value != null) return `市值 ${fmtNum(t.value, digits)} ${currency}`
   return '—'
 }

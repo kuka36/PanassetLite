@@ -9,7 +9,14 @@ interface Props {
   onCancel: () => void
 }
 
-const CURRENCIES = ['CNY', 'USD', 'HKD', 'EUR']
+const CURRENCIES = ['CNY', 'USD', 'HKD', 'EUR', 'BTC'] as const
+const CURRENCY_LABEL: Record<(typeof CURRENCIES)[number], string> = {
+  CNY: 'CNY 人民币',
+  USD: 'USD 美元',
+  HKD: 'HKD 港币',
+  EUR: 'EUR 欧元',
+  BTC: 'BTC 比特币',
+}
 
 export default function AssetForm({ initial, onSubmit, onCancel }: Props) {
   const [name, setName] = useState(initial?.name ?? '')
@@ -72,7 +79,7 @@ export default function AssetForm({ initial, onSubmit, onCancel }: Props) {
           >
             {CURRENCIES.map((c) => (
               <option key={c} value={c}>
-                {c}
+                {CURRENCY_LABEL[c]}
               </option>
             ))}
           </select>
@@ -101,6 +108,11 @@ export default function AssetForm({ initial, onSubmit, onCancel }: Props) {
               {type === 'crypto' && <option value="coingecko">CoinGecko 自动(免 key)</option>}
               {type !== 'crypto' && <option value="finnhub">Finnhub 自动(美股,需 key)</option>}
             </select>
+            {type === 'crypto' && (currency === 'BTC' || symbol.trim().toLowerCase() === 'bitcoin') && (
+              <p className="mt-1 text-xs text-slate-500">
+                记买入/卖出时可只填币数，成本按设置中的 BTC 汇率；记一笔不联网。
+              </p>
+            )}
           </div>
           {priceSource !== 'manual' && (
             <div>

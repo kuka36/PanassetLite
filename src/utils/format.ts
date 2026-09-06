@@ -32,6 +32,11 @@ export function fmtNum(n: number, maxDigits = 4): string {
   return n.toLocaleString('zh-CN', { maximumFractionDigits: maxDigits })
 }
 
+/** 原币种金额小数位：BTC 用 8 位（聪），其余 2 位 */
+export function nativeAmountDigits(currency: string): number {
+  return currency === 'BTC' ? 8 : 2
+}
+
 /** 日期时间:MM/DD HH:mm:ss */
 export function fmtDateTime(ts: number): string {
   return new Date(ts).toLocaleString('zh-CN', {

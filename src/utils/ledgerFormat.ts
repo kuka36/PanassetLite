@@ -1,9 +1,9 @@
 import type { TxLedgerRow } from '../types'
-import { fmtNum } from './format'
+import { fmtNum, nativeAmountDigits } from './format'
 
 export function formatLedgerAmount(amount: number | null, currency: string): string {
   if (amount == null) return '—'
-  return `${fmtNum(amount, 2)} ${currency}`
+  return `${fmtNum(amount, nativeAmountDigits(currency))} ${currency}`
 }
 
 export function formatLedgerBalance(
@@ -12,5 +12,5 @@ export function formatLedgerBalance(
   currency: string,
 ): string {
   if (label === 'quantity') return `${fmtNum(balance)} 份`
-  return `${fmtNum(balance, 2)} ${currency}`
+  return `${fmtNum(balance, nativeAmountDigits(currency))} ${currency}`
 }

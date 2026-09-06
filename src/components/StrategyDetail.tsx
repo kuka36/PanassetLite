@@ -11,7 +11,7 @@ import ValueLedgerTable from './ValueLedgerTable'
 import { lightAxis, lightTooltip } from './chartTheme'
 import { btnGhost, btnPrimary } from './Modal'
 import { hexAlpha, palette } from '../theme/colors'
-import { fmtCompact, fmtMoney, fmtNum, fmtPct, pnlColor } from '../utils/format'
+import { fmtCompact, fmtMoney, fmtNum, fmtPct, nativeAmountDigits, pnlColor } from '../utils/format'
 import { formatDateKey } from '../utils/time'
 
 type ModalState =
@@ -254,9 +254,9 @@ export default function StrategyDetail({
       <ValueLedgerTable
         rows={ledger}
         typeLabel={(row) => STRATEGY_TX_TYPE_LABEL[row.tx.type]}
-        formatAmount={(amount) => (amount != null ? fmtNum(amount) : '—')}
-        formatBalance={(balance) => fmtNum(balance)}
-        formatIntervalGain={(gain) => fmtNum(gain)}
+        formatAmount={(amount) => (amount != null ? fmtNum(amount, nativeAmountDigits(cur)) : '—')}
+        formatBalance={(balance) => fmtNum(balance, nativeAmountDigits(cur))}
+        formatIntervalGain={(gain) => fmtNum(gain, nativeAmountDigits(cur))}
         amountHeader={`发生额（${cur}）`}
         balanceHeader={`余额（${cur}）`}
         emptyColSpan={8}

@@ -4,6 +4,9 @@ import { TX_TYPE_LABEL, isQuantityBased, isTransferableAsset } from '../types'
 import type { TransferSubmit } from '../utils/transfer'
 import { parseDatetimeLocal, toDatetimeLocalValue } from '../utils/time'
 import { btnGhost, btnPrimary, inputCls, labelCls } from './Modal'
+import { useStore } from '../store'
+import { unitPriceFromSettingsFx } from '../services/prices'
+import { fmtMoney, fmtNum, nativeAmountDigits } from '../utils/format'
 
 /** UI 伪类型：记一笔时选「转账」，不写入领域 TxType */
 const TRANSFER_UI = '__TRANSFER__' as const
@@ -60,6 +63,7 @@ export default function TxForm({
   const [amount, setAmount] = useState(initial?.amount != null ? String(initial.amount) : '')
   const [value, setValue] = useState(initial?.value != null ? String(initial.value) : '')
   const [note, setNote] = useState(initial?.note ?? '')
+  const settings = useStore((s) => s.settings)
 
   const isTransfer = type === TRANSFER_UI && allowTransfer
   const effType: TxType = isTransfer
@@ -86,6 +90,14 @@ export default function TxForm({
     effType === 'BORROW' ||
     effType === 'REPAY'
   const needsValue = !isTransfer && effType === 'VALUATION'
+  const impliedPrice = asset ? unitPriceFromSettingsFx(asset, settings) : undefined
+  const canOmitPrice = impliedPrice != null
+  const impliedCostCny =
+    asset && impliedPrice != null && Number(quantity) > 0
+      ? Number(quantity) *
+        impliedPrice *
+        (asset.currency === settings.baseCurrency ? 1 : (settings.fxRates[asset.currency] ?? 1))
+      : null
 
   const occurredAt = parseDatetimeLocal(occurredAtInput)
   const valid = isTransfer
@@ -97,7 +109,7 @@ export default function TxForm({
     : !!asset &&
       occurredAt != null &&
       occurredAt <= openedAt &&
-      (!needsQty || (Number(quantity) > 0 && Number(price) > 0)) &&
+      (!needsQty || (Number(quantity) > 0 && (Number(price) > 0 || canOmitPrice))) &&
       (!needsAmount || Number(amount) > 0) &&
       (!needsValue || Number(value) >= 0)
 
@@ -116,12 +128,18 @@ export default function TxForm({
       return
     }
 
+    const unitPrice = needsQty
+      ? Number(price) > 0
+        ? Number(price)
+        : impliedPrice
+      : undefined
+
     onSubmit({
       assetId: asset.id,
       type: effType,
       occurredAt,
       quantity: needsQty ? Number(quantity) : undefined,
-      price: needsQty ? Number(price) : undefined,
+      price: needsQty ? unitPrice : undefined,
       amount: needsAmount ? Number(amount) : undefined,
       value: needsValue ? Number(value) : undefined,
       note: note.trim() || undefined,
@@ -215,34 +233,46 @@ export default function TxForm({
       {needsQty && (
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className={labelCls}>数量 / 份额 *</label>
+            <label className={labelCls}>{asset?.type === 'crypto' ? '数量（币数）*' : '数量 / 份额 *'}</label>
             <input
               type="number"
               className={inputCls}
               value={quantity}
               onChange={(e) => setQuantity(e.target.value)}
-              placeholder="100"
+              placeholder={asset?.type === 'crypto' ? '0.002' : '100'}
               min="0"
               step="any"
             />
           </div>
           <div>
-            <label className={labelCls}>单价({cur})*</label>
+            <label className={labelCls}>
+              {canOmitPrice ? `成本单价(${cur})` : `单价(${cur})*`}
+            </label>
             <input
               type="number"
               className={inputCls}
               value={price}
               onChange={(e) => setPrice(e.target.value)}
-              placeholder="0.00"
+              placeholder={canOmitPrice ? '留空则用设置汇率' : '0.00'}
               min="0"
               step="any"
             />
           </div>
         </div>
       )}
+      {needsQty && canOmitPrice && Number(price) <= 0 && (
+        <p className="text-xs text-slate-500">
+          未填单价时，按设置中的 BTC → CNY 汇率计成本。记一笔不联网，请在设置页更新汇率。
+        </p>
+      )}
       {needsQty && Number(quantity) > 0 && Number(price) > 0 && (
         <p className="text-xs text-slate-500">
-          成交金额:{(Number(quantity) * Number(price)).toLocaleString('zh-CN')} {cur}
+          成交金额:{fmtNum(Number(quantity) * Number(price), nativeAmountDigits(cur))} {cur}
+        </p>
+      )}
+      {needsQty && canOmitPrice && Number(quantity) > 0 && Number(price) <= 0 && impliedCostCny != null && (
+        <p className="text-xs text-slate-500">
+          约计成本:{fmtMoney(impliedCostCny, 2)}
         </p>
       )}
 

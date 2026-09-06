@@ -10,7 +10,7 @@ import MiniStat from './ui/MiniStat'
 import ValueLedgerTable from './ValueLedgerTable'
 import type { Asset, StrategySnapshot, Transaction } from '../types'
 import { TX_TYPE_LABEL, isQuantityBased } from '../types'
-import { fmtMoney, fmtNum, fmtPct, pnlColor } from '../utils/format'
+import { fmtMoney, fmtNum, fmtPct, nativeAmountDigits, pnlColor } from '../utils/format'
 import { formatLedgerAmount, formatLedgerBalance } from '../utils/ledgerFormat'
 
 export interface AssetDetailProps {
@@ -152,7 +152,9 @@ export default function AssetDetail({
                       {row.tx.quantity != null ? fmtNum(row.tx.quantity) : '—'}
                     </td>
                     <td className="px-3 py-2 text-right tabular-nums text-slate-700">
-                      {row.tx.price != null ? `${fmtNum(row.tx.price)} ${asset.currency}` : '—'}
+                      {row.tx.price != null
+                        ? `${fmtNum(row.tx.price, nativeAmountDigits(asset.currency))} ${asset.currency}`
+                        : '—'}
                     </td>
                   </>
                 )

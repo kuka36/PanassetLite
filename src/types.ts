@@ -37,7 +37,7 @@ export interface Asset {
   id: string
   name: string
   type: AssetType
-  /** 计价货币,如 CNY / USD / HKD */
+  /** 计价货币,如 CNY / USD / HKD / BTC */
   currency: string
   /** 行情代码:coingecko id(如 bitcoin)或股票 ticker(如 AAPL) */
   symbol?: string
@@ -122,7 +122,7 @@ export interface Settings {
 
 export const DEFAULT_SETTINGS: Settings = {
   baseCurrency: 'CNY',
-  fxRates: { USD: 7.2, HKD: 0.92, EUR: 7.8, USDT: 7.2 },
+  fxRates: { USD: 6.711, HKD: 0.8559, EUR: 7.7997, USDT: 6.711, BTC: 536260 },
   llm: { baseUrl: 'https://api.deepseek.com', apiKey: '', model: 'deepseek-chat' },
   llmSendAssetNames: true,
   llmContextPrivacy: 'detailed',

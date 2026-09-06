@@ -111,7 +111,7 @@ export const ASSISTANT_TOOL_DEFINITIONS = [
             type: 'string',
             enum: ['cash', 'wealth', 'stock', 'fund', 'crypto', 'property', 'debt', 'other'],
           },
-          currency: { type: 'string' },
+          currency: { type: 'string', description: '计价货币,如 CNY / USD / HKD / EUR / BTC' },
           platform: { type: 'string' },
           symbol: { type: 'string' },
           note: { type: 'string' },
