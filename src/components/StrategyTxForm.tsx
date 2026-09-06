@@ -15,7 +15,7 @@ interface Props {
 const ALL_TYPES: StrategyTxType[] = ['DEPOSIT', 'WITHDRAW', 'INCOME', 'VALUATION']
 
 export default function StrategyTxForm({ strategyId, currency, initial, onSubmit, onCancel }: Props) {
-  const [type, setType] = useState<StrategyTxType>(initial?.type ?? 'DEPOSIT')
+  const [type, setType] = useState<StrategyTxType>(initial?.type ?? 'VALUATION')
   const [openedAt] = useState(() => Date.now())
   const [occurredAtInput, setOccurredAtInput] = useState(() =>
     toDatetimeLocalValue(initial?.occurredAt ?? Date.now()),

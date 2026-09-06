@@ -45,6 +45,7 @@ export default function AssetDetail({
   const strategyEngine = useStrategyEngine()
   const assets = useStore((s) => s.assets)
   const addStrategy = useStore((s) => s.addStrategy)
+  const addStrategyTransaction = useStore((s) => s.addStrategyTransaction)
   const updateStrategy = useStore((s) => s.updateStrategy)
   const deleteStrategy = useStore((s) => s.deleteStrategy)
   const deleteTransaction = useStore((s) => s.deleteTransaction)
@@ -238,8 +239,16 @@ export default function AssetDetail({
           <StrategyForm
             assets={assets}
             fixedAssetId={assetId}
-            onSubmit={(s) => {
-              addStrategy(s)
+            onSubmit={(s, deposit) => {
+              const strategy = addStrategy(s)
+              if (deposit) {
+                addStrategyTransaction({
+                  strategyId: strategy.id,
+                  type: 'DEPOSIT',
+                  occurredAt: deposit.occurredAt,
+                  amount: deposit.amount,
+                })
+              }
               setStrategyModal(null)
             }}
             onCancel={() => setStrategyModal(null)}

@@ -58,7 +58,7 @@ export default function TxForm({
 
   const [type, setType] = useState<FormType>(
     initial?.type ??
-      (defaultType && types.includes(defaultType) ? defaultType : types[0] ?? 'DEPOSIT'),
+      (defaultType && types.includes(defaultType) ? defaultType : 'VALUATION'),
   )
   const [toAssetId, setToAssetId] = useState('')
   const [openedAt] = useState(() => Date.now())

@@ -1,14 +1,20 @@
 import { useState } from 'react'
 import type { Asset, Strategy, StrategyKind } from '../types'
 import { STRATEGY_KIND_LABEL } from '../types'
+import { parseDatetimeLocal, toDatetimeLocalValue } from '../utils/time'
 import { btnGhost, btnPrimary, inputCls, labelCls } from './Modal'
+
+export type StrategyInitialDeposit = { amount: number; occurredAt: number }
 
 interface Props {
   assets: Asset[]
   /** 从资产详情打开时固定 assetId；从策略页打开时可选 */
   fixedAssetId?: string
   initial?: Strategy
-  onSubmit: (s: Omit<Strategy, 'id' | 'createdAt'>) => void
+  onSubmit: (
+    s: Omit<Strategy, 'id' | 'createdAt'>,
+    initialDeposit?: StrategyInitialDeposit,
+  ) => void
   onCancel: () => void
   /** 编辑进行中策略时，底部永久删除入口 */
   onPermanentDelete?: () => void
@@ -22,6 +28,7 @@ export default function StrategyForm({
   onCancel,
   onPermanentDelete,
 }: Props) {
+  const isCreate = !initial
   const active = assets.filter((a) => !a.archived)
   const [assetId, setAssetId] = useState(
     fixedAssetId ?? initial?.assetId ?? active[0]?.id ?? '',
@@ -29,23 +36,41 @@ export default function StrategyForm({
   const [name, setName] = useState(initial?.name ?? '')
   const [kind, setKind] = useState<StrategyKind>(initial?.kind ?? 'dca')
   const [note, setNote] = useState(initial?.note ?? '')
+  const [openedAt] = useState(() => Date.now())
+  const [amount, setAmount] = useState('')
+  const [occurredAtInput, setOccurredAtInput] = useState(() =>
+    toDatetimeLocalValue(Date.now()),
+  )
 
   const selectedAsset = active.find((a) => a.id === assetId)
   const currency = selectedAsset?.currency ?? initial?.currency ?? 'CNY'
 
-  const valid = !!assetId && name.trim().length > 0
+  const hasDepositInput = amount.trim() !== ''
+  const occurredAt = parseDatetimeLocal(occurredAtInput)
+  const depositValid =
+    !hasDepositInput ||
+    (Number(amount) > 0 && occurredAt != null && occurredAt <= openedAt)
+
+  const valid = !!assetId && name.trim().length > 0 && (!isCreate || depositValid)
 
   const submit = () => {
     if (!valid) return
-    onSubmit({
+    const strategy = {
       assetId,
       name: name.trim(),
       kind,
       currency,
       note: note.trim() || undefined,
       archived: initial?.archived,
-    })
+    }
+    if (isCreate && hasDepositInput && occurredAt != null) {
+      onSubmit(strategy, { amount: Number(amount), occurredAt })
+    } else {
+      onSubmit(strategy)
+    }
   }
+
+  const maxDatetime = toDatetimeLocalValue(openedAt)
 
   return (
     <div className="space-y-4">
@@ -102,6 +127,38 @@ export default function StrategyForm({
         <p className="text-xs text-slate-400">
           计价货币将继承资产：{currency}
         </p>
+      )}
+
+      {isCreate && (
+        <div className="space-y-3 border-t border-slate-100 pt-4">
+          <p className="text-sm text-slate-600">初始存入（可选）</p>
+          <div>
+            <label className={labelCls}>金额（{currency}）</label>
+            <input
+              type="number"
+              min="0"
+              step="any"
+              className={inputCls}
+              placeholder="留空则只创建策略"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && submit()}
+            />
+          </div>
+          {hasDepositInput && (
+            <div>
+              <label className={labelCls}>发生时间 *</label>
+              <input
+                type="datetime-local"
+                step={1}
+                className={inputCls}
+                value={occurredAtInput}
+                max={maxDatetime}
+                onChange={(e) => setOccurredAtInput(e.target.value)}
+              />
+            </div>
+          )}
+        </div>
       )}
 
       {onPermanentDelete && (

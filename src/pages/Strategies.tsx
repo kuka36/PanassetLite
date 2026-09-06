@@ -117,6 +117,7 @@ function StrategyTableRow({
 export default function Strategies({ initial, onViewAllFlows }: Props) {
   const assets = useStore((s) => s.assets)
   const addStrategy = useStore((s) => s.addStrategy)
+  const addStrategyTransaction = useStore((s) => s.addStrategyTransaction)
   const updateStrategy = useStore((s) => s.updateStrategy)
   const deleteStrategy = useStore((s) => s.deleteStrategy)
 
@@ -238,8 +239,16 @@ export default function Strategies({ initial, onViewAllFlows }: Props) {
         <Modal title="添加策略" onClose={() => setModal(null)}>
           <StrategyForm
             assets={assets}
-            onSubmit={(s) => {
-              addStrategy(s)
+            onSubmit={(s, deposit) => {
+              const strategy = addStrategy(s)
+              if (deposit) {
+                addStrategyTransaction({
+                  strategyId: strategy.id,
+                  type: 'DEPOSIT',
+                  occurredAt: deposit.occurredAt,
+                  amount: deposit.amount,
+                })
+              }
               setModal(null)
             }}
             onCancel={() => setModal(null)}
