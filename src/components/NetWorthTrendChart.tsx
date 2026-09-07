@@ -25,6 +25,7 @@ const TREND_RANGE_OPTIONS: { key: DashboardTrendRange; label: string; days?: num
   { key: 'd90', label: '近90天', days: 90 },
   { key: 'd180', label: '近180天', days: 180 },
   { key: 'ytd', label: '今年以来' },
+  { key: 'year', label: '近一年' },
   { key: 'all', label: '全部' },
   { key: 'custom', label: '自定义' },
 ]
@@ -48,6 +49,14 @@ function ytdTrendRange(): { fromMs: number; toMs: number } {
   return { fromMs: from.getTime(), toMs: todayEndMs() }
 }
 
+/** 近一年：自去年同日起（与 periodReturns year 基线一致） */
+function yearTrendRange(): { fromMs: number; toMs: number } {
+  const now = new Date()
+  const from = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate())
+  from.setHours(0, 0, 0, 0)
+  return { fromMs: from.getTime(), toMs: todayEndMs() }
+}
+
 /** `undefined` = 全部；`null` = 自定义日期无效 */
 function trendRangeFor(
   key: DashboardTrendRange,
@@ -56,6 +65,7 @@ function trendRangeFor(
 ): { fromMs: number; toMs: number } | undefined | null {
   if (key === 'all') return undefined
   if (key === 'ytd') return ytdTrendRange()
+  if (key === 'year') return yearTrendRange()
   if (key === 'custom') {
     if (!customFrom || !customTo || customFrom > customTo) return null
     return {
