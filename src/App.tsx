@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { initAnalytics, reportPageView } from './services/analytics'
 import {
-  ChevronLeft,
-  ChevronRight,
   LayoutDashboard,
   Menu,
   Settings,
@@ -181,15 +179,24 @@ export default function App() {
         }`}
       >
         <div className="flex items-center justify-between gap-2 px-4 py-5">
-          <div className={`flex items-center gap-2.5 ${collapsed ? 'justify-center w-full' : ''}`}>
+          <button
+            type="button"
+            onClick={() => setCollapsed((c) => !c)}
+            title={collapsed ? '展开侧栏' : '收起侧栏'}
+            aria-label={collapsed ? '展开侧栏' : '收起侧栏'}
+            aria-expanded={!collapsed}
+            className={`flex items-center gap-2.5 rounded-xl max-md:pointer-events-none md:-mx-1 md:px-1 md:py-1 md:hover:bg-slate-50 ${
+              collapsed ? 'w-full justify-center' : ''
+            }`}
+          >
             <LogoMark className="h-7 w-7 shrink-0" />
             {!collapsed && (
-              <div>
+              <div className="text-left">
                 <div className="text-sm font-bold tracking-wide text-slate-800">PanassetLite</div>
                 <div className="text-[10px] text-slate-500">轻量个人资产管理</div>
               </div>
             )}
-          </div>
+          </button>
           <button
             type="button"
             onClick={() => setMobileOpen(false)}
@@ -272,16 +279,6 @@ export default function App() {
             {!collapsed && <span>分享</span>}
           </button>
         </div>
-
-        <button
-          type="button"
-          onClick={() => setCollapsed((c) => !c)}
-          className="mx-3 mb-4 hidden items-center justify-center gap-1 rounded-xl border border-slate-100 py-2 text-xs text-slate-500 transition-all duration-200 hover:bg-slate-50 md:flex"
-          aria-label={collapsed ? '展开侧栏' : '折叠侧栏'}
-        >
-          {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-          {!collapsed && <span>收起侧栏</span>}
-        </button>
       </aside>
 
       {/* 主内容 */}
