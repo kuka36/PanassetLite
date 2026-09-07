@@ -1,10 +1,12 @@
 import { useMemo, useRef, useState } from 'react'
+import { Share2 } from 'lucide-react'
 import { useStore } from '../store'
 import { StorageService } from '../services/storage'
 import { fetchFxRates } from '../services/prices'
 import { refreshCryptoPrices } from '../services/priceRefreshActions'
 import { Card, CardBody, CardHeader } from '../components/ui/Card'
 import { btnGhost, btnPrimary, inputCls, labelCls } from '../components/Modal'
+import ShareAppModal from '../components/ShareAppModal'
 import { color } from '../theme/colors'
 import { formatFxRate, staleUpdateCls } from '../utils/format'
 import { isLocalLlmBaseUrl, isLocalLlmUnavailableOnRemoteHost } from '../services/llmClient'
@@ -31,6 +33,7 @@ export default function Settings() {
   )
   const [msg, setMsg] = useState('')
   const [cryptoRefreshing, setCryptoRefreshing] = useState(false)
+  const [shareOpen, setShareOpen] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
   const [fx, setFx] = useState<Record<string, string>>(
@@ -303,6 +306,20 @@ export default function Settings() {
       </Section>
 
       <Section
+        title="分享给朋友"
+        desc="推荐 PanassetLite。只分享软件地址，不会带出你的资产与流水。"
+      >
+        <button
+          type="button"
+          className={`${btnPrimary} inline-flex items-center gap-1.5`}
+          onClick={() => setShareOpen(true)}
+        >
+          <Share2 className="h-4 w-4" />
+          打开分享
+        </button>
+      </Section>
+
+      <Section
         title="数据管理"
         desc="所有数据仅保存在当前浏览器的 LocalStorage 中。换设备或清缓存前,请先导出备份。"
       >
@@ -336,6 +353,8 @@ export default function Settings() {
       <p className="pb-6 text-center text-xs text-slate-400">
         PanassetLite · 本地优先 · 隐私至上 —— 不注册、不上传,你的财务数据只属于你。
       </p>
+
+      <ShareAppModal open={shareOpen} onClose={() => setShareOpen(false)} />
     </div>
   )
 }

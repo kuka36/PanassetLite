@@ -1,17 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { initAnalytics, reportPageView } from './services/analytics'
 import {
-  BookOpen,
   ChevronLeft,
   ChevronRight,
   LayoutDashboard,
   Menu,
   Settings,
+  Share2,
   Target,
   Wallet,
   X,
 } from 'lucide-react'
-import { palette } from './theme/colors'
 import Dashboard from './pages/Dashboard'
 import Assets from './pages/Assets'
 import Transactions, { type FlowsInit } from './pages/Transactions'
@@ -22,6 +21,8 @@ import AssistantFab from './components/AssistantFab'
 import AssistantPanel from './components/AssistantPanel'
 import AssistantConfirmModals from './components/AssistantConfirmModals'
 import ShortcutHelpModal from './components/ShortcutHelpModal'
+import ShareAppModal from './components/ShareAppModal'
+import LogoMark from './components/LogoMark'
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
 import { useAssetStaleCount } from './hooks/useSummary'
 import { useStrategyStaleCount } from './hooks/useStrategySummary'
@@ -42,7 +43,6 @@ const SIDEBAR_EXPANDED = 'w-56'
 const SIDEBAR_COLLAPSED = 'w-[4.5rem]'
 const MAIN_EXPANDED = 'md:ml-56'
 const MAIN_COLLAPSED = 'md:ml-[4.5rem]'
-const ABOUT_URL = 'https://mp.weixin.qq.com/s/du0wh1As2s-casSadFAgZQ'
 
 function navStaleBadge(id: NavId, assetStaleCount: number, strategyStaleCount: number): number {
   if (id === 'assets') return assetStaleCount
@@ -82,6 +82,7 @@ export default function App() {
   const [collapsed, setCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
+  const [shareOpen, setShareOpen] = useState(false)
   const addAssistantMessage = useAssistantStore((s) => s.addMessage)
   const toggleAssistant = useAssistantStore((s) => s.toggle)
   const assetStaleCount = useAssetStaleCount()
@@ -256,21 +257,20 @@ export default function App() {
               无注册 · 无上传 · 隐私至上
             </p>
           )}
-          <a
-            href={ABOUT_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            title="关于 PanassetLite"
-            aria-label="关于 PanassetLite"
+          <button
+            type="button"
+            onClick={() => setShareOpen(true)}
+            title="分享"
+            aria-label="分享"
             className={`text-slate-500 transition-colors hover:text-slate-700 ${
               collapsed
-                ? 'flex items-center justify-center rounded-xl py-2.5 transition-all duration-200 hover:bg-slate-50'
+                ? 'flex w-full items-center justify-center rounded-xl py-2.5 transition-all duration-200 hover:bg-slate-50'
                 : 'mt-2 inline-flex items-center gap-1.5'
             }`}
           >
-            <BookOpen className="h-[18px] w-[18px] shrink-0" />
-            {!collapsed && <span>关于 PanassetLite</span>}
-          </a>
+            <Share2 className="h-[18px] w-[18px] shrink-0" />
+            {!collapsed && <span>分享</span>}
+          </button>
         </div>
 
         <button
@@ -317,23 +317,7 @@ export default function App() {
         onSuccess={(msg) => addAssistantMessage({ role: 'assistant', content: msg })}
       />
       <ShortcutHelpModal open={helpOpen} onClose={() => setHelpOpen(false)} />
+      <ShareAppModal open={shareOpen} onClose={() => setShareOpen(false)} />
     </div>
-  )
-}
-
-function LogoMark({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 32 32" className={className}>
-      <rect x="2" y="2" width="28" height="28" rx="7" fill={palette.blue600} />
-      <path
-        d="M9 22 L13 14 L17 18 L23 9"
-        stroke="#fff"
-        strokeWidth="2.6"
-        fill="none"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <circle cx="23" cy="9" r="2.2" fill="#fff" />
-    </svg>
   )
 }
