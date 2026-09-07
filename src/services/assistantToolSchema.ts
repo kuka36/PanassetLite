@@ -100,6 +100,42 @@ export function validateToolArgs(
       return ok({ includeArchived: raw.includeArchived === true })
     }
 
+    case 'get_asset_detail': {
+      const keyErrors = rejectUnknownKeys(raw, new Set(['assetId']))
+      const assetId = requireString(raw, 'assetId', 'assetId')
+      const errors = [...keyErrors, ...assetId.errors]
+      if (!assetId.value) errors.push('缺少 assetId')
+      if (errors.length) return err(errors)
+      return ok({ assetId: assetId.value })
+    }
+
+    case 'get_period_returns': {
+      const keyErrors = rejectUnknownKeys(raw, new Set(['assetId']))
+      const errors = [...keyErrors, ...optionalString(raw, 'assetId', 'assetId')]
+      if (errors.length) return err(errors)
+      const out: Record<string, unknown> = {}
+      if (typeof raw.assetId === 'string' && raw.assetId.trim()) out.assetId = raw.assetId.trim()
+      return ok(out)
+    }
+
+    case 'list_ledger': {
+      const keyErrors = rejectUnknownKeys(raw, new Set(['assetId', 'limit']))
+      const assetId = requireString(raw, 'assetId', 'assetId')
+      const errors = [...keyErrors, ...assetId.errors]
+      if (!assetId.value) errors.push('缺少 assetId')
+      if (raw.limit !== undefined && raw.limit !== null) {
+        if (typeof raw.limit !== 'number' || !Number.isFinite(raw.limit) || raw.limit < 1) {
+          errors.push('limit 须为大于 0 的数字')
+        } else if (raw.limit > 50) {
+          errors.push('limit 最大为 50')
+        }
+      }
+      if (errors.length) return err(errors)
+      const out: Record<string, unknown> = { assetId: assetId.value }
+      if (typeof raw.limit === 'number') out.limit = Math.floor(raw.limit)
+      return ok(out)
+    }
+
     case 'list_flows': {
       const keyErrors = rejectUnknownKeys(raw, new Set(['limit', 'assetId']))
       const errors = [...keyErrors, ...optionalString(raw, 'assetId', 'assetId')]

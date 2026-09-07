@@ -3,14 +3,14 @@ import { createPortal } from 'react-dom'
 import { ClipboardList, Send, Trash2, X } from 'lucide-react'
 import { findQueueIdByAction, useAssistantStore } from '../assistantStore'
 import { useStore } from '../store'
-import { useSummary } from '../hooks/useSummary'
+import { usePortfolioEngine, useSummary } from '../hooks/useSummary'
 import LightMarkdown from './LightMarkdown'
 import {
   DeleteConfirmCard,
   PendingActionCard,
 } from './AssistantConfirmModals'
 import { btnAi, btnGhost, inputCls } from './Modal'
-import { ADVISOR_PRESETS, DEFAULT_ADVISOR_PROMPT, resolveAdvisorPrompt, streamLlmAdvice } from '../services/ai'
+import { ADVISOR_PRESETS, DEFAULT_ADVISOR_PROMPT, resolveAdvisorPrompt } from '../services/ai'
 import { runAssistantTurn, runLocalAssistantTurn } from '../services/assistantAgent'
 import type { AssistantToolContext } from '../services/assistantTools'
 import { isLlmUsable } from '../services/llmClient'
@@ -43,6 +43,7 @@ export default function AssistantPanel({ currentPage, onNavigate }: Props) {
   const transactions = useStore((s) => s.transactions)
   const settings = useStore((s) => s.settings)
   const summary = useSummary()
+  const engine = usePortfolioEngine()
 
   const [input, setInput] = useState('')
   const [auditOpen, setAuditOpen] = useState(false)
@@ -75,8 +76,10 @@ export default function AssistantPanel({ currentPage, onNavigate }: Props) {
       addMessage({
         role: 'assistant',
         content:
-          '你好,我是 PanassetLite AI 助手。你可以问我净资产、健康评分,或让我帮你记流水、添加资产。' +
-          (llmReady ? '' : '\n\n当前未配置 LLM,可先问「我的净资产」或「健康评分」;完整能力请到设置页配置接口。'),
+          '你好,我是 PanassetLite AI 助手。我能查收益率与区间表现、分析健康评分,也能提议记流水或改资产(需你确认)。' +
+          (llmReady
+            ? '试试下方快捷问题,或直接问「某理财还值得留吗」。'
+            : '\n\n当前未配置 LLM,可先问「我的净资产」或「健康评分」;完整能力请到设置页配置接口。'),
       })
     }
   }, [open, messages.length, addMessage, llmReady])
@@ -91,6 +94,17 @@ export default function AssistantPanel({ currentPage, onNavigate }: Props) {
     settings,
     summary,
     navigate: onNavigate,
+    getTxLedger: (assetId) => {
+      const asset = assets.find((a) => a.id === assetId)
+      if (!asset) return null
+      return engine.txLedger(asset)
+    },
+    getPeriodReturns: (assetId) => {
+      if (!assetId) return summary.periodReturns
+      const asset = assets.find((a) => a.id === assetId)
+      if (!asset) return null
+      return engine.periodReturnsForAssets([asset])
+    },
   })
 
   const pendingCount = actionQueue.filter((q) => q.status === 'pending' || q.status === 'active').length
@@ -115,6 +129,24 @@ export default function AssistantPanel({ currentPage, onNavigate }: Props) {
     enqueueActions(pending, msgId)
   }
 
+  const applyTurnResult = (
+    assistantId: string,
+    result: Awaited<ReturnType<typeof runAssistantTurn>>,
+  ) => {
+    updateMessage(assistantId, { content: result.assistantContent })
+    attachPendingToMessage(assistantId, result.pendingActions)
+
+    for (let i = 1; i < result.pendingActions.length; i++) {
+      const p = result.pendingActions[i]
+      addMessage({
+        role: 'assistant',
+        content: `还有一项待确认:**${p.summary}**`,
+        pendingAction: p.action,
+        pendingSummary: p.summary,
+      })
+    }
+  }
+
   const sendUserMessage = async (text: string) => {
     const trimmed = text.trim()
     if (!trimmed || loading) return
@@ -132,33 +164,23 @@ export default function AssistantPanel({ currentPage, onNavigate }: Props) {
 
     try {
       const history = useAssistantStore.getState().messages.filter((m) => m.id !== assistantId)
-      let result
 
       if (llmReady) {
         const advisorPrompt = resolveAdvisorPrompt(trimmed)
-        if (advisorPrompt !== null) {
-          await streamLlmAdvice(summary, settings, advisorPrompt, (acc) => {
-            updateMessage(assistantId, { content: acc })
-          }, ac.signal)
-        } else {
-          result = await runAssistantTurn(trimmed, history, buildContext(), currentPage, ac.signal)
-          updateMessage(assistantId, { content: result.assistantContent })
-          attachPendingToMessage(assistantId, result.pendingActions)
-
-          for (let i = 1; i < result.pendingActions.length; i++) {
-            const p = result.pendingActions[i]
-            addMessage({
-              role: 'assistant',
-              content: `还有一项待确认:**${p.summary}**`,
-              pendingAction: p.action,
-              pendingSummary: p.summary,
-            })
-          }
-        }
+        const agentInput = advisorPrompt ?? trimmed
+        // 快捷标签在 UI 显示原文,发给 agent 用完整顾问 prompt(避免历史里重复一条短标签)
+        const apiHistory = advisorPrompt != null ? history.slice(0, -1) : history
+        const result = await runAssistantTurn(
+          agentInput,
+          apiHistory,
+          buildContext(),
+          currentPage,
+          ac.signal,
+        )
+        applyTurnResult(assistantId, result)
       } else {
-        result = await runLocalAssistantTurn(trimmed, buildContext())
-        updateMessage(assistantId, { content: result.assistantContent })
-        attachPendingToMessage(assistantId, result.pendingActions)
+        const result = await runLocalAssistantTurn(trimmed, buildContext())
+        applyTurnResult(assistantId, result)
       }
     } catch (e) {
       if ((e as Error).name === 'AbortError') return
@@ -170,7 +192,7 @@ export default function AssistantPanel({ currentPage, onNavigate }: Props) {
     }
   }
 
-  const runPreset = async (prompt: string) => {
+  const runPreset = async (label: string, prompt: string) => {
     if (!llmReady || loading) return
     const q = prompt.trim() || DEFAULT_ADVISOR_PROMPT
 
@@ -178,16 +200,23 @@ export default function AssistantPanel({ currentPage, onNavigate }: Props) {
     const ac = new AbortController()
     abortRef.current = ac
 
-    addMessage({ role: 'user', content: q })
+    addMessage({ role: 'user', content: label })
     setLoading(true)
     setError('')
 
     const assistantId = addMessage({ role: 'assistant', content: '' })
 
     try {
-      await streamLlmAdvice(summary, settings, q, (acc) => {
-        updateMessage(assistantId, { content: acc })
-      }, ac.signal)
+      const history = useAssistantStore.getState().messages.filter((m) => m.id !== assistantId)
+      // UI 显示快捷标签,agent 使用完整顾问 prompt
+      const result = await runAssistantTurn(
+        q,
+        history.slice(0, -1),
+        buildContext(),
+        currentPage,
+        ac.signal,
+      )
+      applyTurnResult(assistantId, result)
     } catch (e) {
       if ((e as Error).name === 'AbortError') return
       const errMsg = (e as Error).message
@@ -316,13 +345,13 @@ export default function AssistantPanel({ currentPage, onNavigate }: Props) {
 
         <div className="shrink-0 border-t border-slate-100 px-4 py-3">
           <div className="mb-2 flex flex-wrap gap-1.5">
-            {ADVISOR_PRESETS.slice(0, 4).map((preset) => (
+            {ADVISOR_PRESETS.map((preset) => (
               <button
                 key={preset.label}
                 type="button"
                 disabled={loading || !llmReady}
                 className="rounded-full border border-slate-200 bg-white px-2.5 py-0.5 text-[10px] text-slate-600 transition hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700 disabled:opacity-50"
-                onClick={() => runPreset(preset.prompt)}
+                onClick={() => runPreset(preset.label, preset.prompt)}
               >
                 {preset.label}
               </button>

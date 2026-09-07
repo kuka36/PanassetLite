@@ -1,14 +1,16 @@
 import { useMemo } from 'react'
-import { TrendingUp } from 'lucide-react'
+import { Sparkles, TrendingUp } from 'lucide-react'
 import { useSummary } from '../hooks/useSummary'
 import { useStrategySnapshots } from '../hooks/useStrategySummary'
 import { useStore } from '../store'
+import { useAssistantStore } from '../assistantStore'
 import EChart from '../components/EChart'
 import NetWorthTrendChart from '../components/NetWorthTrendChart'
 import { lightTooltip } from '../components/chartTheme'
 import { Card, CardBody, CardHeader } from '../components/ui/Card'
 import { btnGhost } from '../components/Modal'
-import { palette } from '../theme/colors'
+import { healthScoreHex, insightLevelCls, palette } from '../theme/colors'
+import { analyzePortfolio } from '../services/ai'
 import { ASSET_TYPE_COLOR, ASSET_TYPE_LABEL, type AssetSnapshot } from '../types'
 import { fmtCompact, fmtMoney, fmtPct, pnlColor } from '../utils/format'
 
@@ -110,6 +112,9 @@ export default function Dashboard({ goTo }: { goTo: (page: string) => void }) {
     [strategySnapshots],
   )
   const hasData = summary.snapshots.length > 0
+  const health = useMemo(() => analyzePortfolio(summary), [summary])
+  const openAssistant = useAssistantStore((s) => s.setOpen)
+  const topInsights = health.insights.slice(0, 3)
 
   if (!hasData) {
     return (
@@ -140,6 +145,51 @@ export default function Dashboard({ goTo }: { goTo: (page: string) => void }) {
   return (
     <div className="space-y-6">
       <h1 className="text-xl font-semibold text-slate-800">总览</h1>
+
+      <Card>
+        <CardBody className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex items-start gap-4">
+            <div
+              className="flex h-14 w-14 shrink-0 flex-col items-center justify-center rounded-2xl text-white shadow-sm"
+              style={{ background: healthScoreHex(health.score) }}
+              title="本地规则健康评分,无需配置 LLM"
+            >
+              <span className="text-lg font-semibold tabular-nums leading-none">{health.score}</span>
+              <span className="mt-0.5 text-[10px] opacity-90">{health.grade}</span>
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-medium text-slate-700">组合健康</h3>
+                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-500">
+                  本地规则 · 零配置
+                </span>
+              </div>
+              {topInsights.length === 0 ? (
+                <p className="mt-1 text-sm text-slate-500">暂无洞察</p>
+              ) : (
+                <ul className="mt-2 space-y-1.5">
+                  {topInsights.map((i) => (
+                    <li
+                      key={i.title}
+                      className={`rounded-lg border px-2.5 py-1.5 text-xs text-slate-700 ${insightLevelCls[i.level]}`}
+                    >
+                      <span className="font-medium">{i.title}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+          <button
+            type="button"
+            className={`${btnGhost} inline-flex shrink-0 items-center gap-1.5 self-start text-xs`}
+            onClick={() => openAssistant(true)}
+          >
+            <Sparkles className="h-3.5 w-3.5" />
+            打开 AI 助手
+          </button>
+        </CardBody>
+      </Card>
 
       <NetWorthTrendChart assets={activeAssets} />
 

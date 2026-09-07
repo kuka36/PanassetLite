@@ -1,7 +1,15 @@
 import type { PortfolioSummary, Settings } from '../types'
 import type { LlmContextPrivacy } from '../types/assistant'
 import { ASSET_TYPE_LABEL } from '../types'
-import { postChatCompletions, readChatCompletionStream } from './llmClient'
+import { fmtDateTime } from '../utils/format'
+import { formatDateKey } from '../utils/time'
+import {
+  isLocalLlmBaseUrl,
+  isLocalLlmUnavailableOnRemoteHost,
+  LOCAL_LLM_REMOTE_HOST_MSG,
+  postChatCompletions,
+  readChatCompletionStream,
+} from './llmClient'
 
 /**
  * AI 智能顾问。
@@ -225,12 +233,37 @@ export function analyzePortfolio(summary: PortfolioSummary): HealthReport {
 
 // ── LLM 增强(可选) ─────────────────────────────────────────────────────────
 
+const WEEKDAY_LABEL = ['日', '一', '二', '三', '四', '五', '六'] as const
+
+/** 顾问/助手上下文:当前本地日期时间与时区 */
+export function formatLlmNowContext(nowMs = Date.now()): string {
+  const d = new Date(nowMs)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const date = formatDateKey(nowMs)
+  const time = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+  const weekday = `周${WEEKDAY_LABEL[d.getDay()]}`
+  const offsetMin = -d.getTimezoneOffset()
+  const sign = offsetMin >= 0 ? '+' : '-'
+  const abs = Math.abs(offsetMin)
+  const tz = `UTC${sign}${pad(Math.floor(abs / 60))}:${pad(abs % 60)}`
+  return `当前本地时间: ${date} ${time} (${weekday}), ${tz}`
+}
+
 export function buildPortfolioBrief(
   summary: PortfolioSummary,
   privacy: LlmContextPrivacy = 'detailed',
+  settings?: Pick<Settings, 'pricesUpdatedAt' | 'fxUpdatedAt'>,
 ): string {
   const lines: string[] = []
   const { totalAssetsCNY: assets, totalDebtCNY: debt } = summary
+
+  lines.push(formatLlmNowContext())
+  if (settings?.pricesUpdatedAt) {
+    lines.push(`行情上次更新: ${fmtDateTime(settings.pricesUpdatedAt)}`)
+  }
+  if (settings?.fxUpdatedAt) {
+    lines.push(`汇率上次更新: ${fmtDateTime(settings.fxUpdatedAt)}`)
+  }
 
   lines.push(
     `总资产 ¥${assets.toFixed(0)},负债 ¥${debt.toFixed(0)},净资产 ¥${summary.netWorthCNY.toFixed(0)}`,
@@ -293,7 +326,7 @@ export function buildPortfolioBrief(
       ]
       if (s.asset.type !== 'debt') {
         parts.push(`累计盈亏 ¥${s.totalPnlCNY.toFixed(0)}`)
-        if (s.xirr != null) parts.push(`年化 ${(s.xirr * 100).toFixed(1)}%`)
+        if (s.xirr != null) parts.push(`年化(XIRR) ${(s.xirr * 100).toFixed(1)}%`)
         if (s.recentAnnualized != null)
           parts.push(`近期区间年化 ${(s.recentAnnualized * 100).toFixed(1)}%`)
       }
@@ -301,7 +334,17 @@ export function buildPortfolioBrief(
     }
   } else {
     const holdingCount = summary.snapshots.filter((s) => s.valueCNY > 0).length
-    lines.push(`资产数量: ${holdingCount} 项(未发送具体名称与单项盈亏,可在设置中切换为「含明细」)`)
+    lines.push(`资产数量: ${holdingCount} 项(未发送具体名称;可在设置中切换为「含明细」)`)
+    lines.push('资产收益概览(匿名):')
+    for (const s of summary.snapshots) {
+      if (s.valueCNY <= 0 || s.asset.type === 'debt') continue
+      const parts = [`- ${ASSET_TYPE_LABEL[s.asset.type]}:市值 ¥${s.valueCNY.toFixed(0)}`]
+      parts.push(`累计盈亏 ¥${s.totalPnlCNY.toFixed(0)}`)
+      if (s.xirr != null) parts.push(`年化(XIRR) ${(s.xirr * 100).toFixed(1)}%`)
+      if (s.recentAnnualized != null)
+        parts.push(`近期区间年化 ${(s.recentAnnualized * 100).toFixed(1)}%`)
+      lines.push(parts.join(','))
+    }
   }
   const h = summary.history
   if (h.length >= 2) {
@@ -346,7 +389,7 @@ export const ADVISOR_PRESETS: AdvisorPreset[] = [
   },
 ]
 
-/** 用户输入若匹配快捷问题标签,返回对应完整 prompt(供 streamLlmAdvice 使用) */
+/** 用户输入若匹配快捷问题标签,返回对应完整 prompt(供顾问 agent / streamLlmAdvice 使用) */
 export function resolveAdvisorPrompt(userInput: string): string | null {
   const trimmed = userInput.trim()
   if (!trimmed) return null
@@ -370,15 +413,21 @@ export async function streamLlmAdvice(
   signal?: AbortSignal,
 ): Promise<string> {
   const { baseUrl, apiKey, model } = settings.llm
-  if (!apiKey) throw new Error('未配置 LLM API key,请到设置页填写(或仅使用本地规则分析)')
+  if (isLocalLlmUnavailableOnRemoteHost(baseUrl)) {
+    throw new Error(LOCAL_LLM_REMOTE_HOST_MSG)
+  }
+  if (!apiKey && !isLocalLlmBaseUrl(baseUrl)) {
+    throw new Error('未配置 LLM API key,请到设置页填写(本地模型可留空 key)')
+  }
 
   const system =
     '你是一位专业、务实的个人理财顾问。基于用户的资产组合数据,用简体中文给出具体、可执行的建议。' +
+    '必须引用数据中的具体数字(净资产、区间收益、XIRR、近期年化、健康评分等),禁止无数据支撑的空泛套话。' +
     '数据里已附带本地规则引擎的健康评分与检出问题(含等级),请在此基础上解释、排序优先级并给出行动方案,不要重复做同样的数值判断。' +
-    '直接给结论和理由,不要免责声明套话。用 markdown 列表组织内容,控制在 400 字以内。'
+    '直接给结论和理由,不要免责声明套话。用 markdown 列表组织内容。'
   const privacy: LlmContextPrivacy =
     settings.llmContextPrivacy === 'summary' ? 'summary' : 'detailed'
-  const user = `我的资产组合如下:\n${buildPortfolioBrief(summary, privacy)}\n\n${
+  const user = `我的资产组合如下:\n${buildPortfolioBrief(summary, privacy, settings)}\n\n${
     question?.trim() || DEFAULT_ADVISOR_PROMPT
   }`
 
