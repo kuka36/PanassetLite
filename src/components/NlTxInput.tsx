@@ -48,11 +48,10 @@ export default function NlTxInput({
     setLoading(true)
     setError('')
     try {
-      const result = await parseNaturalLanguageTx(text, assets, settings, ac.signal)
-      if (fixedAssetId) {
-        result.assetId = fixedAssetId
-        result.warnings = result.warnings.filter((w) => !w.includes('未能自动匹配资产'))
-      }
+      const result = await parseNaturalLanguageTx(text, assets, settings, {
+        fixedAssetId,
+        signal: ac.signal,
+      })
       onParsed(result, text)
       setInput('')
     } catch (e) {
@@ -125,6 +124,7 @@ export default function NlTxInput({
       )}
       <p className="mt-2 text-xs text-slate-500">
         将发送你的原文
+        {fixedAsset ? `、当前资产「${fixedAsset.name}」` : ''}
         {settings.llmSendAssetNames !== false && !fixedAssetId ? '及资产名称列表' : ''}
         至 LLM 解析,确认后才会写入本地。
         {!fixedAssetId && '可在设置页关闭「发送资产名称」。'}

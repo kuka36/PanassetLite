@@ -209,6 +209,12 @@ function extractJsonObject(text: string): unknown {
   throw new Error('无法从 LLM 响应中解析 JSON')
 }
 
+function formatAssetLine(a: Asset): string {
+  const parts = [`名称:${a.name}`, `类别:${ASSET_TYPE_LABEL[a.type]}`, `币种:${a.currency}`]
+  if (a.platform) parts.push(`平台:${a.platform}`)
+  return parts.join(', ')
+}
+
 function buildAssetCatalog(assets: Asset[], includeNames: boolean): string {
   const active = assets.filter((a) => !a.archived)
   if (active.length === 0) return '(用户尚未添加资产)'
@@ -226,13 +232,15 @@ function buildAssetCatalog(assets: Asset[], includeNames: boolean): string {
     )
   }
 
-  return active
-    .map((a) => {
-      const parts = [`名称:${a.name}`, `类别:${ASSET_TYPE_LABEL[a.type]}`]
-      if (a.platform) parts.push(`平台:${a.platform}`)
-      return `- ${parts.join(', ')}`
-    })
-    .join('\n')
+  return active.map((a) => `- ${formatAssetLine(a)}`).join('\n')
+}
+
+function buildTargetAssetSection(asset: Asset): string {
+  return [
+    '当前选中的目标资产(用户已在界面选定,描述未点名资产时默认归属此资产):',
+    formatAssetLine(asset),
+    '请将 assetHint 填为该资产名称;并按该资产类别选择合适类型(现金/理财/房产等价值类多用 DEPOSIT/WITHDRAW/VALUATION;股票/基金/加密等份额类用 BUY/SELL)。',
+  ].join('\n')
 }
 
 async function requestNlTxJson(
@@ -284,15 +292,21 @@ async function requestNlTxJson(
   return content
 }
 
+export interface ParseNlTxOptions {
+  /** 界面已锁定的目标资产;会写入 prompt,并优先作为匹配结果 */
+  fixedAssetId?: string
+  signal?: AbortSignal
+}
+
 /**
  * 自然语言 → 流水草稿。
- * 发送:用户原文 + (可选)资产名称列表。仅在用户主动触发时调用。
+ * 发送:用户原文 + (可选)资产名称列表 + (可选)当前选中资产。仅在用户主动触发时调用。
  */
 export async function parseNaturalLanguageTx(
   input: string,
   assets: Asset[],
   settings: Settings,
-  signal?: AbortSignal,
+  options?: ParseNlTxOptions,
 ): Promise<NlTxParseResult> {
   const text = input.trim()
   if (!text) throw new Error('请输入流水描述')
@@ -301,17 +315,21 @@ export async function parseNaturalLanguageTx(
 
   const includeNames = settings.llmSendAssetNames !== false
   const catalog = buildAssetCatalog(assets, includeNames)
+  const fixedAsset = options?.fixedAssetId
+    ? assets.find((a) => a.id === options.fixedAssetId && !a.archived)
+    : undefined
 
   const userPrompt = [
     `用户描述:「${text}」`,
     '',
+    ...(fixedAsset ? [buildTargetAssetSection(fixedAsset), ''] : []),
     '已知资产列表:',
     catalog,
     '',
     '请解析为一条流水 JSON。',
   ].join('\n')
 
-  const rawContent = await requestNlTxJson(settings, userPrompt, signal)
+  const rawContent = await requestNlTxJson(settings, userPrompt, options?.signal)
   let parsed: unknown
   try {
     parsed = extractJsonObject(rawContent)
@@ -320,10 +338,11 @@ export async function parseNaturalLanguageTx(
   }
 
   const draft = validateNlTxDraft(parsed)
-  const assetId = matchAssetByHint(draft.assetHint, assets)
+  const matchedId = matchAssetByHint(draft.assetHint, assets)
+  const assetId = fixedAsset?.id ?? matchedId
 
   const warnings: string[] = []
-  if (draft.assetHint && !assetId) {
+  if (!fixedAsset && draft.assetHint && !matchedId) {
     warnings.push(`未能自动匹配资产「${draft.assetHint}」,请在确认表单中手动选择`)
   }
 

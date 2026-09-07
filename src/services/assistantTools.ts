@@ -404,7 +404,10 @@ export async function executeAssistantTool(
             safeArgs.naturalLanguage.trim(),
             ctx.assets,
             ctx.settings,
-            signal,
+            {
+              fixedAssetId: typeof safeArgs.assetId === 'string' ? safeArgs.assetId : undefined,
+              signal,
+            },
           )
           const fixedAssetId =
             typeof safeArgs.assetId === 'string' ? safeArgs.assetId : result.assetId
