@@ -34,6 +34,14 @@ alwaysApply: true
 
 金额、百分比统一用 `src/utils/format.ts`（`fmtMoney`、`fmtPct`、`pnlColor`），不在页面散落 `toFixed`。
 
-## 验证
+## 验证（必须通过 CI）
 
-改完跑 `npm run build` 确认 TypeScript 通过；涉及 UI 时在浏览器手动验证关键路径。
+每次改完代码后，**必须在本地跑通与 CI 相同的检查**，再结束任务；不要把失败留给 PR：
+
+```bash
+npm run lint
+npx tsc -b --noEmit
+npm run build
+```
+
+对应 `.github/workflows/ci.yml`。任一步失败则先修好再交付。涉及 UI 时另在浏览器手动验证关键路径。
