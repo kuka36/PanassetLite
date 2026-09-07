@@ -177,6 +177,30 @@ export function buildValueLedgerRows<T extends ValueTx>(
   return rows
 }
 
+/** 任意区间收益（剔除存取/买卖本金变动），与 PeriodReturn 同口径 */
+export function pnlBetween<T>(
+  items: readonly T[],
+  valueAt: (item: T, atMs: number) => number,
+  flowsUpTo: (item: T, atMs: number) => { in: number; out: number },
+  fromMs: number,
+  toMs: number,
+): { pnlCNY: number; ratio: number | null } {
+  let pnl = 0
+  let baseValue = 0
+  let netInflow = 0
+  for (const item of items) {
+    const v0 = valueAt(item, fromMs)
+    const v1 = valueAt(item, toMs)
+    const f0 = flowsUpTo(item, fromMs)
+    const f1 = flowsUpTo(item, toMs)
+    pnl += v1 + f1.out - f1.in - (v0 + f0.out - f0.in)
+    baseValue += v0
+    netInflow += f1.in - f0.in - (f1.out - f0.out)
+  }
+  const base = baseValue + Math.max(0, netInflow)
+  return { pnlCNY: pnl, ratio: base > 1 ? pnl / base : null }
+}
+
 export function periodReturnsFor<T>(
   items: readonly T[],
   valueAt: (item: T, atMs: number) => number,
@@ -198,20 +222,8 @@ export function periodReturnsFor<T>(
 
   return periods.map(({ key, label, baseline }) => {
     const baselineMs = endOfDay(baseline.getTime())
-    let pnl = 0
-    let baseValue = 0
-    let netInflow = 0
-    for (const item of items) {
-      const v0 = valueAt(item, baselineMs)
-      const v1 = valueAt(item, nowMs)
-      const f0 = flowsUpTo(item, baselineMs)
-      const f1 = flowsUpTo(item, nowMs)
-      pnl += v1 + f1.out - f1.in - (v0 + f0.out - f0.in)
-      baseValue += v0
-      netInflow += f1.in - f0.in - (f1.out - f0.out)
-    }
-    const base = baseValue + Math.max(0, netInflow)
-    const result: PeriodReturn = { key, label, pnlCNY: pnl, ratio: base > 1 ? pnl / base : null }
+    const { pnlCNY, ratio } = pnlBetween(items, valueAt, flowsUpTo, baselineMs, nowMs)
+    const result: PeriodReturn = { key, label, pnlCNY, ratio }
     if (options?.netWorthAt) {
       const nw0 = options.netWorthAt(baselineMs)
       const nw1 = options.netWorthAt(nowMs)

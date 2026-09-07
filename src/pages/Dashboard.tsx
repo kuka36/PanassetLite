@@ -1,26 +1,16 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { TrendingUp } from 'lucide-react'
-import { usePortfolioEngine, useSummary } from '../hooks/useSummary'
+import { useSummary } from '../hooks/useSummary'
 import { useStrategySnapshots } from '../hooks/useStrategySummary'
 import { useStore } from '../store'
 import EChart from '../components/EChart'
-import { lightAxis, lightTooltip } from '../components/chartTheme'
+import NetWorthTrendChart from '../components/NetWorthTrendChart'
+import { lightTooltip } from '../components/chartTheme'
 import { Card, CardBody, CardHeader } from '../components/ui/Card'
-import { btnGhost, inputCls } from '../components/Modal'
-import { hexAlpha, palette } from '../theme/colors'
+import { btnGhost } from '../components/Modal'
+import { palette } from '../theme/colors'
 import { ASSET_TYPE_COLOR, ASSET_TYPE_LABEL, type AssetSnapshot } from '../types'
 import { fmtCompact, fmtMoney, fmtPct, pnlColor } from '../utils/format'
-import {
-  StorageService,
-  type DashboardTrendRange,
-} from '../services/storage'
-import {
-  endOfDayFromDateKey,
-  formatDateKey,
-  migrateDateToOccurredAt,
-  startOfDay,
-  todayEndMs,
-} from '../utils/time'
 
 const NAME_PIE_COLORS = [
   palette.blue500,
@@ -34,41 +24,6 @@ const NAME_PIE_COLORS = [
   palette.blue700,
   palette.red500,
 ]
-
-const TREND_RANGE_OPTIONS: { key: DashboardTrendRange; label: string; days?: number }[] = [
-  { key: 'd7', label: '近7天', days: 7 },
-  { key: 'd30', label: '近30天', days: 30 },
-  { key: 'd90', label: '近90天', days: 90 },
-  { key: 'd180', label: '近180天', days: 180 },
-  { key: 'all', label: '全部' },
-  { key: 'custom', label: '自定义' },
-]
-
-function presetTrendRange(days: number): { fromMs: number; toMs: number } {
-  const toMs = todayEndMs()
-  const from = new Date()
-  from.setHours(0, 0, 0, 0)
-  from.setDate(from.getDate() - (days - 1))
-  return { fromMs: from.getTime(), toMs }
-}
-
-/** `undefined` = 全部；`null` = 自定义日期无效 */
-function trendRangeFor(
-  key: DashboardTrendRange,
-  customFrom: string,
-  customTo: string,
-): { fromMs: number; toMs: number } | undefined | null {
-  if (key === 'all') return undefined
-  if (key === 'custom') {
-    if (!customFrom || !customTo || customFrom > customTo) return null
-    return {
-      fromMs: startOfDay(migrateDateToOccurredAt(customFrom)),
-      toMs: endOfDayFromDateKey(customTo),
-    }
-  }
-  const days = TREND_RANGE_OPTIONS.find((o) => o.key === key)?.days
-  return days ? presetTrendRange(days) : undefined
-}
 
 function pieOption(data: { name: string; value: number; itemStyle?: { color: string } }[]) {
   return {
@@ -115,113 +70,8 @@ export default function Dashboard({ goTo }: { goTo: (page: string) => void }) {
   const loadDemo = useStore((s) => s.loadDemo)
   const assets = useStore((s) => s.assets)
   const summary = useSummary()
-  const engine = usePortfolioEngine()
-  const [trendRange, setTrendRange] = useState<DashboardTrendRange>(() =>
-    StorageService.loadDashboardTrendRange(),
-  )
-  const [customFrom, setCustomFrom] = useState(() => StorageService.loadDashboardTrendCustomFrom())
-  const [customTo, setCustomTo] = useState(() => StorageService.loadDashboardTrendCustomTo())
-
-  useEffect(() => {
-    StorageService.saveDashboardTrendRange(trendRange)
-  }, [trendRange])
-  useEffect(() => {
-    StorageService.saveDashboardTrendCustomFrom(customFrom)
-  }, [customFrom])
-  useEffect(() => {
-    StorageService.saveDashboardTrendCustomTo(customTo)
-  }, [customTo])
 
   const activeAssets = useMemo(() => assets.filter((a) => !a.archived), [assets])
-  const history = useMemo(() => {
-    const range = trendRangeFor(trendRange, customFrom, customTo)
-    if (range === null) return []
-    return engine.history(activeAssets, range)
-  }, [engine, activeAssets, trendRange, customFrom, customTo])
-
-  const netWorthDelta = useMemo(() => {
-    if (history.length < 2) return null
-    return history[history.length - 1].netWorth - history[0].netWorth
-  }, [history])
-
-  const [todayKey] = useState(() => formatDateKey(Date.now()))
-
-  function handleTrendRangeChange(next: DashboardTrendRange) {
-    setTrendRange(next)
-    if (next === 'custom' && (!customFrom || !customTo)) {
-      const { fromMs, toMs } = presetTrendRange(30)
-      setCustomFrom(formatDateKey(fromMs))
-      setCustomTo(formatDateKey(toMs))
-    }
-  }
-
-  const trendOption = useMemo(
-    () => ({
-      color: [palette.blue600, palette.green600, palette.red500],
-      tooltip: {
-        trigger: 'axis' as const,
-        ...lightTooltip,
-        valueFormatter: (v: unknown) => fmtMoney(Number(v)),
-      },
-      legend: { textStyle: { color: palette.textMuted }, top: 0 },
-      grid: { left: 12, right: 16, top: 36, bottom: 8, containLabel: true },
-      xAxis: {
-        type: 'category' as const,
-        data: history.map((h) => h.date),
-        ...lightAxis,
-        boundaryGap: false,
-      },
-      yAxis: {
-        type: 'value' as const,
-        ...lightAxis,
-        axisLabel: { color: palette.textMuted, formatter: (v: number) => fmtCompact(v) },
-        scale: true,
-      },
-      series: [
-        {
-          name: '净资产',
-          type: 'line' as const,
-          data: history.map((h) => Math.round(h.netWorth)),
-          smooth: true,
-          showSymbol: false,
-          itemStyle: { color: palette.blue600 },
-          lineStyle: { width: 2.5, color: palette.blue600 },
-          areaStyle: {
-            color: {
-              type: 'linear' as const,
-              x: 0,
-              y: 0,
-              x2: 0,
-              y2: 1,
-              colorStops: [
-                { offset: 0, color: hexAlpha(palette.blue600, 0.2) },
-                { offset: 1, color: hexAlpha(palette.blue600, 0.02) },
-              ],
-            },
-          },
-        },
-        {
-          name: '总资产',
-          type: 'line' as const,
-          data: history.map((h) => Math.round(h.assets)),
-          smooth: true,
-          showSymbol: false,
-          itemStyle: { color: palette.green600 },
-          lineStyle: { width: 1.5, color: palette.green600, type: 'dashed' as const },
-        },
-        {
-          name: '负债',
-          type: 'line' as const,
-          data: history.map((h) => Math.round(h.debt)),
-          smooth: true,
-          showSymbol: false,
-          itemStyle: { color: palette.red500 },
-          lineStyle: { width: 1.5, color: palette.red500, type: 'dashed' as const },
-        },
-      ],
-    }),
-    [history],
-  )
 
   const typePieOption = useMemo(
     () =>
@@ -291,64 +141,7 @@ export default function Dashboard({ goTo }: { goTo: (page: string) => void }) {
     <div className="space-y-6">
       <h1 className="text-xl font-semibold text-slate-800">总览</h1>
 
-      <Card>
-        <CardHeader>
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex min-w-0 items-baseline gap-2">
-              <h3 className="text-sm font-medium text-slate-700">净资产趋势</h3>
-              {netWorthDelta != null && (
-                <span className={`text-sm font-semibold tabular-nums ${pnlColor(netWorthDelta)}`}>
-                  {netWorthDelta > 0 ? '+' : ''}
-                  {fmtMoney(netWorthDelta)}
-                </span>
-              )}
-            </div>
-            <div className="w-[7.5rem] shrink-0">
-              <select
-                className={inputCls}
-                value={trendRange}
-                onChange={(e) => handleTrendRangeChange(e.target.value as DashboardTrendRange)}
-                aria-label="趋势时间范围"
-              >
-                {TREND_RANGE_OPTIONS.map((opt) => (
-                  <option key={opt.key} value={opt.key}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-          {trendRange === 'custom' && (
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              <div className="w-[10.5rem]">
-                <input
-                  type="date"
-                  className={inputCls}
-                  value={customFrom}
-                  max={customTo || todayKey}
-                  onChange={(e) => setCustomFrom(e.target.value)}
-                  aria-label="趋势起始日期"
-                />
-              </div>
-              <span className="text-xs text-slate-500">至</span>
-              <div className="w-[10.5rem]">
-                <input
-                  type="date"
-                  className={inputCls}
-                  value={customTo}
-                  min={customFrom || undefined}
-                  max={todayKey}
-                  onChange={(e) => setCustomTo(e.target.value)}
-                  aria-label="趋势结束日期"
-                />
-              </div>
-            </div>
-          )}
-        </CardHeader>
-        <CardBody className="pt-2">
-          <EChart option={trendOption} height={300} />
-        </CardBody>
-      </Card>
+      <NetWorthTrendChart assets={activeAssets} />
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>

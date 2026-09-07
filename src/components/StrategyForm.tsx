@@ -1,8 +1,16 @@
 import { useState } from 'react'
 import type { Asset, Strategy, StrategyKind } from '../types'
 import { STRATEGY_KIND_LABEL } from '../types'
-import { parseDatetimeLocal, toDatetimeLocalValue } from '../utils/time'
+import { formatDateKey, parseDatetimeLocal, startOfDay, toDatetimeLocalValue } from '../utils/time'
 import { btnGhost, btnPrimary, inputCls, labelCls } from './Modal'
+
+/** YYYY-MM-DD → 本地日 00:00 ms；非法返回 null */
+function parseDateInput(value: string): number | null {
+  if (!value) return null
+  const [y, m, d] = value.split('-').map(Number)
+  if (!y || !m || !d) return null
+  return startOfDay(new Date(y, m - 1, d).getTime())
+}
 
 export type StrategyInitialDeposit = { amount: number; occurredAt: number }
 
@@ -36,6 +44,9 @@ export default function StrategyForm({
   const [name, setName] = useState(initial?.name ?? '')
   const [kind, setKind] = useState<StrategyKind>(initial?.kind ?? 'manual')
   const [note, setNote] = useState(initial?.note ?? '')
+  const [expiresAtInput, setExpiresAtInput] = useState(
+    () => (initial?.expiresAt != null ? formatDateKey(initial.expiresAt) : ''),
+  )
   const [openedAt] = useState(() => Date.now())
   const [amount, setAmount] = useState('')
   const [occurredAtInput, setOccurredAtInput] = useState(() =>
@@ -55,12 +66,14 @@ export default function StrategyForm({
 
   const submit = () => {
     if (!valid) return
+    const expiresAt = parseDateInput(expiresAtInput) ?? undefined
     const strategy = {
       assetId,
       name: name.trim(),
       kind,
       currency,
       note: note.trim() || undefined,
+      expiresAt,
       archived: initial?.archived,
     }
     if (isCreate && hasDepositInput && occurredAt != null) {
@@ -121,6 +134,19 @@ export default function StrategyForm({
           value={note}
           onChange={(e) => setNote(e.target.value)}
         />
+      </div>
+
+      <div>
+        <label className={labelCls}>到期日</label>
+        <input
+          type="date"
+          className={inputCls}
+          value={expiresAtInput}
+          onChange={(e) => setExpiresAtInput(e.target.value)}
+        />
+        <p className="mt-1 text-xs text-slate-400">
+          可选。到期当天起在侧栏与列表提醒；清空则不再提醒
+        </p>
       </div>
 
       {selectedAsset && (

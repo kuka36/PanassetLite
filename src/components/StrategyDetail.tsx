@@ -11,7 +11,7 @@ import ValueLedgerTable from './ValueLedgerTable'
 import { lightAxis, lightTooltip } from './chartTheme'
 import { btnGhost, btnPrimary } from './Modal'
 import { hexAlpha, palette } from '../theme/colors'
-import { fmtCompact, fmtMoney, fmtNum, fmtPct, nativeAmountDigits, pnlColor } from '../utils/format'
+import { fmtCompact, fmtMoney, fmtNum, fmtPct, fmtStrategyExpiry, isStrategyExpiryDue, nativeAmountDigits, pnlColor, strategyExpiryCls } from '../utils/format'
 import { formatDateKey } from '../utils/time'
 
 type ModalState =
@@ -145,6 +145,14 @@ export default function StrategyDetail({
           {archived && (
             <span className="shrink-0 rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-xs text-slate-500">
               已关闭
+            </span>
+          )}
+          {strategy.expiresAt != null && (
+            <span
+              className={`shrink-0 text-xs font-normal ${strategyExpiryCls(strategy.expiresAt)}`}
+              title={isStrategyExpiryDue(strategy.expiresAt) ? '策略已到期' : undefined}
+            >
+              {fmtStrategyExpiry(strategy.expiresAt)}
             </span>
           )}
         </span>

@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { useStore } from '../store'
 import { StrategyEngine } from '../engine/strategy'
-import { isUpdateStale } from '../utils/format'
+import { isStrategyExpiryDue, isUpdateStale } from '../utils/format'
 
 /** 获取 StrategyEngine 实例（策略计算的唯一入口） */
 export function useStrategyEngine() {
@@ -27,14 +27,17 @@ export function useArchivedStrategySnapshots() {
   return useMemo(() => engine.archivedSnapshots(), [engine])
 }
 
-/** 活跃策略中超过默认阈值未更新估值的数量（侧栏角标用） */
+/** 活跃策略中需关注的数量：长期未更新或已到期（侧栏角标用，同一策略只计 1 次） */
 export function useStrategyStaleCount() {
   const engine = useStrategyEngine()
   return useMemo(
     () =>
       engine
         .allSnapshots()
-        .filter((s) => isUpdateStale(s.lastUpdated)).length,
+        .filter(
+          (s) =>
+            isUpdateStale(s.lastUpdated) || isStrategyExpiryDue(s.strategy.expiresAt),
+        ).length,
     [engine],
   )
 }

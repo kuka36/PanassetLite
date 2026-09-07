@@ -335,6 +335,7 @@ export class PortfolioEngine {
   /**
    * 按日（跨度 >730 天则按周）取样净资产曲线。
    * `range` 只限制取样日历范围；每个点仍 `valueAt(..., atMs)`，重放该日及之前全部流水。
+   * `pnlCNY` / `pnlRatio` 相对本次取样窗口第一个点，口径同 periodReturns（负债不计）。
    */
   history(assets: Asset[], range?: { fromMs: number; toMs: number }) {
     let earliestMs: number | undefined
@@ -353,8 +354,15 @@ export class PortfolioEngine {
 
     const spanDays = Math.max(1, Math.round((end - start) / DAY_MS))
     const step = spanDays > 730 ? 7 : 1
+    const nonDebt = assets.filter((a) => a.type !== 'debt')
+    const baselineMs = Math.min(endOfDay(start), end)
+    const baseline = nonDebt.map((a) => ({
+      asset: a,
+      v0: this.valueAt(a, baselineMs),
+      f0: this.flowsUpTo(a, baselineMs),
+    }))
 
-    const result: { date: string; netWorth: number; assets: number; debt: number }[] = []
+    const result: PortfolioSummary['history'] = []
     for (let ms = start; ; ms += step * DAY_MS) {
       const atMs = Math.min(endOfDay(ms), end)
       const date = formatDateKey(atMs)
@@ -365,7 +373,25 @@ export class PortfolioEngine {
         if (a.type === 'debt') debtVal += v
         else assetVal += v
       }
-      result.push({ date, netWorth: assetVal - debtVal, assets: assetVal, debt: debtVal })
+      let pnlCNY = 0
+      let baseValue = 0
+      let netInflow = 0
+      for (const { asset, v0, f0 } of baseline) {
+        const v1 = this.valueAt(asset, atMs)
+        const f1 = this.flowsUpTo(asset, atMs)
+        pnlCNY += v1 + f1.out - f1.in - (v0 + f0.out - f0.in)
+        baseValue += v0
+        netInflow += f1.in - f0.in - (f1.out - f0.out)
+      }
+      const base = baseValue + Math.max(0, netInflow)
+      result.push({
+        date,
+        netWorth: assetVal - debtVal,
+        assets: assetVal,
+        debt: debtVal,
+        pnlCNY,
+        pnlRatio: base > 1 ? pnlCNY / base : null,
+      })
       if (atMs >= end) break
     }
     return result

@@ -1,7 +1,7 @@
 import type { Asset, StrategySnapshot } from '../types'
 import { STRATEGY_KIND_LABEL } from '../types'
 import { Card, CardBody } from './ui/Card'
-import { fmtDateTime, fmtMoney, fmtPct, pnlColor, staleUpdateCls } from '../utils/format'
+import { fmtDateTime, fmtMoney, fmtPct, fmtStrategyExpiry, pnlColor, staleUpdateCls, strategyExpiryCls, isStrategyExpiryDue } from '../utils/format'
 
 interface Props {
   snapshots: StrategySnapshot[]
@@ -73,12 +73,22 @@ function StrategyCard({
               </p>
             </div>
           </div>
-          <p className="flex items-center justify-between text-xs">
-            <span className={staleUpdateCls(snap.lastUpdated)}>
-              最近记录 {snap.lastUpdated != null ? fmtDateTime(snap.lastUpdated) : '—'}
+          <p className="flex items-center justify-between gap-2 text-xs">
+            <span className="min-w-0 truncate">
+              <span className={staleUpdateCls(snap.lastUpdated)}>
+                最近记录 {snap.lastUpdated != null ? fmtDateTime(snap.lastUpdated) : '—'}
+              </span>
+              {strategy.expiresAt != null && (
+                <span
+                  className={`ml-2 ${strategyExpiryCls(strategy.expiresAt)}`}
+                  title={isStrategyExpiryDue(strategy.expiresAt) ? '策略已到期' : undefined}
+                >
+                  {fmtStrategyExpiry(strategy.expiresAt)}
+                </span>
+              )}
             </span>
             {snap.recentAnnualized != null && (
-              <span className="text-slate-400">
+              <span className="shrink-0 text-slate-400">
                 近期年化 <span className={pnlColor(snap.recentAnnualized)}>{fmtPct(snap.recentAnnualized)}</span>
               </span>
             )}

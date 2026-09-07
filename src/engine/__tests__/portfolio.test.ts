@@ -285,6 +285,40 @@ describe('PortfolioEngine', () => {
       expect(h.every((p) => p.netWorth === 1000)).toBe(true)
     })
 
+    it('纯存款、无估值变动时累计收益为 0', () => {
+      const engine = new PortfolioEngine(
+        [cash],
+        [tx({ id: 'd1', assetId: 'c1', type: 'DEPOSIT', occurredAt: T0, amount: 1000 })],
+        emptyPrices,
+        settings(),
+      )
+      const fromMs = startOfDay(new Date(2025, 4, 26).getTime())
+      const h = engine.history([cash], { fromMs, toMs: todayEndMs() })
+      expect(h.every((p) => Math.abs(p.pnlCNY) < 1e-9)).toBe(true)
+      expect(h.every((p) => p.pnlRatio === 0)).toBe(true)
+    })
+
+    it('存款后估值上涨，末点收益与收益率正确', () => {
+      const mid = new Date(2025, 4, 28, 12).getTime()
+      const engine = new PortfolioEngine(
+        [cash],
+        [
+          tx({ id: 'd1', assetId: 'c1', type: 'DEPOSIT', occurredAt: T0, amount: 1000 }),
+          tx({ id: 'v1', assetId: 'c1', type: 'VALUATION', occurredAt: mid, value: 1200 }),
+        ],
+        emptyPrices,
+        settings(),
+      )
+      const fromMs = startOfDay(new Date(2025, 4, 26).getTime())
+      const h = engine.history([cash], { fromMs, toMs: todayEndMs() })
+      expect(h[0].pnlCNY).toBeCloseTo(0)
+      expect(h[0].pnlRatio).toBeCloseTo(0)
+      const last = h[h.length - 1]
+      expect(last.netWorth).toBe(1200)
+      expect(last.pnlCNY).toBeCloseTo(200)
+      expect(last.pnlRatio).toBeCloseTo(0.2)
+    })
+
     it('跨度超过 730 天时按周取样', () => {
       const early = new Date(2022, 0, 1, 12).getTime()
       const engine = new PortfolioEngine(
@@ -300,6 +334,7 @@ describe('PortfolioEngine', () => {
       expect(h.length).toBeLessThan(spanDays / 2)
       expect(h[0].date).toBe('2022-01-01')
       expect(h[1].date).toBe('2022-01-08')
+      expect(h.every((p) => Math.abs(p.pnlCNY) < 1e-9)).toBe(true)
     })
   })
 })

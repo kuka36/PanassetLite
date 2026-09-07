@@ -1,5 +1,6 @@
 import { color, isUpdateStale, pnlTextCls, staleTextCls } from '../theme/colors'
 import type { AssetSnapshot } from '../types'
+import { formatDateKey, startOfDay } from './time'
 
 /** 金额格式化:¥1,234,567 */
 export function fmtMoney(n: number, digits = 0): string {
@@ -93,4 +94,20 @@ export function assetStaleUpdateCls(
 ): string {
   if (snap.asset.suppressUpdateReminder) return color.muted
   return staleUpdateCls(snap.lastUpdated, thresholdDays)
+}
+
+/** 策略是否已到/过到期日（本地日历日；缺省不算到期） */
+export function isStrategyExpiryDue(expiresAt?: number): boolean {
+  if (expiresAt == null) return false
+  return startOfDay(Date.now()) >= startOfDay(expiresAt)
+}
+
+/** 到期日文字色：已到期警示，否则 muted */
+export function strategyExpiryCls(expiresAt?: number): string {
+  return isStrategyExpiryDue(expiresAt) ? color.stale : color.muted
+}
+
+/** 到期日展示文案：到期 YYYY-MM-DD */
+export function fmtStrategyExpiry(expiresAt: number): string {
+  return `到期 ${formatDateKey(expiresAt)}`
 }

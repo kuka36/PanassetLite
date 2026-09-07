@@ -14,10 +14,10 @@ import { Card, CardHeader } from '../components/ui/Card'
 import { useTableSort } from '../hooks/useTableSort'
 import type { StrategySnapshot } from '../types'
 import { STRATEGY_KIND_LABEL } from '../types'
-import { fmtDateTime, fmtMoney, fmtPct, isUpdateStale, pnlColor, staleUpdateCls } from '../utils/format'
+import { fmtDateTime, fmtMoney, fmtPct, fmtStrategyExpiry, isStrategyExpiryDue, isUpdateStale, pnlColor, staleUpdateCls, strategyExpiryCls } from '../utils/format'
 import { sortBy, type SortState } from '../utils/tableSort'
 
-type StrategySortKey = 'name' | 'kind' | 'asset' | 'valueCNY' | 'totalPnlCNY' | 'xirr' | 'recentAnnualized' | 'lastUpdated'
+type StrategySortKey = 'name' | 'kind' | 'asset' | 'valueCNY' | 'totalPnlCNY' | 'xirr' | 'recentAnnualized' | 'lastUpdated' | 'expiresAt'
 
 const STRATEGY_TEXT_KEYS: readonly StrategySortKey[] = ['name', 'kind', 'asset']
 const DEFAULT_STRATEGY_SORT: SortState<StrategySortKey> = { key: 'valueCNY', dir: 'desc' }
@@ -110,6 +110,18 @@ function StrategyTableRow({
       >
         {snap.lastUpdated != null ? fmtDateTime(snap.lastUpdated) : '—'}
       </td>
+      <td
+        className={`px-3 py-2.5 text-right text-xs tabular-nums ${
+          strategy.expiresAt != null ? strategyExpiryCls(strategy.expiresAt) : 'text-slate-400'
+        }`}
+        title={
+          strategy.expiresAt != null && isStrategyExpiryDue(strategy.expiresAt)
+            ? '策略已到期'
+            : undefined
+        }
+      >
+        {strategy.expiresAt != null ? fmtStrategyExpiry(strategy.expiresAt) : '—'}
+      </td>
     </tr>
   )
 }
@@ -189,6 +201,7 @@ export default function Strategies({ initial, onViewAllFlows }: Props) {
       xirr: (s) => s.xirr,
       recentAnnualized: (s) => s.recentAnnualized,
       lastUpdated: (s) => s.lastUpdated,
+      expiresAt: (s) => s.strategy.expiresAt,
     }),
     [assetMap],
   )
@@ -482,6 +495,15 @@ export default function Strategies({ initial, onViewAllFlows }: Props) {
                   align="right"
                   title="末次流水对应的业务时间；超过一个月未更新时数据行会标黄"
                 />
+                <SortTh
+                  label="到期日"
+                  sortKey="expiresAt"
+                  sort={sort}
+                  onSort={handleSort}
+                  className="px-3 py-3 font-medium"
+                  align="right"
+                  title="策略到期日；到期当天起会标黄并计入侧栏角标"
+                />
               </tr>
             </thead>
             <tbody>
@@ -495,7 +517,7 @@ export default function Strategies({ initial, onViewAllFlows }: Props) {
               ))}
               {showClosed && sortedClosed.length > 0 && (
                 <tr className="border-t border-slate-200 bg-slate-50/50">
-                  <td colSpan={8} className="px-4 py-2 text-xs text-slate-400">
+                  <td colSpan={9} className="px-4 py-2 text-xs text-slate-400">
                     已关闭的策略
                   </td>
                 </tr>
@@ -512,7 +534,7 @@ export default function Strategies({ initial, onViewAllFlows }: Props) {
                 ))}
               {tableEmpty && (
                 <tr>
-                  <td colSpan={8} className="px-4 py-12 text-center text-slate-500">
+                  <td colSpan={9} className="px-4 py-12 text-center text-slate-500">
                     没有符合筛选条件的策略
                   </td>
                 </tr>

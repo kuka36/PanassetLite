@@ -16,7 +16,7 @@ const KEYS = {
   ui: 'panasset.ui',
 } as const
 
-export const DASHBOARD_TREND_RANGES = ['d7', 'd30', 'd90', 'd180', 'all', 'custom'] as const
+export const DASHBOARD_TREND_RANGES = ['d7', 'd30', 'd90', 'd180', 'ytd', 'all', 'custom'] as const
 export type DashboardTrendRange = (typeof DASHBOARD_TREND_RANGES)[number]
 
 function isDashboardTrendRange(value: string | undefined): value is DashboardTrendRange {

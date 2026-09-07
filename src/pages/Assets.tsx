@@ -17,10 +17,8 @@ import { transferToTransactions } from '../utils/transfer'
 import AssetFilters from '../components/AssetFilters'
 import { SortTh } from '../components/SortTh'
 import { Card, CardHeader } from '../components/ui/Card'
-import PeriodReturnsCard from '../components/PeriodReturnsCard'
-import { color } from '../theme/colors'
+import NetWorthTrendChart from '../components/NetWorthTrendChart'
 import { useTableSort } from '../hooks/useTableSort'
-import { aggregateAssetSnapshots } from '../engine/portfolio'
 import type { Asset, AssetSnapshot, AssetType, Transaction } from '../types'
 import { ASSET_TYPE_LABEL } from '../types'
 import { fmtDateTime, fmtMoney, fmtNum, fmtPct, isAssetUpdateReminderStale, pnlColor, assetStaleUpdateCls } from '../utils/format'
@@ -151,14 +149,9 @@ export default function Assets({
     [summary.snapshots, filterType, filterAsset],
   )
 
-  const filteredOverview = useMemo(
-    () => aggregateAssetSnapshots(filteredSnapshots),
+  const filteredAssets = useMemo(
+    () => filteredSnapshots.map((s) => s.asset),
     [filteredSnapshots],
-  )
-
-  const filteredPeriodReturns = useMemo(
-    () => engine.periodReturnsForAssets(filteredSnapshots.map((s) => s.asset)),
-    [engine, filteredSnapshots],
   )
 
   const sortedSnapshots = useMemo(
@@ -218,20 +211,7 @@ export default function Assets({
       )}
 
       {filteredSnapshots.length > 0 && (
-        <PeriodReturnsCard
-          title="资产概览"
-          primary={[
-            { label: '净资产', value: fmtMoney(filteredOverview.netWorthCNY), featured: true },
-            { label: '总资产', value: fmtMoney(filteredOverview.totalAssetsCNY) },
-            { label: '总负债', value: fmtMoney(filteredOverview.totalDebtCNY), accent: color.danger },
-          ]}
-          returns={filteredPeriodReturns}
-          totalPnl={{
-            label: '累计盈亏',
-            amount: filteredOverview.totalPnlCNY,
-            ratio: filteredOverview.totalPnlRatio,
-          }}
-        />
+        <NetWorthTrendChart assets={filteredAssets} />
       )}
 
       {!hasAssets && (

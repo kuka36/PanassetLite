@@ -191,8 +191,15 @@ export interface PortfolioSummary {
   totalPnlRatio: number | null
   byType: { type: AssetType; valueCNY: number }[]
   snapshots: AssetSnapshot[]
-  /** 净值历史(按日) */
-  history: { date: string; netWorth: number; assets: number; debt: number }[]
+  /** 净值历史(按日)；pnl 相对该次取样窗口起点，口径同 PeriodReturn */
+  history: {
+    date: string
+    netWorth: number
+    assets: number
+    debt: number
+    pnlCNY: number
+    pnlRatio: number | null
+  }[]
   /** 区间收益 */
   periodReturns: PeriodReturn[]
 }
@@ -219,6 +226,8 @@ export interface Strategy {
   currency: string
   note?: string
   archived?: boolean
+  /** 策略到期日（本地日 00:00 ms）；缺省表示不设到期提醒 */
+  expiresAt?: number
   createdAt: number
 }
 
