@@ -215,23 +215,9 @@ function formatAssetLine(a: Asset): string {
   return parts.join(', ')
 }
 
-function buildAssetCatalog(assets: Asset[], includeNames: boolean): string {
+function buildAssetCatalog(assets: Asset[]): string {
   const active = assets.filter((a) => !a.archived)
   if (active.length === 0) return '(用户尚未添加资产)'
-
-  if (!includeNames) {
-    const counts: Record<string, number> = {}
-    for (const a of active) {
-      counts[a.type] = (counts[a.type] ?? 0) + 1
-    }
-    return (
-      '用户资产概况(未发送具体名称): ' +
-      Object.entries(counts)
-        .map(([t, n]) => `${ASSET_TYPE_LABEL[t as keyof typeof ASSET_TYPE_LABEL]}×${n}`)
-        .join('、')
-    )
-  }
-
   return active.map((a) => `- ${formatAssetLine(a)}`).join('\n')
 }
 
@@ -300,7 +286,7 @@ export interface ParseNlTxOptions {
 
 /**
  * 自然语言 → 流水草稿。
- * 发送:用户原文 + (可选)资产名称列表 + (可选)当前选中资产。仅在用户主动触发时调用。
+ * 发送:用户原文 + 资产名称列表 + (可选)当前选中资产。仅在用户主动触发时调用。
  */
 export async function parseNaturalLanguageTx(
   input: string,
@@ -313,8 +299,7 @@ export async function parseNaturalLanguageTx(
 
   assertApiReady(settings)
 
-  const includeNames = settings.llmSendAssetNames !== false
-  const catalog = buildAssetCatalog(assets, includeNames)
+  const catalog = buildAssetCatalog(assets)
   const fixedAsset = options?.fixedAssetId
     ? assets.find((a) => a.id === options.fixedAssetId && !a.archived)
     : undefined

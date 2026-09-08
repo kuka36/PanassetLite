@@ -41,10 +41,6 @@ export default function Settings() {
   )
   const [finnhubKey, setFinnhubKey] = useState(settings.finnhubKey ?? '')
   const [llm, setLlm] = useState(settings.llm)
-  const [llmSendAssetNames, setLlmSendAssetNames] = useState(settings.llmSendAssetNames !== false)
-  const [llmContextPrivacy, setLlmContextPrivacy] = useState<'summary' | 'detailed'>(
-    settings.llmContextPrivacy === 'summary' ? 'summary' : 'detailed',
-  )
 
   const flash = (m: string) => {
     setMsg(m)
@@ -246,57 +242,10 @@ export default function Settings() {
               />
             </div>
           </div>
-          <div className="space-y-2">
-            <p className="text-xs font-medium text-slate-600">AI 助手发送给 LLM 的组合上下文</p>
-            <label className="flex cursor-pointer items-start gap-2 text-sm text-slate-700">
-              <input
-                type="radio"
-                name="llmContextPrivacy"
-                className="mt-0.5 accent-indigo-600"
-                checked={llmContextPrivacy === 'summary'}
-                onChange={() => setLlmContextPrivacy('summary')}
-              />
-              <span>
-                仅汇总
-                <span className="mt-0.5 block text-xs text-slate-500">
-                  仅发送净资产、类别占比、健康评分标题等汇总数字,不含具体资产名称与单项盈亏。
-                </span>
-              </span>
-            </label>
-            <label className="flex cursor-pointer items-start gap-2 text-sm text-slate-700">
-              <input
-                type="radio"
-                name="llmContextPrivacy"
-                className="mt-0.5 accent-indigo-600"
-                checked={llmContextPrivacy === 'detailed'}
-                onChange={() => setLlmContextPrivacy('detailed')}
-              />
-              <span>
-                含明细
-                <span className="mt-0.5 block text-xs text-slate-500">
-                  另含每项资产的名称、市值、累计盈亏与年化收益率。
-                </span>
-              </span>
-            </label>
-          </div>
-          <label className="mt-2 flex cursor-pointer items-start gap-2 text-sm text-slate-700">
-            <input
-              type="checkbox"
-              className="mt-0.5 accent-indigo-600"
-              checked={llmSendAssetNames}
-              onChange={(e) => setLlmSendAssetNames(e.target.checked)}
-            />
-            <span>
-              自然语言记一笔时发送资产名称
-              <span className="mt-0.5 block text-xs text-slate-500">
-                关闭后仅发送你的原文与资产类别统计,匹配准确度可能下降。
-              </span>
-            </span>
-          </label>
           <button
             className={btnPrimary}
             onClick={() => {
-              saveSettings({ llm, llmSendAssetNames, llmContextPrivacy })
+              saveSettings({ llm })
               flash('LLM 配置已保存')
             }}
           >

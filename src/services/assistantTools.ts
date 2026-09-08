@@ -7,7 +7,7 @@ import type {
   TxLedgerRow,
 } from '../types'
 import { ASSET_TYPE_LABEL, TX_TYPE_LABEL } from '../types'
-import type { AppPageId, LlmContextPrivacy, PendingAction, ToolExecutionResult } from '../types/assistant'
+import type { AppPageId, PendingAction, ToolExecutionResult } from '../types/assistant'
 import { analyzePortfolio } from './ai'
 import { parseNaturalLanguageTx } from './nlTx'
 import { nlResultToTxInitial } from '../services/nlTx'
@@ -289,10 +289,6 @@ function findTx(ctx: AssistantToolContext, id: string): Transaction | undefined 
   return ctx.transactions.find((t) => t.id === id)
 }
 
-function resolvePrivacy(settings: Settings): LlmContextPrivacy {
-  return settings.llmContextPrivacy === 'summary' ? 'summary' : 'detailed'
-}
-
 function findSnapshot(ctx: AssistantToolContext, assetId: string) {
   return ctx.summary.snapshots.find((s) => s.asset.id === assetId)
 }
@@ -302,19 +298,17 @@ function roundPct(rate: number | null | undefined): number | null {
   return Math.round(rate * 10000) / 10000
 }
 
-function serializeAssetMetrics(
-  ctx: AssistantToolContext,
-  asset: Asset,
-  privacy: LlmContextPrivacy,
-) {
+function serializeAssetMetrics(ctx: AssistantToolContext, asset: Asset) {
   const snap = findSnapshot(ctx, asset.id)
   const valueCNY = Math.round(snap?.valueCNY ?? 0)
   const shareOfAssets =
     ctx.summary.totalAssetsCNY > 0 && asset.type !== 'debt'
       ? valueCNY / ctx.summary.totalAssetsCNY
       : null
-  const base = {
+  return {
     id: asset.id,
+    name: asset.name,
+    platform: asset.platform,
     type: ASSET_TYPE_LABEL[asset.type],
     currency: asset.currency,
     valueCNY,
@@ -327,14 +321,6 @@ function serializeAssetMetrics(
     archived: !!asset.archived,
     shareOfAssets: roundPct(shareOfAssets),
   }
-  if (privacy === 'detailed') {
-    return {
-      ...base,
-      name: asset.name,
-      platform: asset.platform,
-    }
-  }
-  return base
 }
 
 function serializePeriodReturns(returns: PeriodReturn[]) {
@@ -379,22 +365,18 @@ export async function executeAssistantTool(
   switch (name) {
     case 'get_portfolio_summary': {
       const { summary } = ctx
-      const privacy = resolvePrivacy(ctx.settings)
       const top = summary.snapshots
         .filter((s) => s.valueCNY > 0)
         .slice(0, 8)
-        .map((s) => {
-          const row: Record<string, unknown> = {
-            id: s.asset.id,
-            type: ASSET_TYPE_LABEL[s.asset.type],
-            valueCNY: Math.round(s.valueCNY),
-            xirr: roundPct(s.xirr),
-            recentAnnualized: roundPct(s.recentAnnualized),
-            totalPnlCNY: Math.round(s.totalPnlCNY),
-          }
-          if (privacy === 'detailed') row.name = s.asset.name
-          return row
-        })
+        .map((s) => ({
+          id: s.asset.id,
+          name: s.asset.name,
+          type: ASSET_TYPE_LABEL[s.asset.type],
+          valueCNY: Math.round(s.valueCNY),
+          xirr: roundPct(s.xirr),
+          recentAnnualized: roundPct(s.recentAnnualized),
+          totalPnlCNY: Math.round(s.totalPnlCNY),
+        }))
       return {
         content: JSON.stringify({
           netWorthCNY: Math.round(summary.netWorthCNY),
@@ -429,10 +411,9 @@ export async function executeAssistantTool(
 
     case 'list_assets': {
       const includeArchived = safeArgs.includeArchived === true
-      const privacy = resolvePrivacy(ctx.settings)
       const list = ctx.assets
         .filter((a) => includeArchived || !a.archived)
-        .map((a) => serializeAssetMetrics(ctx, a, privacy))
+        .map((a) => serializeAssetMetrics(ctx, a))
       return { content: JSON.stringify({ assets: list }) }
     }
 
@@ -440,9 +421,8 @@ export async function executeAssistantTool(
       const assetId = String(safeArgs.assetId ?? '')
       const asset = findAsset(ctx, assetId)
       if (!asset) return { content: JSON.stringify({ error: '未找到资产' }) }
-      const privacy = resolvePrivacy(ctx.settings)
       return {
-        content: JSON.stringify(serializeAssetMetrics(ctx, asset, privacy)),
+        content: JSON.stringify(serializeAssetMetrics(ctx, asset)),
       }
     }
 
@@ -453,11 +433,10 @@ export async function executeAssistantTool(
         if (!asset) return { content: JSON.stringify({ error: '未找到资产' }) }
         const returns = ctx.getPeriodReturns(assetId)
         if (!returns) return { content: JSON.stringify({ error: '无法计算该资产区间收益' }) }
-        const privacy = resolvePrivacy(ctx.settings)
         return {
           content: JSON.stringify({
             scope: 'asset',
-            asset: serializeAssetMetrics(ctx, asset, privacy),
+            asset: serializeAssetMetrics(ctx, asset),
             periodReturns: serializePeriodReturns(returns),
           }),
         }
@@ -477,7 +456,6 @@ export async function executeAssistantTool(
       const ledger = ctx.getTxLedger(assetId)
       if (!ledger) return { content: JSON.stringify({ error: '未找到账本' }) }
       const limit = typeof safeArgs.limit === 'number' ? safeArgs.limit : 20
-      const privacy = resolvePrivacy(ctx.settings)
       const rows = ledger.slice(0, limit).map((row) => {
         const base: Record<string, unknown> = {
           txId: row.tx.id,
@@ -489,13 +467,13 @@ export async function executeAssistantTool(
           intervalGainNative: row.intervalGainNative ?? null,
           intervalAnnualized: roundPct(row.intervalAnnualized),
         }
-        if (privacy === 'detailed' && row.tx.note) base.note = row.tx.note
+        if (row.tx.note) base.note = row.tx.note
         return base
       })
       return {
         content: JSON.stringify({
           assetId,
-          ...(privacy === 'detailed' ? { assetName: asset.name } : {}),
+          assetName: asset.name,
           currency: asset.currency,
           rows,
         }),
@@ -505,26 +483,22 @@ export async function executeAssistantTool(
     case 'list_flows': {
       const limit = typeof safeArgs.limit === 'number' ? safeArgs.limit : 20
       const assetId = typeof safeArgs.assetId === 'string' ? safeArgs.assetId : undefined
-      const privacy = resolvePrivacy(ctx.settings)
       let txs = [...ctx.transactions].sort((a, b) => b.occurredAt - a.occurredAt)
       if (assetId) txs = txs.filter((t) => t.assetId === assetId)
       const list = txs.slice(0, limit).map((t) => {
         const asset = findAsset(ctx, t.assetId)
-        const row: Record<string, unknown> = {
+        return {
           id: t.id,
           occurredAt: t.occurredAt,
           type: TX_TYPE_LABEL[t.type],
           assetId: t.assetId,
+          assetName: asset?.name,
           amount: t.amount,
           quantity: t.quantity,
           price: t.price,
           value: t.value,
+          note: t.note,
         }
-        if (privacy === 'detailed') {
-          row.assetName = asset?.name
-          row.note = t.note
-        }
-        return row
       })
       return { content: JSON.stringify({ flows: list }) }
     }

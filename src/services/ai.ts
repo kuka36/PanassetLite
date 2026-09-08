@@ -1,5 +1,4 @@
 import type { PortfolioSummary, Settings } from '../types'
-import type { LlmContextPrivacy } from '../types/assistant'
 import { ASSET_TYPE_LABEL } from '../types'
 import { fmtDateTime } from '../utils/format'
 import { formatDateKey } from '../utils/time'
@@ -251,7 +250,6 @@ export function formatLlmNowContext(nowMs = Date.now()): string {
 
 export function buildPortfolioBrief(
   summary: PortfolioSummary,
-  privacy: LlmContextPrivacy = 'detailed',
   settings?: Pick<Settings, 'pricesUpdatedAt' | 'fxUpdatedAt'>,
 ): string {
   const lines: string[] = []
@@ -302,11 +300,7 @@ export function buildPortfolioBrief(
       now - s.lastUpdated > 45 * 86400_000,
   )
   if (stale.length > 0) {
-    if (privacy === 'detailed') {
-      lines.push(`估值过期(>45天未更新): ${stale.map((s) => s.asset.name).join('、')}`)
-    } else {
-      lines.push(`估值过期(>45天未更新): ${stale.length} 项`)
-    }
+    lines.push(`估值过期(>45天未更新): ${stale.map((s) => s.asset.name).join('、')}`)
   }
 
   const report = analyzePortfolio(summary)
@@ -317,34 +311,19 @@ export function buildPortfolioBrief(
     }
   }
 
-  if (privacy === 'detailed') {
-    lines.push('资产明细:')
-    for (const s of summary.snapshots) {
-      if (s.valueCNY <= 0) continue
-      const parts = [
-        `- ${s.asset.name}(${ASSET_TYPE_LABEL[s.asset.type]}):市值 ¥${s.valueCNY.toFixed(0)}`,
-      ]
-      if (s.asset.type !== 'debt') {
-        parts.push(`累计盈亏 ¥${s.totalPnlCNY.toFixed(0)}`)
-        if (s.xirr != null) parts.push(`年化(XIRR) ${(s.xirr * 100).toFixed(1)}%`)
-        if (s.recentAnnualized != null)
-          parts.push(`近期区间年化 ${(s.recentAnnualized * 100).toFixed(1)}%`)
-      }
-      lines.push(parts.join(','))
-    }
-  } else {
-    const holdingCount = summary.snapshots.filter((s) => s.valueCNY > 0).length
-    lines.push(`资产数量: ${holdingCount} 项(未发送具体名称;可在设置中切换为「含明细」)`)
-    lines.push('资产收益概览(匿名):')
-    for (const s of summary.snapshots) {
-      if (s.valueCNY <= 0 || s.asset.type === 'debt') continue
-      const parts = [`- ${ASSET_TYPE_LABEL[s.asset.type]}:市值 ¥${s.valueCNY.toFixed(0)}`]
+  lines.push('资产明细:')
+  for (const s of summary.snapshots) {
+    if (s.valueCNY <= 0) continue
+    const parts = [
+      `- ${s.asset.name}(${ASSET_TYPE_LABEL[s.asset.type]}):市值 ¥${s.valueCNY.toFixed(0)}`,
+    ]
+    if (s.asset.type !== 'debt') {
       parts.push(`累计盈亏 ¥${s.totalPnlCNY.toFixed(0)}`)
       if (s.xirr != null) parts.push(`年化(XIRR) ${(s.xirr * 100).toFixed(1)}%`)
       if (s.recentAnnualized != null)
         parts.push(`近期区间年化 ${(s.recentAnnualized * 100).toFixed(1)}%`)
-      lines.push(parts.join(','))
     }
+    lines.push(parts.join(','))
   }
   const h = summary.history
   if (h.length >= 2) {
@@ -425,9 +404,7 @@ export async function streamLlmAdvice(
     '必须引用数据中的具体数字(净资产、区间收益、XIRR、近期年化、健康评分等),禁止无数据支撑的空泛套话。' +
     '数据里已附带本地规则引擎的健康评分与检出问题(含等级),请在此基础上解释、排序优先级并给出行动方案,不要重复做同样的数值判断。' +
     '直接给结论和理由,不要免责声明套话。用 markdown 列表组织内容。'
-  const privacy: LlmContextPrivacy =
-    settings.llmContextPrivacy === 'summary' ? 'summary' : 'detailed'
-  const user = `我的资产组合如下:\n${buildPortfolioBrief(summary, privacy, settings)}\n\n${
+  const user = `我的资产组合如下:\n${buildPortfolioBrief(summary, settings)}\n\n${
     question?.trim() || DEFAULT_ADVISOR_PROMPT
   }`
 

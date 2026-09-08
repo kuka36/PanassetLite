@@ -1,5 +1,5 @@
 import type { PortfolioSummary, Settings } from '../types'
-import type { AppPageId, ChatMessage, LlmContextPrivacy, PendingAction } from '../types/assistant'
+import type { AppPageId, ChatMessage, PendingAction } from '../types/assistant'
 import { buildPortfolioBrief, formatLlmNowContext } from './ai'
 import {
   isLocalLlmBaseUrl,
@@ -17,8 +17,11 @@ import {
 
 const MAX_TOOL_ITERATIONS = 8
 
+/** 可编辑/预览的出站消息(无 tool_calls) */
+export type OutgoingApiMessage = { role: 'system' | 'user' | 'assistant'; content: string }
+
 type ApiMessage =
-  | { role: 'system' | 'user' | 'assistant'; content: string }
+  | OutgoingApiMessage
   | { role: 'assistant'; content: string | null; tool_calls?: ToolCall[] }
   | { role: 'tool'; tool_call_id: string; content: string }
 
@@ -33,6 +36,15 @@ export interface RunAssistantTurnResult {
   pendingActions: Array<{ action: PendingAction; summary: string }>
 }
 
+export interface BuildOutgoingOptions {
+  userInput: string
+  history: ChatMessage[]
+  summary: PortfolioSummary
+  currentPage: AppPageId
+  settings: Settings
+  includePortfolio: boolean
+}
+
 function assertLlmReady(settings: Settings) {
   const { baseUrl, apiKey } = settings.llm
   if (isLocalLlmUnavailableOnRemoteHost(baseUrl)) {
@@ -43,20 +55,24 @@ function assertLlmReady(settings: Settings) {
   }
 }
 
-function resolveContextPrivacy(settings: Settings): LlmContextPrivacy {
-  return settings.llmContextPrivacy === 'summary' ? 'summary' : 'detailed'
-}
-
-function buildSystemPrompt(
+export function buildSystemPrompt(
   summary: PortfolioSummary,
   currentPage: AppPageId,
   settings: Settings,
+  includePortfolio: boolean,
 ): string {
-  const privacy = resolveContextPrivacy(settings)
-  const privacyNote =
-    privacy === 'summary'
-      ? '当前用户已选择「仅汇总」隐私模式,系统上下文不含具体资产名称与单项盈亏。'
-      : '当前用户已选择「含明细」模式,系统上下文包含资产名称、市值与盈亏。'
+  const nowAndPage = `当前页面:${currentPage}。${formatLlmNowContext()}。`
+
+  if (!includePortfolio) {
+    return (
+      '你是 PanassetLite 内的通用 AI 助手,当前为纯对话模式。' +
+      '未附带用户的资产组合数据,也未提供查询/记账等工具。' +
+      '请基于对话内容用简体中文直接回答;不要声称已查询本地资产、已写入流水或已执行操作。' +
+      '若用户需要基于真实持仓的分析或记账,可提示其打开「包含资产上下文」。' +
+      nowAndPage
+    )
+  }
+
   return (
     '你是 PanassetLite 的 AI 助手,帮助用户管理本地个人资产。' +
     '你可以查询组合摘要、区间收益、单资产 XIRR/近期年化、流水账本、分析风险、导航页面、刷新行情,以及提议添加/修改/删除资产与流水。' +
@@ -65,18 +81,113 @@ function buildSystemPrompt(
     '重要:所有写操作(添加/修改/删除)必须通过工具 propose_* 发起,系统会打开确认表单或对话确认,你不得声称已直接写入。' +
     '调用工具后必须用自然语言向用户解释结果,禁止只调用工具而不给出文字回复。' +
     '导入导出、清空数据、LLM 配置请用 open_settings 引导用户去设置页手动操作。' +
-    `当前页面:${currentPage}。${formatLlmNowContext()}。${privacyNote}` +
+    nowAndPage +
+    '系统上下文已附带当前资产组合摘要(含资产名称、市值与盈亏)。' +
     '\n\n当前资产组合摘要:\n' +
-    buildPortfolioBrief(summary, privacy, settings)
+    buildPortfolioBrief(summary, settings)
   )
 }
 
-function dedupeTrailingUserMessage(history: ApiMessage[], userInput: string): ApiMessage[] {
+function dedupeTrailingUserMessage(history: OutgoingApiMessage[], userInput: string): OutgoingApiMessage[] {
   const last = history[history.length - 1]
   if (last?.role === 'user' && last.content === userInput) {
     return history.slice(0, -1)
   }
   return history
+}
+
+function chatHistoryToApi(messages: ChatMessage[]): OutgoingApiMessage[] {
+  return messages
+    .filter((m) => m.role === 'user' || m.role === 'assistant')
+    .slice(-20)
+    .map((m) => ({ role: m.role, content: m.content }))
+}
+
+/** 构建即将发送给 LLM 的 messages(与 runAssistantTurn 一致) */
+export function buildOutgoingApiMessages(opts: BuildOutgoingOptions): OutgoingApiMessage[] {
+  const historyMessages = dedupeTrailingUserMessage(chatHistoryToApi(opts.history), opts.userInput)
+  return [
+    {
+      role: 'system',
+      content: buildSystemPrompt(
+        opts.summary,
+        opts.currentPage,
+        opts.settings,
+        opts.includePortfolio,
+      ),
+    },
+    ...historyMessages,
+    { role: 'user', content: opts.userInput },
+  ]
+}
+
+/** 校验用户编辑的 messages JSON */
+export function parseOutgoingApiMessages(raw: string): OutgoingApiMessage[] {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(raw)
+  } catch {
+    throw new Error('上下文不是合法 JSON,请检查后再发送')
+  }
+  if (!Array.isArray(parsed) || parsed.length === 0) {
+    throw new Error('上下文须为非空的 messages 数组')
+  }
+  const roles = new Set(['system', 'user', 'assistant'])
+  const messages: OutgoingApiMessage[] = []
+  for (const item of parsed) {
+    if (!item || typeof item !== 'object') {
+      throw new Error('messages 中每项须为对象')
+    }
+    const role = (item as { role?: unknown }).role
+    const content = (item as { content?: unknown }).content
+    if (typeof role !== 'string' || !roles.has(role)) {
+      throw new Error('messages 仅支持 role 为 system / user / assistant')
+    }
+    if (typeof content !== 'string') {
+      throw new Error('messages 每项的 content 须为字符串')
+    }
+    messages.push({ role: role as OutgoingApiMessage['role'], content })
+  }
+  return messages
+}
+
+/** 无 tools 的单次 chat/completions(纯 LLM) */
+export async function runPlainLlmTurn(
+  messages: OutgoingApiMessage[],
+  settings: Settings,
+  signal?: AbortSignal,
+): Promise<RunAssistantTurnResult> {
+  assertLlmReady(settings)
+  if (messages.length === 0) {
+    throw new Error('上下文为空,无法发送')
+  }
+
+  const res = await postChatCompletions(
+    settings.llm.baseUrl,
+    settings.llm.apiKey,
+    {
+      model: settings.llm.model,
+      messages,
+      temperature: 0.4,
+      stream: false,
+    },
+    signal,
+  )
+
+  const message = await parseChatCompletionResponse(res)
+  const assistantContent = message?.content?.trim() ?? ''
+  if (!assistantContent) {
+    throw new Error('LLM 返回为空')
+  }
+  return { assistantContent, pendingActions: [] }
+}
+
+function parseToolArgs(raw: string): Record<string, unknown> {
+  try {
+    return JSON.parse(raw) as Record<string, unknown>
+  } catch {
+    return {}
+  }
 }
 
 async function synthesizeAssistantReply(
@@ -104,21 +215,6 @@ async function synthesizeAssistantReply(
 
   const message = await parseChatCompletionResponse(res)
   return message?.content?.trim() ?? ''
-}
-
-function chatHistoryToApi(messages: ChatMessage[]): ApiMessage[] {
-  return messages
-    .filter((m) => m.role === 'user' || m.role === 'assistant')
-    .slice(-20)
-    .map((m) => ({ role: m.role, content: m.content }))
-}
-
-function parseToolArgs(raw: string): Record<string, unknown> {
-  try {
-    return JSON.parse(raw) as Record<string, unknown>
-  } catch {
-    return {}
-  }
 }
 
 /** 无 LLM 时的本地快捷回复 */
@@ -329,15 +425,25 @@ export async function runAssistantTurn(
   ctx: AssistantToolContext,
   currentPage: AppPageId,
   signal?: AbortSignal,
+  includePortfolio = false,
 ): Promise<RunAssistantTurnResult> {
   assertLlmReady(ctx.settings)
 
-  const historyMessages = dedupeTrailingUserMessage(chatHistoryToApi(history), userInput)
-  const apiMessages: ApiMessage[] = [
-    { role: 'system', content: buildSystemPrompt(ctx.summary, currentPage, ctx.settings) },
-    ...historyMessages,
-    { role: 'user', content: userInput },
-  ]
+  const outgoing = buildOutgoingApiMessages({
+    userInput,
+    history,
+    summary: ctx.summary,
+    currentPage,
+    settings: ctx.settings,
+    includePortfolio,
+  })
+
+  // 未包含资产上下文:纯对话,不附带 tools
+  if (!includePortfolio) {
+    return runPlainLlmTurn(outgoing, ctx.settings, signal)
+  }
+
+  const apiMessages: ApiMessage[] = [...outgoing]
 
   const pendingActions: Array<{ action: PendingAction; summary: string }> = []
   let finalContent = ''

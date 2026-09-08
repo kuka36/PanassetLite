@@ -39,9 +39,12 @@ interface AssistantState {
   actionQueue: QueuedAction[]
   loading: boolean
   error: string
+  /** 是否在 system prompt 中附带资产组合摘要;默认关 */
+  includePortfolioContext: boolean
 
   toggle: () => void
   setOpen: (open: boolean) => void
+  setIncludePortfolioContext: (include: boolean) => void
   addMessage: (msg: Omit<ChatMessage, 'id' | 'timestamp'> & { id?: string }) => string
   updateMessage: (id: string, patch: Partial<ChatMessage>) => void
   appendToMessage: (id: string, delta: string) => void
@@ -65,10 +68,13 @@ export const useAssistantStore = create<AssistantState>((set, get) => ({
   actionQueue: [],
   loading: false,
   error: '',
+  includePortfolioContext: false,
 
   toggle: () => set((s) => ({ open: !s.open })),
 
   setOpen: (open) => set({ open }),
+
+  setIncludePortfolioContext: (includePortfolioContext) => set({ includePortfolioContext }),
 
   addMessage: (msg) => {
     const id = msg.id ?? `msg-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
